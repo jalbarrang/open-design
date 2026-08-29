@@ -6,21 +6,21 @@
 
 ## 环境要求
 
-- **Node.js：** `~24`（Node 24.x）。仓库在 `package.json#engines` 中强制要求该版本。
+- **Node.js：** `~26`（Node 26.x）。仓库在 `package.json#engines` 中强制要求该版本。
 - **pnpm：** `10.33.x`。仓库通过 `packageManager` 固定为 `pnpm@10.33.2`；若使用 Corepack，该固定版本将被自动选中。
 - **操作系统：** 主要支持 macOS、Linux、WSL2。Windows 原生环境大部分流程也可运行，但 WSL2 是更稳定的基线。
 - **可选的本地 agent CLI：** OpenDesign 通过 registry 支持 Claude Code、Codex、Devin for Terminal、OpenCode、Cursor Agent、Qwen、Qoder CLI、GitHub Copilot CLI 等本地 runtime；当前清单以 [`apps/daemon/src/runtimes/registry.ts`](../../apps/daemon/src/runtimes/registry.ts) 为准。即使未安装任何本地 runtime，也可使用在 Settings 中配置的 BYOK runtime。
 
-`nvm` / `fnm` 为可选的便捷工具，并非项目必要依赖。如需使用，请在执行 pnpm 之前安装并切换到 Node 24：
+`nvm` / `fnm` 为可选的便捷工具，并非项目必要依赖。如需使用，请在执行 pnpm 之前安装并切换到 Node 26：
 
 ```bash
 # nvm
-nvm install 24
-nvm use 24
+nvm install 26
+nvm use 26
 
 # fnm
-fnm install 24
-fnm use 24
+fnm install 26
+fnm use 26
 ```
 
 随后启用 Corepack，由仓库自动选择 pnpm：

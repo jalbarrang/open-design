@@ -328,7 +328,7 @@ pnpm tools-dev run web
 
 Відкрийте URL, надрукований `tools-dev`; без явних портових прапорців порти розробки призначаються динамічно.
 
-Node `~24`, pnpm `10.33.x`. Користувачі Windows, див. [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Повний швидкий старт, змінні середовища, Nix flake та процес упакованого збирання → [`QUICKSTART.md`](../../QUICKSTART.md).
+Node `~26`, pnpm `10.33.x`. Користувачі Windows, див. [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Повний швидкий старт, змінні середовища, Nix flake та процес упакованого збирання → [`QUICKSTART.md`](../../QUICKSTART.md).
 
 ### Повний робочий процес — від брифа до артефакта
 
@@ -542,7 +542,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 | Шар | Стек |
 |---|---|
 | Фронтенд | Next.js 16 App Router + React 18 + TypeScript |
-| Демон | Node 24 · Express · потокова передача SSE · `better-sqlite3` |
+| Демон | Node 26 · Express · потокова передача SSE · `better-sqlite3` |
 | Сховище | Перш ніж змінювати або документувати шляхи сховища демона, необхідно прочитати кореневий `AGENTS.md`, розділ **Daemon data directory contract**. Цей README НЕ ПОВИНЕН переказувати його. |
 | Попередній перегляд | Filesystem-запуск рендерить канонічні файли; BYOK/API розбирає повний `<artifact>` в iframe `srcdoc` |
 | Експорт | HTML (вбудований) · PDF (друк із браузера) · PPTX (під керуванням агента) · ZIP · Markdown · MP4 (HyperFrames) |

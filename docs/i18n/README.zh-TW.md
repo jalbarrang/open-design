@@ -339,7 +339,7 @@ pnpm tools-dev run web
 
 請開啟 `tools-dev` 印出的 URL；除非明確傳入連接埠參數，開發連接埠會動態配置。
 
-Node `~24`、pnpm `10.33.x`。WSL2 使用者請參見 [`docs/wsl-setup.md`](../../docs/wsl-setup.md)；原生 Windows 使用者請參見 [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md)。完整快速開始、環境變數、Nix flake 與打包建置流程 → [`QUICKSTART.zh-TW.md`](QUICKSTART.zh-TW.md)。
+Node `~26`、pnpm `10.33.x`。WSL2 使用者請參見 [`docs/wsl-setup.md`](../../docs/wsl-setup.md)；原生 Windows 使用者請參見 [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md)。完整快速開始、環境變數、Nix flake 與打包建置流程 → [`QUICKSTART.zh-TW.md`](QUICKSTART.zh-TW.md)。
 
 ### 完整工作流程——從需求到 artifact
 
@@ -554,7 +554,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 | 層 | 技術堆疊 |
 |---|---|
 | 前端 | Next.js 16 App Router + React 18 + TypeScript |
-| Daemon | Node 24 · Express · SSE 串流 · `better-sqlite3` |
+| Daemon | Node 26 · Express · SSE 串流 · `better-sqlite3` |
 | 儲存 | 在變更或記錄 daemon 儲存路徑之前，必須閱讀儲存庫根目錄 `AGENTS.md` 中的 **Daemon data directory contract**。本 README 不得重述該契約。 |
 | 預覽 | 檔案系統執行渲染標準專案檔案；BYOK／純 API 執行把一個完整 `<artifact>` 區塊解析到沙箱化 `srcdoc` iframe |
 | 匯出 | HTML（內嵌）· PDF（瀏覽器列印）· PPTX（agent 驅動）· ZIP · Markdown · MP4（HyperFrames） |

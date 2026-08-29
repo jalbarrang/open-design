@@ -328,7 +328,7 @@ pnpm tools-dev run web
 
 Abra a URL impressa por `tools-dev`; as portas de desenvolvimento são alocadas dinamicamente sem flags explícitos.
 
-Node `~24`, pnpm `10.33.x`. Usuários de Windows, veja [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Início rápido completo, variáveis de ambiente, Nix flake e fluxo de build empacotado → [`QUICKSTART.pt-BR.md`](QUICKSTART.pt-BR.md).
+Node `~26`, pnpm `10.33.x`. Usuários de Windows, veja [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Início rápido completo, variáveis de ambiente, Nix flake e fluxo de build empacotado → [`QUICKSTART.pt-BR.md`](QUICKSTART.pt-BR.md).
 
 ### Um fluxo de trabalho completo — do briefing ao artefato
 
@@ -542,7 +542,7 @@ Endpoint do registry de plugins: `GET /api/plugins`. Visão geral do diretório 
 | Camada | Stack |
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
-| Daemon | Node 24 · Express · streaming SSE · `better-sqlite3` |
+| Daemon | Node 26 · Express · streaming SSE · `better-sqlite3` |
 | Armazenamento | Antes de alterar ou documentar caminhos de armazenamento do daemon, você DEVE ler o `AGENTS.md` na raiz, seção **Daemon data directory contract**. Este README NÃO DEVE repeti-lo. |
 | Preview | Execuções filesystem renderizam arquivos canônicos; BYOK/API analisa um bloco `<artifact>` completo em iframe `srcdoc` isolado |
 | Exportação | HTML (embutido) · PDF (impressão do navegador) · PPTX (conduzido pelo agente) · ZIP · Markdown · MP4 (HyperFrames) |

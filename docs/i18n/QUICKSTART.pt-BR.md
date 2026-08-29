@@ -6,21 +6,21 @@ Rode o produto inteiro localmente.
 
 ## Requisitos de ambiente
 
-- **Node.js:** `~24` (Node 24.x). O repo força isso via `package.json#engines`.
+- **Node.js:** `~26` (Node 26.x). O repo força isso via `package.json#engines`.
 - **pnpm:** `10.33.x`. O repo fixa `pnpm@10.33.2` via `packageManager`; use Corepack para selecionar a versão fixada automaticamente.
 - **SO:** macOS, Linux e WSL2 são os caminhos principais. Windows nativo costuma funcionar para a maioria dos fluxos, mas WSL2 é a base mais segura.
 - **CLI de agente local (opcional):** O OpenDesign mantém um registro de runtimes locais, incluindo Claude Code, Codex, Devin for Terminal, OpenCode, Cursor Agent, Qwen, Qoder CLI, GitHub Copilot CLI e outros. A lista atual fica em [`apps/daemon/src/runtimes/registry.ts`](../../apps/daemon/src/runtimes/registry.ts). Sem nenhum instalado, use um runtime BYOK configurado em Settings.
 
-`nvm` / `fnm` são ferramentas opcionais de conveniência, não são parte obrigatória do setup do projeto. Se você usa um deles, instale/selecione o Node 24 antes de rodar pnpm:
+`nvm` / `fnm` são ferramentas opcionais de conveniência, não são parte obrigatória do setup do projeto. Se você usa um deles, instale/selecione o Node 26 antes de rodar pnpm:
 
 ```bash
 # nvm
-nvm install 24
-nvm use 24
+nvm install 26
+nvm use 26
 
 # fnm
-fnm install 24
-fnm use 24
+fnm install 26
+fnm use 26
 ```
 
 Em seguida, habilite o Corepack e deixe o repo escolher o pnpm:

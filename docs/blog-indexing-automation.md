@@ -72,7 +72,7 @@ landing-page-production --success--> blog-indexing-on-deploy
 ```
 
 All scripts live in `apps/landing-page/scripts/blog-indexing/` and run
-under `tsx` directly. Most scripts depend only on Node 24 built-ins
+under `tsx` directly. Most scripts depend only on Node 26 built-ins
 (`crypto`, `fetch`, `child_process`). RSS uses `@astrojs/rss`.
 
 ## One-time setup

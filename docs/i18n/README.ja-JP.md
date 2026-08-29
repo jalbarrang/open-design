@@ -328,7 +328,7 @@ pnpm tools-dev run web
 
 `tools-dev` が表示した URL を開いてください。明示的なポートフラグがなければ、開発ポートは動的に割り当てられます。
 
-Node `~24`、pnpm `10.33.x`。Windows ユーザーは [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md) を参照してください。完全なクイックスタート、環境変数、Nix flake、パッケージ化されたビルドフロー → [`QUICKSTART.ja-JP.md`](QUICKSTART.ja-JP.md)。
+Node `~26`、pnpm `10.33.x`。Windows ユーザーは [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md) を参照してください。完全なクイックスタート、環境変数、Nix flake、パッケージ化されたビルドフロー → [`QUICKSTART.ja-JP.md`](QUICKSTART.ja-JP.md)。
 
 ### 完全なワークフロー — ブリーフからアーティファクトまで
 
@@ -542,7 +542,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 | レイヤー | スタック |
 |---|---|
 | フロントエンド | Next.js 16 App Router + React 18 + TypeScript |
-| デーモン | Node 24 · Express · SSE ストリーミング · `better-sqlite3` |
+| デーモン | Node 26 · Express · SSE ストリーミング · `better-sqlite3` |
 | ストレージ | デーモンのストレージパスを変更または文書化する前に、ルートの `AGENTS.md` にある **Daemon data directory contract** を必ず読んでください。この README でそれを繰り返してはいけません。 |
 | プレビュー | filesystem 実行は正規ファイルを描画し、BYOK/API は完全な `<artifact>` ブロックを sandbox `srcdoc` iframe に解析します |
 | エクスポート | HTML（インライン化） · PDF（ブラウザ印刷） · PPTX（エージェント駆動） · ZIP · Markdown · MP4（HyperFrames） |

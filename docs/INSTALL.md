@@ -5,7 +5,7 @@ These steps install and run a local Electron build created with `tools-pack`.
 ## Requirements
 
 - macOS on Apple Silicon (`arm64`)
-- Node 24
+- Node 26
 - A completed `pnpm tools-pack mac build --to all` build
 
 Run all commands from the repository root.

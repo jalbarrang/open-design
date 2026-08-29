@@ -6,7 +6,7 @@
 
 ## 환경 요구사항
 
-- **Node.js:** `~24`(Node 24.x). `package.json#engines`로 버전을 강제합니다.
+- **Node.js:** `~26`(Node 26.x). `package.json#engines`로 버전을 강제합니다.
 - **pnpm:** `10.33.x`. `packageManager`에 `pnpm@10.33.2`를 고정해 두었으니, Corepack을 쓰면 고정된 버전이 자동으로 선택됩니다.
 - **OS:** macOS, Linux, WSL2가 주요 지원 환경입니다. Windows 네이티브도 지원합니다. 자주 겪는 설치 문제는 [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md)를 참고하세요.
 - **선택: 로컬 에이전트 CLI:** OpenDesign은 Claude Code, Codex, Devin for Terminal, OpenCode, Cursor Agent, Qwen, Qoder CLI, GitHub Copilot CLI 등을 로컬 런타임 레지스트리로 지원합니다. 현재 목록은 [`apps/daemon/src/runtimes/registry.ts`](../../apps/daemon/src/runtimes/registry.ts)에 있습니다. 설치된 런타임이 없으면 Settings에서 구성한 BYOK 런타임을 쓰면 됩니다.
@@ -15,16 +15,16 @@
 
 daemon은 **`PATH`**(여기에 더해 자주 쓰이는 사용자 툴체인 디렉터리)를 스캔합니다. **`npm install -g`**나 **Homebrew**로 CLI를 설치했는데도 OpenDesign이 *not installed*로 표시한다면, GUI가 최소한의 `PATH`로 시작하면서 전역 npm이나 Homebrew의 `bin` 디렉터리를 포함하지 못한 경우입니다(앱이 전체 로그인 셸에서 실행되지 않은 macOS에서 흔히 발생). daemon을 실행하는 프로세스의 `PATH`에 실행 파일 디렉터리가 들어 있는지 확인한 뒤, **Settings → Execution mode**에서 **Rescan**을 누르세요.
 
-[`nvm`](https://github.com/nvm-sh/nvm) / [`fnm`](https://github.com/Schniz/fnm)은 편의를 위한 선택 도구일 뿐, 프로젝트 설정에 꼭 필요한 것은 아닙니다. 둘 중 하나를 쓴다면 pnpm을 실행하기 전에 Node 24를 설치하고 선택하세요.
+[`nvm`](https://github.com/nvm-sh/nvm) / [`fnm`](https://github.com/Schniz/fnm)은 편의를 위한 선택 도구일 뿐, 프로젝트 설정에 꼭 필요한 것은 아닙니다. 둘 중 하나를 쓴다면 pnpm을 실행하기 전에 Node 26를 설치하고 선택하세요.
 
 ```bash
 # nvm
-nvm install 24
-nvm use 24
+nvm install 26
+nvm use 26
 
 # fnm
-fnm install 24
-fnm use 24
+fnm install 26
+fnm use 26
 ```
 
 그다음 Corepack을 켜고 리포지토리가 pnpm을 선택하도록 합니다.

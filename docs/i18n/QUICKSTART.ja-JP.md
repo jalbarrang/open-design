@@ -6,21 +6,21 @@
 
 ## 環境要件
 
-- **Node.js:** `~24`（Node 24.x）。リポジトリは `package.json#engines` を通じてこれを強制しています。
+- **Node.js:** `~26`（Node 26.x）。リポジトリは `package.json#engines` を通じてこれを強制しています。
 - **pnpm:** `10.33.x`。リポジトリは `packageManager` を通じて `pnpm@10.33.2` をピン留めしています。Corepack を使用すれば、ピン留めされたバージョンが自動的に選択されます。
 - **OS:** macOS、Linux、WSL2 が主要なパスです。Windows ネイティブはほとんどのフローで動作するはずですが、WSL2 のほうが安全なベースラインです。
 - **オプションのローカルエージェント CLI:** OpenDesign は、Claude Code、Codex、Devin for Terminal、OpenCode、Cursor Agent、Qwen、Qoder CLI、GitHub Copilot CLI などのローカルランタイムをレジストリで管理しています。現在の一覧は [`apps/daemon/src/runtimes/registry.ts`](../../apps/daemon/src/runtimes/registry.ts) にあります。何もインストールされていない場合は、Settings で設定した BYOK ランタイムを使用してください。
 
-`nvm` / `fnm` はオプションの便利なツールであり、必須のプロジェクトセットアップではありません。使用する場合は、pnpm を実行する前に Node 24 をインストール／選択してください。
+`nvm` / `fnm` はオプションの便利なツールであり、必須のプロジェクトセットアップではありません。使用する場合は、pnpm を実行する前に Node 26 をインストール／選択してください。
 
 ```bash
 # nvm
-nvm install 24
-nvm use 24
+nvm install 26
+nvm use 26
 
 # fnm
-fnm install 24
-fnm use 24
+fnm install 26
+fnm use 26
 ```
 
 その後、Corepack を有効化してリポジトリに pnpm を選択させます。

@@ -54,16 +54,16 @@ Compare the printed hash against the checksum listed on the release page. They m
 
 | Tool | Version | How to verify |
 |---|---|---|
-| Node.js | `~24` | `node -v` |
+| Node.js | `~26` | `node -v` |
 | pnpm | `10.33.x` | `pnpm -v` |
 | Git | any recent | `git --version` |
 
 ---
 
-## 1. Node 24 installation
+## 1. Node 26 installation
 
 ### Symptom
-`node -v` returns something older than `v24.x.x`, or you do not have Node installed at all.
+`node -v` returns something older than `v26.x.x`, or you do not have Node installed at all.
 
 ### Fix
 
@@ -73,14 +73,14 @@ Compare the printed hash against the checksum listed on the release page. They m
 2. In a fresh PowerShell window:
 
    ```powershell
-   nvm install 24
-   nvm use 24
-   node -v   # should print v24.x.x
+   nvm install 26
+   nvm use 26
+   node -v   # should print v26.x.x
    ```
 
 **Option B — Official installer**
 
-Download and run the Node 24 `.msi` from [nodejs.org](https://nodejs.org/).
+Download and run the Node 26 `.msi` from [nodejs.org](https://nodejs.org/). Node 26 is the Current release, not LTS, until October 2026 — take it from the Current download, not the LTS one.
 
 ### Common nvm-windows gotcha
 
@@ -143,7 +143,7 @@ pnpm install
 ```
 
 > **Expected on Windows native:** `better-sqlite3` does not publish a win32
-> prebuilt binary for Node 24, so `pnpm install` compiles it from source with
+> prebuilt binary for Node 26, so `pnpm install` compiles it from source with
 > node-gyp (often around two minutes). Install Visual Studio Build Tools 2022
 > or newer as described in step 4 *before* running `pnpm install`. Compilation
 > output by itself is not a Node-version incompatibility.

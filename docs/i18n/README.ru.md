@@ -337,7 +337,7 @@ pnpm tools-dev run web
 
 Откройте URL, напечатанный `tools-dev`; без явных флагов порты разработки назначаются динамически.
 
-Node `~24`, pnpm `10.33.x`. Пользователям WSL2 см. [`docs/wsl-setup.md`](../../docs/wsl-setup.md); пользователям нативной Windows — [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Полный быстрый старт, переменные окружения, Nix flake и процесс упакованной сборки → [`QUICKSTART.md`](../../QUICKSTART.md).
+Node `~26`, pnpm `10.33.x`. Пользователям WSL2 см. [`docs/wsl-setup.md`](../../docs/wsl-setup.md); пользователям нативной Windows — [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Полный быстрый старт, переменные окружения, Nix flake и процесс упакованной сборки → [`QUICKSTART.md`](../../QUICKSTART.md).
 
 ### Полный рабочий процесс — от брифа до артефакта
 
@@ -553,7 +553,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 | Слой | Стек |
 |---|---|
 | Фронтенд | Next.js 16 App Router + React 18 + TypeScript |
-| Демон | Node 24 · Express · SSE-стриминг · `better-sqlite3` |
+| Демон | Node 26 · Express · SSE-стриминг · `better-sqlite3` |
 | Хранилище | Перед изменением или документированием путей хранения демона необходимо прочитать корневой `AGENTS.md`, раздел **Daemon data directory contract**. Этот README НЕ ДОЛЖЕН пересказывать его. |
 | Предпросмотр | Filesystem-запуск рендерит канонические файлы; BYOK/API разбирает полный `<artifact>` в iframe `srcdoc` |
 | Экспорт | HTML (встроенный) · PDF (печать из браузера) · PPTX (управляемый агентом) · ZIP · Markdown · MP4 (HyperFrames) |

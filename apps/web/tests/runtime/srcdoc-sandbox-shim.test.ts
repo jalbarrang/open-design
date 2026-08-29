@@ -13,11 +13,11 @@
 //   1. Composing a real-shape React artifact that reads localStorage
 //      from a `useState` initializer (the exact repro in #1403's
 //      summary).
-//   2. Running the produced srcDoc string through a sandboxed VM
-//      context whose `window` raises `SecurityError` on every
-//      Web Storage touch — modeling the browser's `allow-scripts`
-//      iframe behavior, which jsdom's default `window.localStorage`
-//      does not simulate on its own.
+//   2. Running the produced srcDoc string against a sandboxed jsdom
+//      window whose Web Storage accessors raise `SecurityError` on
+//      every touch — modeling the browser's `allow-scripts` iframe
+//      behavior, which jsdom's default `window.localStorage` does not
+//      simulate on its own.
 //   3. Asserting (a) the shim takes over `window.localStorage` /
 //      `window.sessionStorage`, and (b) the user script reads/writes
 //      without throwing.
@@ -28,6 +28,7 @@
 
 import { describe, expect, it } from 'vitest';
 import * as vm from 'node:vm';
+import { JSDOM } from 'jsdom';
 import { buildSrcdoc } from '../../src/runtime/srcdoc';
 
 // Pull every <script> body out of a doc in document order. Lets us
@@ -43,39 +44,32 @@ function extractScriptBodies(doc: string): string[] {
   return bodies;
 }
 
-// Build a VM context that models an `allow-scripts` sandbox iframe:
-// `window` is its own globalThis and native `localStorage` /
-// `sessionStorage` accessors throw `SecurityError` on read.
+// Build a window that models an `allow-scripts` sandbox iframe: native
+// `localStorage` / `sessionStorage` accessors throw `SecurityError` on
+// read, exactly as the browser rejects them for an opaque origin.
 //
-// `vm.createContext` does not preserve `Object.defineProperty`
-// descriptors that we install from outside, so we install the
-// throwing getters from *inside* the VM after the context exists —
-// that way V8 keeps the accessor semantics intact and a later
-// `Object.defineProperty(window, 'localStorage', ...)` from the shim
-// can override them normally.
-function createSandboxedIframeVmContext(): vm.Context {
-  const ctx = vm.createContext({});
-  vm.runInContext(
-    `(function () {
-       this.window = this;
-       this.globalThis = this;
-       this.document = { addEventListener: function () {} };
-       for (var name of ['localStorage', 'sessionStorage']) {
-         (function (n) {
-           Object.defineProperty(window, n, {
-             configurable: true,
-             get: function () {
-               var err = new Error('SecurityError');
-               err.name = 'SecurityError';
-               throw err;
-             },
-           });
-         })(name);
-       }
-     }).call(this);`,
-    ctx,
-  );
-  return ctx;
+// This uses jsdom rather than `node:vm`. A vm context's `window` has to
+// be the context's own global proxy for bare `localStorage` identifiers
+// to resolve, and from Node 26 on that proxy no longer honours an
+// `Object.defineProperty` accessor for the Web Storage names — a read
+// returns `undefined` instead of invoking the getter, so the sandbox
+// stops modeling anything. A jsdom window takes the descriptors on both
+// `window.localStorage` and the bare identifier, and behaves the same on
+// every supported Node version.
+function createSandboxedIframeWindow(): Window & typeof globalThis {
+  const dom = new JSDOM('<!doctype html><html><body></body></html>', { runScripts: 'outside-only' });
+  const win = dom.window as unknown as Window & typeof globalThis;
+  for (const name of ['localStorage', 'sessionStorage'] as const) {
+    Object.defineProperty(win, name, {
+      configurable: true,
+      get() {
+        const err = new Error('SecurityError');
+        err.name = 'SecurityError';
+        throw err;
+      },
+    });
+  }
+  return win;
 }
 
 describe('buildSrcdoc shim isolates Web Storage from a sandboxed window (#1403 verify)', () => {
@@ -123,36 +117,36 @@ describe('buildSrcdoc shim isolates Web Storage from a sandboxed window (#1403 v
     const doc = buildSrcdoc(REACT_ARTIFACT);
     const scripts = extractScriptBodies(doc);
     // Skip the type="text/babel" tag — its body is empty (just src=)
-    // and Babel-standalone is not present in the VM. We only need the
-    // shim + the inline boot script to validate the SecurityError
-    // suppression model.
+    // and Babel-standalone is not present in the sandbox window. We only
+    // need the shim + the inline boot script to validate the
+    // SecurityError suppression model.
     const shimScript = scripts.find((s) => /data-od-sandbox-shim/.test(s) === false && /makeStore/.test(s));
     const bootScript = scripts.find((s) => /var theme = localStorage\.getItem/.test(s));
     expect(shimScript, 'shim script body must be present').toBeDefined();
     expect(bootScript, 'user boot script body must be present').toBeDefined();
 
-    const ctx = createSandboxedIframeVmContext();
+    const win = createSandboxedIframeWindow();
     // 1. Confirm the bare sandbox raises SecurityError on Web Storage
     //    access — without this the test would not actually be modeling
     //    the iframe behavior the fix is supposed to neutralize.
-    expect(() => vm.runInContext('window.localStorage.getItem("x");', ctx)).toThrow(/SecurityError/);
+    expect(() => win.eval('window.localStorage.getItem("x");')).toThrow(/SecurityError/);
 
     // 2. Run the shim. After this, window.localStorage / sessionStorage
     //    must point at the in-memory polyfill rather than the throwing
     //    accessor.
-    vm.runInContext(shimScript as string, ctx);
-    const ls = vm.runInContext('window.localStorage', ctx) as { getItem: (k: string) => string | null };
-    const ss = vm.runInContext('window.sessionStorage', ctx) as { setItem: (k: string, v: string) => void };
+    win.eval(shimScript as string);
+    const ls = win.eval('window.localStorage') as { getItem: (k: string) => string | null };
+    const ss = win.eval('window.sessionStorage') as { setItem: (k: string, v: string) => void };
     expect(typeof ls.getItem).toBe('function');
     expect(typeof ss.setItem).toBe('function');
 
     // 3. Run the original boot script. It must complete without
     //    throwing — the exact failure mode #1403 reports. The script
     //    uses bare `localStorage` identifiers (no `window.` prefix),
-    //    which the VM now resolves to `win.localStorage` because the
-    //    sandbox window is its own globalThis.
-    vm.runInContext(bootScript as string, ctx);
-    const result = vm.runInContext('window.__bootResult', ctx) as { theme: string; lang: string; ok: boolean };
+    //    which resolve to `win.localStorage` because the sandbox window
+    //    is the script's own globalThis.
+    win.eval(bootScript as string);
+    const result = win.eval('window.__bootResult') as { theme: string; lang: string; ok: boolean };
     expect(result.ok).toBe(true);
     expect(result.theme).toBe('system');
     expect(result.lang).toBe('en');

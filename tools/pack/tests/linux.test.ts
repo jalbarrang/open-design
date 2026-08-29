@@ -163,7 +163,7 @@ describe("buildDockerArgs", () => {
     expect(last).toMatch(/echo "\$PNPM_SHA256  \/tmp\/pnpm\.tmp" \| sha256sum -c -/);
     expect(last).toMatch(/mv \/tmp\/pnpm\.tmp \/tmp\/pnpm/);
     expect(last).toMatch(/chmod \+x \/tmp\/pnpm/);
-    expect(last).toMatch(/\/tmp\/pnpm env use --global 24\.\d+\.\d+/);
+    expect(last).toMatch(/\/tmp\/pnpm env use --global 26\.\d+\.\d+/);
     expect(last).toMatch(/\/tmp\/pnpm install --frozen-lockfile/);
     expect(last).toMatch(/node tools\/pack\/bin\/tools-pack\.mjs linux build --to all --namespace default/);
     expect(last).not.toMatch(/\/tmp\/pnpm tools-pack linux build/);

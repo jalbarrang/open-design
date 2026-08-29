@@ -6,7 +6,7 @@
 
 ## ข้อกำหนดของ environment
 
-- **Node.js:** `~24` (Node 24.x). Repo บังคับเวอร์ชันนี้ผ่าน `package.json#engines`.
+- **Node.js:** `~26` (Node 26.x). Repo บังคับเวอร์ชันนี้ผ่าน `package.json#engines`.
 - **pnpm:** `10.33.x`. Repo pin `pnpm@10.33.2` ผ่าน `packageManager`; ใช้ Corepack เพื่อให้เลือกเวอร์ชันที่ pin ไว้อัตโนมัติ.
 - **OS:** macOS, Linux และ WSL2 เป็น path หลัก. Windows native รองรับด้วย; ดูปัญหา setup ที่พบบ่อยใน [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md).
 - **Optional local agent CLI:** OpenDesign รองรับ registry ของ local runtimes เช่น Claude Code, Codex, Devin for Terminal, OpenCode, Cursor Agent, Qwen, Qoder CLI, GitHub Copilot CLI และอื่น ๆ. รายการปัจจุบันอยู่ใน [`apps/daemon/src/runtimes/registry.ts`](../../apps/daemon/src/runtimes/registry.ts). ถ้าไม่ได้ติดตั้ง runtime ใดเลย ให้ใช้ BYOK runtime ที่ตั้งค่าไว้ใน Settings.
@@ -15,16 +15,16 @@
 
 Daemon จะ scan **`PATH`** ของคุณ (รวมถึง directory toolchain ของ user ที่พบบ่อย). ถ้าคุณติดตั้ง CLI ด้วย **`npm install -g`** หรือ **Homebrew** แล้ว OpenDesign ยังแสดงว่า *not installed*, GUI อาจเริ่มด้วย `PATH` แบบ minimal ที่ไม่มี global npm หรือ Homebrew `bin` directory (พบบ่อยบน macOS เมื่อไม่ได้ launch แอปจาก full login shell). ตรวจให้แน่ใจว่า directory ของ executable อยู่ใน `PATH` สำหรับ process ที่รัน daemon แล้วใช้ **Rescan** ใน **Settings → Execution mode**.
 
-[`nvm`](https://github.com/nvm-sh/nvm) / [`fnm`](https://github.com/Schniz/fnm) เป็น convenience tools แบบ optional ไม่ใช่สิ่งจำเป็นในการ setup project. ถ้าคุณใช้ตัวใดตัวหนึ่ง ให้ติดตั้ง/เลือก Node 24 ก่อนรัน pnpm:
+[`nvm`](https://github.com/nvm-sh/nvm) / [`fnm`](https://github.com/Schniz/fnm) เป็น convenience tools แบบ optional ไม่ใช่สิ่งจำเป็นในการ setup project. ถ้าคุณใช้ตัวใดตัวหนึ่ง ให้ติดตั้ง/เลือก Node 26 ก่อนรัน pnpm:
 
 ```bash
 # nvm
-nvm install 24
-nvm use 24
+nvm install 26
+nvm use 26
 
 # fnm
-fnm install 24
-fnm use 24
+fnm install 26
+fnm use 26
 ```
 
 จากนั้นเปิด Corepack แล้วให้ repo เลือก pnpm:

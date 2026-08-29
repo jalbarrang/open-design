@@ -357,7 +357,7 @@ pnpm tools-dev run web
 
 Open the URL printed by `tools-dev`; development ports are allocated dynamically unless you pass explicit port flags.
 
-Node `~24`, pnpm `10.33.x`. WSL2 users, see [`docs/wsl-setup.md`](docs/wsl-setup.md); native Windows users, see [`docs/windows-troubleshooting.md`](docs/windows-troubleshooting.md). Full quickstart, env vars, Nix flake, and packaged build flow → [`QUICKSTART.md`](QUICKSTART.md).
+Node `~26`, pnpm `10.33.x`. WSL2 users, see [`docs/wsl-setup.md`](docs/wsl-setup.md); native Windows users, see [`docs/windows-troubleshooting.md`](docs/windows-troubleshooting.md). Full quickstart, env vars, Nix flake, and packaged build flow → [`QUICKSTART.md`](QUICKSTART.md).
 
 ### A full workflow — from brief to artifact
 
@@ -574,7 +574,7 @@ Plugin registry endpoint: `GET /api/plugins`. Directory overview → [`plugins/R
 | Layer | Stack |
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
-| Daemon | Node 24 · Express · SSE streaming · `better-sqlite3` |
+| Daemon | Node 26 · Express · SSE streaming · `better-sqlite3` |
 | Storage | Before changing or documenting daemon storage paths, you MUST read `AGENTS.md` → **Daemon data directory contract**. This README MUST NOT restate it. |
 | Preview | Filesystem runs render canonical project files; BYOK/plain-API runs parse one complete `<artifact>` block into a sandboxed `srcdoc` iframe |
 | Export | HTML (inlined) · PDF (browser print) · PPTX (agent-driven) · ZIP · Markdown · MP4 (HyperFrames) |

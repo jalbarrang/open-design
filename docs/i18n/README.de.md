@@ -328,7 +328,7 @@ pnpm tools-dev run web
 
 Öffne die von `tools-dev` ausgegebene URL; Entwicklungsports werden dynamisch vergeben, sofern keine Port-Flags angegeben sind.
 
-Node `~24`, pnpm `10.33.x`. Windows-Nutzer, siehe [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Vollständiger Schnellstart, Umgebungsvariablen, Nix-Flake und der gepackte Build-Ablauf → [`QUICKSTART.de.md`](QUICKSTART.de.md).
+Node `~26`, pnpm `10.33.x`. Windows-Nutzer, siehe [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Vollständiger Schnellstart, Umgebungsvariablen, Nix-Flake und der gepackte Build-Ablauf → [`QUICKSTART.de.md`](QUICKSTART.de.md).
 
 ### Ein vollständiger Workflow — vom Briefing zum Artefakt
 
@@ -543,7 +543,7 @@ Plugin-Registry-Endpunkt: `GET /api/plugins`. Verzeichnisübersicht → [`plugin
 | Ebene | Stack |
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
-| Daemon | Node 24 · Express · SSE-Streaming · `better-sqlite3` |
+| Daemon | Node 26 · Express · SSE-Streaming · `better-sqlite3` |
 | Speicher | Bevor Sie Daemon-Speicherpfade ändern oder dokumentieren, MÜSSEN Sie `AGENTS.md` im Repository-Stamm lesen, Abschnitt **Daemon data directory contract**. Dieses README DARF ihn NICHT wiederholen. |
 | Vorschau | Dateisystemläufe rendern kanonische Projektdateien; BYOK-/Plain-API-Läufe parsen einen vollständigen `<artifact>`-Block in ein Sandbox-`srcdoc`-iframe |
 | Export | HTML (eingebettet) · PDF (Browser-Druck) · PPTX (agentengesteuert) · ZIP · Markdown · MP4 (HyperFrames) |

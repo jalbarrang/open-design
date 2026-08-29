@@ -40,7 +40,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 26
 
       # Fails on a logic regression before anything reaches the registry or a
       # webhook, so a broken checker is loud rather than silently in-sync.

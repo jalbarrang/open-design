@@ -328,7 +328,7 @@ pnpm tools-dev run web
 
 `tools-dev`가 출력한 URL을 여세요. 명시적인 포트 플래그가 없으면 개발 포트는 동적으로 배정됩니다.
 
-Node `~24`, pnpm `10.33.x`. Windows 사용자는 [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md)를 참고하세요. 전체 빠른 시작, 환경 변수, Nix flake, 패키징 빌드 흐름 → [`QUICKSTART.ko.md`](QUICKSTART.ko.md).
+Node `~26`, pnpm `10.33.x`. Windows 사용자는 [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md)를 참고하세요. 전체 빠른 시작, 환경 변수, Nix flake, 패키징 빌드 흐름 → [`QUICKSTART.ko.md`](QUICKSTART.ko.md).
 
 ### 전체 워크플로 — 브리프에서 아티팩트까지
 
@@ -542,7 +542,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 | 계층 | 스택 |
 |---|---|
 | 프론트엔드 | Next.js 16 App Router + React 18 + TypeScript |
-| 데몬 | Node 24 · Express · SSE 스트리밍 · `better-sqlite3` |
+| 데몬 | Node 26 · Express · SSE 스트리밍 · `better-sqlite3` |
 | 스토리지 | daemon 저장 경로를 변경하거나 문서화하기 전에 반드시 루트 `AGENTS.md`의 **Daemon data directory contract**를 읽어야 합니다. 이 README는 그 내용을 다시 서술해서는 안 됩니다. |
 | 미리보기 | filesystem 실행은 정규 파일을 렌더링하고 BYOK/API는 완전한 `<artifact>` 블록을 샌드박스 `srcdoc` iframe으로 파싱합니다 |
 | 내보내기 | HTML(인라인) · PDF(브라우저 인쇄) · PPTX(에이전트 기반) · ZIP · Markdown · MP4(HyperFrames) |

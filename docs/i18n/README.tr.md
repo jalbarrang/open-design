@@ -328,7 +328,7 @@ pnpm tools-dev run web
 
 `tools-dev` tarafından yazdırılan URL'yi açın; açık port bayrakları verilmezse geliştirme portları dinamik atanır.
 
-Node `~24`, pnpm `10.33.x`. Windows kullanıcıları, bkz. [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Tam hızlı başlangıç, ortam değişkenleri, Nix flake ve paketlenmiş derleme akışı → [`QUICKSTART.md`](../../QUICKSTART.md).
+Node `~26`, pnpm `10.33.x`. Windows kullanıcıları, bkz. [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Tam hızlı başlangıç, ortam değişkenleri, Nix flake ve paketlenmiş derleme akışı → [`QUICKSTART.md`](../../QUICKSTART.md).
 
 ### Eksiksiz bir iş akışı — özetten artifact'e
 
@@ -542,7 +542,7 @@ Eklenti kayıt uç noktası: `GET /api/plugins`. Dizin genel bakışı → [`plu
 | Katman | Yığın |
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
-| Daemon | Node 24 · Express · SSE streaming · `better-sqlite3` |
+| Daemon | Node 26 · Express · SSE streaming · `better-sqlite3` |
 | Depolama | Daemon depolama yollarını değiştirmeden veya belgelemeden önce kökteki `AGENTS.md` dosyasında **Daemon data directory contract** bölümünü MUTLAKA okuyun. Bu README onu TEKRAR ETMEMELİDİR. |
 | Önizleme | Filesystem çalıştırmaları kanonik dosyaları render eder; BYOK/API eksiksiz bir `<artifact>` bloğunu yalıtılmış `srcdoc` iframe'e ayrıştırır |
 | Dışa aktarma | HTML (gömülü) · PDF (tarayıcı yazdırma) · PPTX (ajan güdümlü) · ZIP · Markdown · MP4 (HyperFrames) |

@@ -10,7 +10,7 @@ For native Windows PowerShell setup, use
 ## Recommended shape
 
 - Clone OpenDesign inside WSL2.
-- Install Node `~24` and the repo-pinned pnpm (`10.33.2`) inside WSL2.
+- Install Node `~26` and the repo-pinned pnpm (`10.33.2`) inside WSL2.
 - Put a WSL-native `od` wrapper before `/usr/bin` on `PATH`.
 - Start the daemon from WSL with `od --no-open`.
 - Install MCP entries from the same WSL shell.
@@ -26,7 +26,7 @@ same environment.
 git clone https://github.com/nexu-io/open-design.git ~/tools/open-design
 cd ~/tools/open-design
 
-node --version   # should print v24.x.x
+node --version   # should print v26.x.x
 corepack enable
 corepack pnpm --version   # should print 10.33.2
 pnpm install
@@ -134,11 +134,11 @@ for example `~/.claude.json`, `~/.config/opencode/opencode.json`,
 
 ## Native module mismatch after changing Node versions
 
-If dependencies were installed under Node 22 and OpenDesign later runs under
-Node 24, native modules such as `better-sqlite3` can fail with a
+If dependencies were installed under an older Node and OpenDesign later runs
+under Node 26, native modules such as `better-sqlite3` can fail with a
 `NODE_MODULE_VERSION` mismatch.
 
-Reinstall under the active Node 24 runtime:
+Reinstall under the active Node 26 runtime:
 
 ```bash
 cd ~/tools/open-design

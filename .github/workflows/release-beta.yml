@@ -357,7 +357,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 26
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -460,7 +460,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 26
 
       - name: Compute mac_arm64 tools-pack cache key
         id: mac_arm64_tools_pack_cache_key
@@ -815,7 +815,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 26
 
       - name: Compute mac_x64 tools-pack cache key
         id: mac_x64_tools_pack_cache_key
@@ -1084,7 +1084,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 26
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
@@ -1382,7 +1382,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 26
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
@@ -1548,7 +1548,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 26
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

@@ -333,7 +333,7 @@ pnpm tools-dev run web
 
 打开 `tools-dev` 打印的 URL；除非显式传入端口参数，开发端口会动态分配。
 
-Node `~24`，pnpm `10.33.x`。Windows 用户请参见 [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md)。完整的快速开始指南、环境变量、Nix flake 和打包构建流程 → [`QUICKSTART.zh-CN.md`](QUICKSTART.zh-CN.md)。
+Node `~26`，pnpm `10.33.x`。Windows 用户请参见 [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md)。完整的快速开始指南、环境变量、Nix flake 和打包构建流程 → [`QUICKSTART.zh-CN.md`](QUICKSTART.zh-CN.md)。
 
 ### 一个完整的工作流——从需求到工件
 
@@ -548,7 +548,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 | 层 | 技术栈 |
 |---|---|
 | 前端 | Next.js 16 App Router + React 18 + TypeScript |
-| 守护进程 | Node 24 · Express · SSE 流式传输 · `better-sqlite3` |
+| 守护进程 | Node 26 · Express · SSE 流式传输 · `better-sqlite3` |
 | 存储 | 在修改或记录 daemon 存储路径之前，必须阅读仓库根目录 `AGENTS.md` 中的 **Daemon data directory contract**。本 README 不得复述该契约。 |
 | 预览 | 文件系统运行渲染规范项目文件；BYOK/纯 API 运行将一个完整 `<artifact>` 块解析到沙箱 `srcdoc` iframe |
 | 导出 | HTML（内联）· PDF（浏览器打印）· PPTX（Agent 驱动）· ZIP · Markdown · MP4（HyperFrames） |

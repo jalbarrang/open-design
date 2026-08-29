@@ -1,5 +1,5 @@
-ARG NODE_IMAGE=docker.io/library/node:24-alpine
-ARG RUNTIME_IMAGE=docker.io/library/node:24-alpine
+ARG NODE_IMAGE=docker.io/library/node:26-alpine
+ARG RUNTIME_IMAGE=docker.io/library/node:26-alpine
 
 FROM ${NODE_IMAGE} AS build
 

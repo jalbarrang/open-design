@@ -39,7 +39,7 @@
 
     perSystem = flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {inherit system;};
-      nodejs = pkgs.nodejs_24;
+      nodejs = pkgs.nodejs_26;
       workspacePackageManifests = workspacePaths:
         map (workspacePath: "${workspacePath}/package.json") workspacePaths;
       # Keep in sync with .github/workflows/ci.yml change_scopes

@@ -330,7 +330,7 @@ pnpm tools-dev run web
 
 افتح الرابط الذي يطبعه `tools-dev`؛ تُخصَّص منافذ التطوير ديناميكيًا ما لم تمرر أعلام منافذ صريحة.
 
-‏Node `~24`، وpnpm `10.33.x`. مستخدمو Windows، راجعوا [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). البدء السريع الكامل، ومتغيرات البيئة، وNix flake، وسير بناء الحزمة ← [`QUICKSTART.md`](../../QUICKSTART.md).
+‏Node `~26`، وpnpm `10.33.x`. مستخدمو Windows، راجعوا [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). البدء السريع الكامل، ومتغيرات البيئة، وNix flake، وسير بناء الحزمة ← [`QUICKSTART.md`](../../QUICKSTART.md).
 
 ### سير عمل كامل — من الموجز إلى المخرَج
 
@@ -544,7 +544,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 | الطبقة | المكدّس |
 |---|---|
 | الواجهة الأمامية | Next.js 16 App Router + React 18 + TypeScript |
-| الـ Daemon | Node 24 · Express · بثّ SSE · `better-sqlite3` |
+| الـ Daemon | Node 26 · Express · بثّ SSE · `better-sqlite3` |
 | التخزين | قبل تغيير أو توثيق مسارات تخزين الـ daemon، يجب قراءة `AGENTS.md` في جذر المستودع، قسم **Daemon data directory contract**. يجب ألا يعيد هذا README صياغته. |
 | المعاينة | تشغيلات filesystem تعرض الملفات الأساسية؛ وتشغيلات BYOK/API تحلل كتلة `<artifact>` كاملة في iframe `srcdoc` معزول |
 | التصدير | HTML (مضمَّن) · PDF (طباعة المتصفح) · PPTX (يقوده الوكيل) · ZIP · Markdown · MP4 (HyperFrames) |
