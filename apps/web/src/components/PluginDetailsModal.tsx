@@ -51,7 +51,7 @@ export function PluginDetailsModal({
   onDuplicate,
   isApplying,
   hideUseAction,
-  workspaceContext = null,
+
   onSharePopoverItemClick,
 }: Props) {
   const preview = inferPluginPreview(record);

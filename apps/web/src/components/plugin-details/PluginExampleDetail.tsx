@@ -44,7 +44,7 @@ export function PluginExampleDetail({
   onDuplicate,
   isApplying,
   hideUseAction,
-  workspaceContext = null,
+
   onSharePopoverItemClick,
 }: Props) {
   const { t, locale } = useI18n();
@@ -86,7 +86,7 @@ export function PluginExampleDetail({
     } finally {
       inFlightRef.current = false;
     }
-  }, [record.id, exampleStem, workspaceContext]);
+  }, [record.id, exampleStem]);
 
   useEffect(() => {
     void load();

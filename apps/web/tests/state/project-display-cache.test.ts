@@ -1,8 +1,6 @@
-import { buildWorkspacePermissions, type WorkspaceCollabContext } from '@open-design/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
-  MAX_PROJECT_DISPLAY_SNAPSHOTS,
   markProjectDisplaySnapshotsDirty,
   patchProjectDisplaySnapshots,
   projectDisplaySnapshotCount,
@@ -13,31 +11,6 @@ import {
   writeProjectDisplaySnapshot,
 } from '../../src/state/project-display-cache';
 import type { Project } from '../../src/types';
-
-function context(memberId: string): WorkspaceCollabContext {
-  return {
-    workspaceId: 'workspace-a',
-    workspaceType: 'team',
-    workspaceMemberId: memberId,
-    role: 'member',
-    memberStatus: 'active',
-    lifecycleState: 'active',
-    billingState: 'active',
-    planId: null,
-    providerMode: 'platform_credits',
-    seatSummary: {
-      seatLimit: 5,
-      usedSeats: 2,
-      availableSeats: 3,
-      isSeatFull: false,
-    },
-    permissions: buildWorkspacePermissions({
-      role: 'member',
-      lifecycleState: 'active',
-    }),
-    displayName: 'Workspace A',
-  };
-}
 
 function project(id: string): Project {
   return {
@@ -53,98 +26,66 @@ function project(id: string): Project {
 describe('project display snapshots', () => {
   afterEach(() => resetProjectDisplaySnapshots());
 
-  it('partitions snapshots by account, complete workspace identity, and view', () => {
-    const memberA = context('member-a');
-    const memberB = context('member-b');
+  it('partitions snapshots by local project view', () => {
     const keys = new Set([
-      projectDisplaySnapshotKey({ accountGeneration: 1, context: memberA, view: 'drafts' }),
-      projectDisplaySnapshotKey({ accountGeneration: 2, context: memberA, view: 'drafts' }),
-      projectDisplaySnapshotKey({ accountGeneration: 1, context: memberB, view: 'drafts' }),
-      projectDisplaySnapshotKey({ accountGeneration: 1, context: memberA, view: 'all' }),
+      projectDisplaySnapshotKey({ view: 'drafts' }),
+      projectDisplaySnapshotKey({ view: 'all' }),
+      projectDisplaySnapshotKey({ view: 'recent' }),
+      projectDisplaySnapshotKey({ view: undefined }),
     ]);
 
-    expect(keys.size).toBe(4);
+    expect(keys).toEqual(new Set([
+      'project-display:drafts',
+      'project-display:all',
+      'project-display:recent',
+    ]));
   });
 
-  it('marks only the exact principal dirty while retaining its last-good value', () => {
-    const memberA = context('member-a');
-    const memberB = context('member-b');
-    const scopeA = { accountGeneration: 1, context: memberA, view: 'drafts' as const };
-    const scopeB = { accountGeneration: 1, context: memberB, view: 'drafts' as const };
-    writeProjectDisplaySnapshot(scopeA, [project('project-a')]);
-    writeProjectDisplaySnapshot(scopeB, [project('project-b')]);
+  it('marks every local projection dirty while retaining its last-good value', () => {
+    const drafts = { view: 'drafts' as const };
+    const recent = { view: 'recent' as const };
+    writeProjectDisplaySnapshot(drafts, [project('project-a')]);
+    writeProjectDisplaySnapshot(recent, [project('project-b')]);
 
-    markProjectDisplaySnapshotsDirty({ context: memberA, accountGeneration: 1 });
+    markProjectDisplaySnapshotsDirty();
 
-    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(scopeA))).toMatchObject({
+    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(drafts))).toMatchObject({
       projects: [{ id: 'project-a' }],
       dirty: true,
     });
-    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(scopeB))).toMatchObject({
+    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(recent))).toMatchObject({
       projects: [{ id: 'project-b' }],
-      dirty: false,
+      dirty: true,
     });
   });
 
-  it('patches and removes a project across exact-principal views only', () => {
-    const memberA = context('member-a');
-    const memberB = context('member-b');
-    const draftsA = { accountGeneration: 1, context: memberA, view: 'drafts' as const };
-    const allA = { accountGeneration: 1, context: memberA, view: 'all' as const };
-    const draftsB = { accountGeneration: 1, context: memberB, view: 'drafts' as const };
-    writeProjectDisplaySnapshot(draftsA, [project('shared')]);
-    writeProjectDisplaySnapshot(allA, [project('shared')]);
-    writeProjectDisplaySnapshot(draftsB, [project('shared')]);
+  it('patches and removes a project across local views', () => {
+    const drafts = { view: 'drafts' as const };
+    const all = { view: 'all' as const };
+    writeProjectDisplaySnapshot(drafts, [project('shared')]);
+    writeProjectDisplaySnapshot(all, [project('shared')]);
 
     patchProjectDisplaySnapshots({
-      context: memberA,
-      accountGeneration: 1,
       patch: (projects) => projects.map((item) =>
         item.id === 'shared' ? { ...item, name: 'renamed' } : item),
     });
-    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(draftsA)))
+    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(drafts)))
       .toMatchObject({ projects: [{ name: 'renamed' }], dirty: true });
-    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(allA)))
+    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(all)))
       .toMatchObject({ projects: [{ name: 'renamed' }], dirty: true });
-    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(draftsB)))
-      .toMatchObject({ projects: [{ name: 'shared' }], dirty: false });
 
-    removeProjectFromDisplaySnapshots({
-      context: memberA,
-      accountGeneration: 1,
-      projectId: 'shared',
-    });
-    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(draftsA))?.projects).toEqual([]);
-    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(allA))?.projects).toEqual([]);
-    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(draftsB))?.projects)
-      .toMatchObject([{ id: 'shared' }]);
+    removeProjectFromDisplaySnapshots({ projectId: 'shared' });
+    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(drafts))?.projects).toEqual([]);
+    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(all))?.projects).toEqual([]);
   });
 
-  it('bounds snapshots with LRU eviction', () => {
-    const memberA = context('member-a');
-    const firstScope = { accountGeneration: 0, context: memberA, view: 'recent' as const };
-    writeProjectDisplaySnapshot(firstScope, [project('project-first')]);
-    for (let generation = 1; generation < MAX_PROJECT_DISPLAY_SNAPSHOTS; generation += 1) {
-      writeProjectDisplaySnapshot({
-        accountGeneration: generation,
-        context: memberA,
-        view: 'recent',
-      }, [project(`project-${generation}`)]);
-    }
-    // Touch the first entry so generation 1 becomes the least recently used.
-    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(firstScope))).not.toBeNull();
-    writeProjectDisplaySnapshot({
-      accountGeneration: MAX_PROJECT_DISPLAY_SNAPSHOTS,
-      context: memberA,
-      view: 'recent',
-    }, [project('project-overflow')]);
+  it('replaces an existing view snapshot instead of accumulating duplicates', () => {
+    const scope = { view: 'recent' as const };
+    writeProjectDisplaySnapshot(scope, [project('old')]);
+    writeProjectDisplaySnapshot(scope, [project('new')]);
 
-    expect(projectDisplaySnapshotCount()).toBe(MAX_PROJECT_DISPLAY_SNAPSHOTS);
-    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(firstScope))).not.toBeNull();
-    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey({
-      accountGeneration: 1,
-      context: memberA,
-      view: 'recent',
-    }))).toBeNull();
+    expect(projectDisplaySnapshotCount()).toBe(1);
+    expect(readProjectDisplaySnapshot(projectDisplaySnapshotKey(scope))?.projects)
+      .toMatchObject([{ id: 'new' }]);
   });
 });

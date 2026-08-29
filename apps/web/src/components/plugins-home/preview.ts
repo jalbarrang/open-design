@@ -280,9 +280,6 @@ export function inferPluginPreview(
       brand: brandLabel(record),
       designSystemId: designSystemRef(record),
       swatches: deriveSwatches(record),
-      ...(opts?.workspaceContext
-        ? { workspaceContext: opts.workspaceContext }
-        : {}),
     };
   }
 

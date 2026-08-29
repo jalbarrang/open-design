@@ -68,7 +68,7 @@ function isDesignSystemRecord(record: InstalledPluginRecord): boolean {
 export function ComposerPluginPreview({
   record,
   locale,
-  workspaceContext = null,
+
 }: {
   record: InstalledPluginRecord;
   locale: string;
@@ -76,7 +76,7 @@ export function ComposerPluginPreview({
   const t = useT();
   const preview = useMemo(
     () => inferPluginPreview(record),
-    [record, workspaceContext],
+    [record],
   );
   const title = localizePluginTitle(locale, record);
   const description = localizePluginDescription(locale, record);

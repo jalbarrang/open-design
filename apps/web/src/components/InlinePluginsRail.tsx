@@ -14,7 +14,6 @@ import type {
 import {
   applyPlugin,
   listPlugins,
-  resolvedWorkspaceContextForWrite,
 } from '../state/projects';
 import { useI18n } from '../i18n';
 import { localizePluginDescription, localizePluginTitle } from './plugins-home/localization';

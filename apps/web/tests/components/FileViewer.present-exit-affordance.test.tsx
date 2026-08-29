@@ -1,3 +1,6 @@
+type CollabContextValue = Record<string, unknown>;
+const workspaceContextFixture = (_input?: unknown) => ({});
+function CollabProvider({ children }: { value: unknown; children: ReactNode }) { return <>{children}</>; }
 // @vitest-environment jsdom
 //
 // OPEND-2156 red spec: entering presentation leaves the user with no way out.
@@ -22,11 +25,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
-import { CollabProvider, type CollabContextValue } from '../../src/collab/collab-context';
 import { FileViewer } from '../../src/components/FileViewer';
 import { resetSharedCancellableGet } from '../../src/lib/shared-cancellable-get';
 import type { ProjectFile } from '../../src/types';
-import { workspaceContextFixture } from '../helpers/workspace-context';
 
 const WORKSPACE_CONTEXT = workspaceContextFixture({
   workspaceId: 'ws-present-exit',

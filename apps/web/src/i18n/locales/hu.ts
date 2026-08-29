@@ -322,7 +322,7 @@ export const hu: Dict = {
   'settings.onboardingSystemsTitle': 'Hozza a saját designrendszerét',
   'settings.onboardingSystemsBody': 'Válasszon vagy hozzon létre egy márkarendszert, hogy a generált munka valós színeket, tipográfiát és terméknyelvet kövessen.',
   'settings.onboardingExecutionTitle': 'Válasszon modellforrást',
-  'settings.onboardingExecutionBody': 'Használja az OpenDesign Hosted szolgáltatást, csatlakoztasson helyi ügynököt, vagy adja meg saját modellkulcsát.',
+  'settings.onboardingExecutionBody': 'Csatlakoztasson helyi ügynököt, vagy adja meg saját modellkulcsát.',
   'settings.onboardingAmrCloudBenefitOfficial': 'Hivatalosan ajánlott',
   'settings.onboardingAmrCloudBenefitReady': 'Telepítés nélkül',
   'settings.onboardingAmrCloudBenefitModels': 'Érje el a Claude, GPT, Fable 5 és 5.6 sol modelleket időszakos kedvezménnyel és magas párhuzamossággal.',

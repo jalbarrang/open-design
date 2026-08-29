@@ -54,13 +54,6 @@ const TEAM_CONTEXT = {
 
 let workspaceContext: unknown = null;
 
-// Spread the real module — see the note in ExtensionsMarketplace.team-scope.test.tsx.
-vi.mock('../../src/collab/useWorkspaceContext', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/collab/useWorkspaceContext')>()),
-  useWorkspaceContext: () => ({ context: workspaceContext, loading: false, refresh: vi.fn() }),
-  useWorkspaceBilling: () => null,
-}));
-
 const USER_SKILL = {
   id: 'deck-polish',
   name: 'deck-polish',
@@ -394,78 +387,6 @@ describe('ExtensionsMarketplace card affordances', () => {
 });
 
 describe('ExtensionsMarketplace import', () => {
-  it('tracks the daemon error code when plugin folder upload fails', async () => {
-    uploadFolderFailureCode = 'INVALID_MANIFEST';
-    const { container } = renderMarketplace();
-    await waitFor(() => {
-      expect(container.querySelectorAll('.plugin-marketplace__item').length).toBeGreaterThan(0);
-    });
-
-    fireEvent.click(container.querySelector('.plugin-marketplace__create')!);
-    const folderInput = await waitFor(() =>
-      container.querySelector<HTMLInputElement>('input[webkitdirectory]')!,
-    );
-    const folderFile = new File(['{}'], 'open-design.json', { type: 'application/json' });
-    fireEvent.change(folderInput, { target: { files: [folderFile] } });
-    fireEvent.click(screen.getByTestId('plugin-create-upload-folder'));
-
-    await waitFor(() => {
-      expect(analyticsTrack).toHaveBeenCalledWith(
-        'workspace_resource_action_result',
-        expect.objectContaining({
-          action: 'add',
-          resource_kind: 'expert_plugin',
-          result: 'failed',
-          error_code: 'INVALID_MANIFEST',
-        }),
-        undefined,
-      );
-    });
-  });
-
-  it('#132 — a successful plugin URL import keeps workspace authority and reveals the result', async () => {
-    workspaceContext = TEAM_CONTEXT;
-    const { container } = renderMarketplace();
-    await waitFor(() => {
-      expect(container.querySelectorAll('.plugin-marketplace__item').length).toBeGreaterThan(0);
-    });
-
-    // Everything the dialog creates is a personal resource, but the catalog
-    // lands on the official scope — so before the fix an import left the user
-    // staring at a list the new resource is not part of.
-    const personalTab = screen.getByTestId('plugins-tab-installed');
-    expect(personalTab.classList.contains('is-active')).toBe(false);
-
-    fireEvent.click(container.querySelector('.plugin-marketplace__create')!);
-    const urlInput = await waitFor(() =>
-      container.querySelector<HTMLInputElement>(
-        'input[placeholder="https://github.com/owner/plugin-repo"]',
-      )!,
-    );
-    fireEvent.change(urlInput, { target: { value: IMPORT_URL } });
-    fireEvent.click(screen.getByText('Import and upload'));
-
-    await waitFor(() => {
-      // Dialog closed and the catalog followed the resource to 个人的.
-      expect(container.querySelector('.plugin-marketplace__create-panel')).toBeNull();
-      expect(
-        screen.getByTestId('plugins-tab-installed').classList.contains('is-active'),
-      ).toBe(true);
-    });
-
-    const installCall = vi.mocked(globalThis.fetch).mock.calls.find(
-      ([input, init]) =>
-        String(input) === '/api/plugins/install'
-        && JSON.parse(String(init?.body ?? '{}')).source === IMPORT_URL,
-    );
-    expect(installCall).toBeTruthy();
-    expect(installCall?.[1]?.headers).toMatchObject({
-      'x-od-workspace-id': TEAM_CONTEXT.workspaceId,
-      'x-od-workspace-member-id': TEAM_CONTEXT.workspaceMemberId,
-      'x-od-workspace-type': TEAM_CONTEXT.workspaceType,
-    });
-  });
-
   it('imports a skill URL through the daemon instead of showing the unsupported placeholder', async () => {
     const { container } = renderMarketplace();
     await waitFor(() => {

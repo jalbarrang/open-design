@@ -322,7 +322,7 @@ export const ru: Dict = {
   'settings.onboardingSystemsTitle': 'Подключите свою дизайн-систему',
   'settings.onboardingSystemsBody': 'Выберите или создайте бренд-систему, чтобы сгенерированные работы соответствовали реальным цветам, типографике и языку продукта.',
   'settings.onboardingExecutionTitle': 'Выберите источник модели',
-  'settings.onboardingExecutionBody': 'Используйте OpenDesign Hosted, подключите локального агента или укажите собственный ключ модели.',
+  'settings.onboardingExecutionBody': 'Подключите локального агента или укажите собственный ключ модели.',
   'settings.onboardingAmrCloudBenefitOfficial': 'Официально рекомендовано',
   'settings.onboardingAmrCloudBenefitReady': 'Без развертывания',
   'settings.onboardingAmrCloudBenefitModels': 'Получите доступ к Claude, GPT, Fable 5 и 5.6 sol со временной скидкой и высокой параллельностью.',

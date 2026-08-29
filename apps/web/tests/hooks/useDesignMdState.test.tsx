@@ -4,6 +4,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useDesignMdState, computeStale } from '../../src/hooks/useDesignMdState';
+import { resetCoalescedGet } from '../../src/lib/coalesced-get';
 
 const FRESH_DESIGN_MD = `# DESIGN.md
 
@@ -53,6 +54,7 @@ function installFetchMock(endpoints: MockEndpoints) {
 }
 
 afterEach(() => {
+  resetCoalescedGet();
   vi.restoreAllMocks();
 });
 

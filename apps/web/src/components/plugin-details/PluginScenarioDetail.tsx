@@ -40,7 +40,7 @@ export function PluginScenarioDetail({
   onDuplicate,
   isApplying,
   hideUseAction,
-  workspaceContext = null,
+
 }: Props) {
   const { t, locale } = useI18n();
   const localizedTitle = localizePluginTitle(locale, record);

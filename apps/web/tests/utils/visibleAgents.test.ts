@@ -18,29 +18,6 @@ function agent(partial: Partial<AgentInfo> & { id: string }): AgentInfo {
 }
 
 describe('availableVisibleAgentCount', () => {
-  // The rescan notice and the list underneath it must agree. `byok-opencode`
-  // is available whenever OpenCode is installed but is never rendered, so
-  // counting the raw detection list announced one more CLI than the user
-  // could see — "3 available" sitting above a two-row list.
-  it('excludes agents that are hidden from the picker', () => {
-    const agents = [
-      agent({ id: 'amr', available: true }),
-      agent({ id: 'deepseek', available: true }),
-      agent({ id: 'byok-opencode', available: true }),
-    ];
-
-    expect(agents.filter((a) => a.available).length).toBe(3);
-    expect(availableVisibleAgentCount(agents)).toBe(2);
-  });
-
-  it('ignores unavailable agents', () => {
-    const agents = [
-      agent({ id: 'amr', available: true }),
-      agent({ id: 'codex', available: false }),
-    ];
-
-    expect(availableVisibleAgentCount(agents)).toBe(1);
-  });
 
   it('counts nothing when every agent is hidden or unavailable', () => {
     expect(

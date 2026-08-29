@@ -55,7 +55,7 @@ export function NewBrandModal({ open, onClose, onCreated }: Props) {
       if (!trimmed || starting) return;
       void run(trimmed);
     },
-    [url, starting, run, workspaceContext],
+    [url, starting, run],
   );
 
   // Picking a reference brand fills the URL field for visible feedback and
@@ -66,7 +66,7 @@ export function NewBrandModal({ open, onClose, onCreated }: Props) {
       setUrl(brand.domain);
       void run(brand.domain);
     },
-    [starting, run, workspaceContext],
+    [starting, run],
   );
 
   useEffect(() => {

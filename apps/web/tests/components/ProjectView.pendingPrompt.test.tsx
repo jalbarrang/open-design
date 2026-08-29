@@ -41,7 +41,6 @@ const registryOriginals = vi.hoisted(() => ({
     projectId: string,
     options?: {
       signal?: AbortSignal;
-      workspaceContext?: import('@open-design/contracts').WorkspaceCollabContext | null;
       fresh?: boolean;
       requireAuthoritative?: boolean;
     },
@@ -96,19 +95,6 @@ vi.mock('../../src/providers/daemon', () => ({
 
 vi.mock('../../src/providers/project-events', () => ({
   useProjectFileEvents: vi.fn(),
-}));
-
-vi.mock('../../src/collab/useProjectWorkspaceScope', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/collab/useProjectWorkspaceScope')>()),
-  useProjectWorkspaceScope: (projectId: string) => ({
-    loading: false,
-    scope: {
-      kind: 'unbound',
-      projectId,
-      workspaceId: null,
-      context: null,
-    },
-  }),
 }));
 
 vi.mock('../../src/runtime/brands', async () => {
@@ -795,54 +781,6 @@ describe('ProjectView pending prompt seeding', () => {
     });
   });
 
-  // recvqb6mfyqXLD: a design system materialized from a teammate's team share
-  // is only mutable by whoever can manage that share — the same server-side
-  // verdict (`canMutateUserDesignSystem`) mirrored onto the design system's
-  // `canMutate` field. This tab is a genuinely separate surface from
-  // `DesignSystemsTab`'s own team-tab pane (fixed earlier): `projectCollab
-  // .viewerOnly` does not catch it, because team-sharing a design system does
-  // not also register its backing project as team-shared at the project-
-  // collab/hub level, so `designSystemEditable` needs its own signal off the
-  // `designSystems` list this project's design-system tab already reads.
-  it('disables the in-project design system tab for a team-synced design system the caller may not manage', async () => {
-    renderProjectView(
-      {
-        ...project('teammate-ds-project'),
-        designSystemId: 'user:teammate-ds',
-        metadata: {
-          kind: 'other',
-          importedFrom: 'design-system',
-          entryFile: 'DESIGN.md',
-          sourceFileName: 'user:teammate-ds',
-        },
-      },
-      vi.fn(),
-      {
-        designSystems: [
-          {
-            id: 'user:teammate-ds',
-            title: 'Teammate DS',
-            category: 'Custom',
-            summary: '',
-            swatches: [],
-            surface: 'web',
-            body: '# Teammate DS',
-            source: 'user',
-            status: 'draft',
-            isEditable: true,
-            teamSynced: true,
-            canMutate: false,
-          } as DesignSystemSummary,
-        ],
-      },
-    );
-
-    await waitFor(() => {
-      expect(fileWorkspaceSpy.mock.calls.length).toBeGreaterThan(0);
-    });
-    expect(fileWorkspaceSpy.mock.calls.at(-1)?.[0].designSystemEditable).toBe(false);
-  });
-
   it('keeps the in-project design system tab editable for the caller\'s own (non-team-synced) design system', async () => {
     renderProjectView(
       {
@@ -1019,7 +957,7 @@ describe('ProjectView pending prompt seeding', () => {
       expect(mockedContinueBrandExtraction).toHaveBeenCalledWith(projectId);
     });
     await waitFor(() => {
-      expect(mockedListMessages).toHaveBeenCalledWith(projectId, 'conv-brand-replacement', null);
+      expect(mockedListMessages).toHaveBeenCalledWith(projectId, 'conv-brand-replacement');
     });
     await waitFor(() => {
       expect(screen.getByTestId('active-conversation').textContent).toBe('conv-brand-replacement');

@@ -13,10 +13,7 @@ import type {
   InstalledPluginRecord,
   PluginConnectorRef,
 } from '@open-design/contracts';
-import {
-  applyPlugin,
-  resolvedWorkspaceContextForWrite,
-} from '../state/projects';
+import { applyPlugin } from '../state/projects';
 import { goBack, navigate } from '../router';
 import {
   createPluginUseHandoff,

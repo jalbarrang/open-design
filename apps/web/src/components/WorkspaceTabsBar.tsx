@@ -30,7 +30,6 @@ import {
 import { homeHeroChipLabel } from './home-hero/chip-labels';
 import { useGlideIndicator } from '../hooks/useGlideIndicator';
 import { useLiquidGlass } from '../hooks/useLiquidGlass';
-import { WORKSPACE_CHROME_ACCOUNT_ACTIONS_ID } from './workspaceChromeActions';
 
 type WorkspaceChromeTab =
   | {
@@ -1867,11 +1866,6 @@ export function WorkspaceTabsBar({
       </div>
       </>,
       )}
-      <div
-        id={WORKSPACE_CHROME_ACCOUNT_ACTIONS_ID}
-        className="workspace-chrome-account-actions"
-        data-testid="workspace-chrome-account-actions"
-      />
       {radialMenu ? createPortal(
         <div className="workspace-radial-layer" onMouseDown={() => setRadialMenu(null)}>
           <div

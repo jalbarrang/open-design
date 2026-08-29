@@ -152,7 +152,6 @@ interface BrandFontManifestFile {
 export function useBrandFonts(
   projectId: string | undefined,
   fonts: { googleFontsUrl?: string }[],
-  workspaceReadGeneration?: string,
 ): void {
   const googleUrls = useMemo(() => {
     const urls = fonts
@@ -215,7 +214,7 @@ export function useBrandFonts(
       cancelled = true;
       if (styleEl) styleEl.remove();
     };
-  }, [projectId, workspaceReadGeneration]);
+  }, [projectId]);
 }
 
 interface BrandTokenSubset {
@@ -368,7 +367,7 @@ function DesignKitViewInner({
   const stickyHeaderRef = useRef<HTMLElement | null>(null);
   const logoSectionRef = useRef<HTMLElement | null>(null);
 
-  useBrandFonts(kit.projectId, kit.fonts, workspaceReadGeneration);
+  useBrandFonts(kit.projectId, kit.fonts);
 
   const logoCandidates = useMemo(
     () =>
@@ -389,7 +388,7 @@ function DesignKitViewInner({
     setCoverPreviewOpen(false);
     setColorEditor(null);
     setColorError(null);
-  }, [kit.designSystemId, kit.brandId, workspaceReadGeneration]);
+  }, [kit.designSystemId, kit.brandId]);
 
   useEffect(() => {
     setColorOverrides({});
@@ -1103,7 +1102,6 @@ function DesignKitViewInner({
               faviconSize={128}
               className={styles.coverLogo}
               fallbackClassName={styles.coverLogoFallback}
-              readGeneration={workspaceReadGeneration}
             />
           </button>
         ) : (
@@ -1115,7 +1113,6 @@ function DesignKitViewInner({
             faviconSize={128}
             className={styles.coverLogo}
             fallbackClassName={styles.coverLogoFallback}
-            readGeneration={workspaceReadGeneration}
           />
         )}
       </div>
@@ -1140,7 +1137,6 @@ function DesignKitViewInner({
                 faviconSize={40}
                 className={styles.previewHeadLogoImage}
                 fallbackClassName={styles.previewHeadLogoFallback}
-                readGeneration={workspaceReadGeneration}
               />
             </span>
           ) : null}

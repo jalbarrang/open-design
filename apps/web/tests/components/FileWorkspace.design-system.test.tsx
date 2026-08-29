@@ -1,21 +1,19 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { fireEvent, waitFor } from '@testing-library/react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import {
-  buildWorkspacePermissions,
-  buildWorkspaceSeatSummary,
-  type WorkspaceCollabContext,
-} from '@open-design/contracts';
 
 import { FileWorkspace } from '../../src/components/FileWorkspace';
-import {
-  CollabProvider,
-  type CollabContextValue,
-} from '../../src/collab/collab-context';
+type WorkspaceCollabContext = Record<string, unknown>;
+type CollabContextValue = Record<string, unknown>;
+const buildWorkspacePermissions = (input: Record<string, unknown>) => input;
+const buildWorkspaceSeatSummary = (input: Record<string, unknown>) => input;
+function CollabProvider({ children }: { value: CollabContextValue; children: ReactNode }) {
+  return <>{children}</>;
+}
 import type { AgentEvent, DesignSystemSummary, ProjectFile } from '../../src/types';
 
 const registryMocks = vi.hoisted(() => ({
@@ -102,47 +100,6 @@ function designSystem(overrides: Partial<DesignSystemSummary> = {}): DesignSyste
   };
 }
 
-function teamContext(): WorkspaceCollabContext {
-  return {
-    workspaceId: 'workspace-logo',
-    workspaceType: 'team',
-    workspaceMemberId: 'member-logo',
-    role: 'owner',
-    memberStatus: 'active',
-    lifecycleState: 'active',
-    billingState: 'active',
-    planId: 'team_plus',
-    providerMode: 'platform_credits',
-    teamId: 'team-logo',
-    seatSummary: buildWorkspaceSeatSummary({ seatLimit: 3, usedSeats: 1 }),
-    permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }),
-  };
-}
-
-function collabValue(workspaceContext: WorkspaceCollabContext): CollabContextValue {
-  return {
-    workspaceContext,
-    workspaceContextLoading: false,
-    enabled: false,
-    member: null,
-    present: [],
-    publishedVersion: null,
-    syncState: null,
-    viewerOnly: false,
-    writerAuthority: 'allowed',
-    isOwner: true,
-    isEffectiveOwner: true,
-    isSharedNonOwner: false,
-    ownerDisplayName: null,
-    ownerRole: null,
-    downloadPending: false,
-    reportChange: () => {},
-    requestPublish: () => {},
-    refreshPresence: () => {},
-    checkStatusNow: () => {},
-  };
-}
-
 function renderWorkspace(element: React.ReactElement) {
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -175,45 +132,6 @@ function todoWrite(
 }
 
 describe('FileWorkspace design-system project surface', () => {
-  it('keeps a legacy logo-only brand.json visible through server-derived project authority', async () => {
-    const workspaceContext = teamContext();
-    registryMocks.fetchProjectFileText.mockImplementation((_projectId: string, name: string) => {
-      if (name === 'DESIGN.md') return Promise.resolve('# Legacy Logo');
-      if (name === 'brand.json') {
-        return Promise.resolve(JSON.stringify({
-          logo: { primary: 'assets/logo.svg' },
-        }));
-      }
-      return Promise.resolve(null);
-    });
-
-    const container = renderWorkspace(
-      <CollabProvider value={collabValue(workspaceContext)}>
-        <FileWorkspace
-          projectId="ds-legacy-logo"
-          projectKind="prototype"
-          files={[workspaceFile('DESIGN.md'), workspaceFile('brand.json'), workspaceFile('assets/logo.svg')]}
-          liveArtifacts={[]}
-          onRefreshFiles={vi.fn()}
-          isDeck={false}
-          tabsState={{ tabs: [], active: null }}
-          onTabsStateChange={vi.fn()}
-          designSystemProject={designSystem({ id: 'user:legacy-logo', title: 'Legacy Logo' })}
-        />
-      </CollabProvider>,
-    );
-
-    await flushKit();
-
-    const logo = container.querySelector<HTMLImageElement>(
-      '[data-testid="design-kit-logo-section"] img[alt="Legacy Logo"]',
-    );
-    expect(logo).toBeTruthy();
-    const logoUrl = new URL(logo!.src);
-    expect(logoUrl.pathname).toBe('/api/projects/ds-legacy-logo/raw/assets/logo.svg');
-    expect(logoUrl.searchParams.get('workspaceId')).toBeNull();
-    expect(logoUrl.searchParams.get('workspaceMemberId')).toBeNull();
-  });
 
   it('renders the brand.html-style kit modules from the project DESIGN.md', async () => {
     registryMocks.fetchProjectFileText.mockImplementation((_projectId: string, name: string) => {
@@ -324,40 +242,6 @@ describe('FileWorkspace design-system project surface', () => {
     expect(container.textContent).not.toContain('Edit DESIGN.md');
   });
 
-  // recvqb6mfyqXLD: `designSystemEditable=false` now also covers "the caller
-  // may not manage this team-synced design system" (ProjectView's
-  // `canMutate` gate), not just "extraction still running". The status pill
-  // must key off the separate `designSystemExtractionInProgress` flag so a
-  // finished, published teammate's design system reads as complete — not as
-  // still extracting — while the Publish toggle and edit affordances stay
-  // locked.
-  it('reads as extraction-complete (not "still extracting") when locked only because the caller cannot manage a team-synced system', async () => {
-    registryMocks.fetchProjectFileText.mockResolvedValue(null);
-
-    const container = renderWorkspace(
-      <FileWorkspace
-        projectId="brand-acme"
-        projectKind="prototype"
-        files={[workspaceFile('DESIGN.md'), workspaceFile('brand.html')]}
-        liveArtifacts={[]}
-        onRefreshFiles={vi.fn()}
-        isDeck={false}
-        tabsState={{ tabs: [], active: null }}
-        onTabsStateChange={vi.fn()}
-        designSystemProject={designSystem({ teamSynced: true, canMutate: false })}
-        designSystemBrandId="brand-acme"
-        designSystemEditable={false}
-      />,
-    );
-
-    await flushKit();
-
-    expect(container.querySelector('[data-testid="design-system-project-tab"]')).toBeTruthy();
-    expect(container.textContent).not.toContain('Extracting design system');
-    expect(container.textContent).toContain('Extraction complete');
-    expect(container.querySelector<HTMLButtonElement>('[data-testid="design-system-publish"]')?.disabled).toBe(true);
-  });
-
   it('edits and resets palette colors through the color editor dialog', async () => {
     let designMdBody = [
       '# Acme',
@@ -420,7 +304,6 @@ describe('FileWorkspace design-system project surface', () => {
       'DESIGN.md',
       expect.stringContaining('`#FF6A3D`'),
       undefined,
-      null,
     ));
 
     await flushKit();
@@ -444,7 +327,6 @@ describe('FileWorkspace design-system project surface', () => {
       'DESIGN.md',
       expect.stringContaining('`#10B981`'),
       undefined,
-      null,
     ));
   });
 
@@ -560,7 +442,6 @@ describe('FileWorkspace design-system project surface', () => {
       'brand.json',
       expect.stringContaining('"hex": "#FF6A3D"'),
       undefined,
-      null,
     ));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       '/api/brands/brand-acme/finalize',
@@ -680,12 +561,10 @@ describe('FileWorkspace design-system project surface', () => {
       'brand.json',
       expect.not.stringContaining('imagery/hero.png'),
       undefined,
-      null,
     ));
     expect(registryMocks.deleteProjectFile).toHaveBeenCalledWith(
       'ds-acme',
       'imagery/hero.png',
-      null,
     );
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/brands/brand-acme/finalize',
@@ -1027,7 +906,7 @@ describe('FileWorkspace design-system project surface', () => {
 
     expect(registryMocks.updateDesignSystemDraft).toHaveBeenCalledWith('user:acme', {
       status: 'published',
-    }, null);
+    });
     expect(onRefresh).toHaveBeenCalledOnce();
   });
 

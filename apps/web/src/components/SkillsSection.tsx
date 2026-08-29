@@ -700,8 +700,7 @@ function SkillRow({
   const { locale } = useI18n();
   const summaryName = localizeSkillName(locale, skill) || skill.id;
   const summaryDescription = localizeSkillDescription(locale, skill);
-  const isTeamMirror = skill.teamSynced === true;
-  const canDelete = getSkillSource(skill) === 'user' && !isTeamMirror;
+  const canDelete = getSkillSource(skill) === 'user';
   // Editing a built-in skill does not modify it in place — it writes a
   // user-owned shadow copy. Frame the affordance as creating a user override
   // so the built-in → user transition is not a surprise.
@@ -774,20 +773,18 @@ function SkillRow({
             </span>
           ) : (
             <>
-              {!isTeamMirror ? (
-                <Button
-                  size="icon"
-                  onClick={onStartEdit}
-                  title={
-                    isBuiltIn
-                      ? t('settings.skillsOverrideCreate')
-                      : t('settings.skillsEdit')
-                  }
-                  data-testid="skills-edit"
-                >
-                  <Icon name="edit" size={14} />
-                </Button>
-              ) : null}
+              <Button
+                size="icon"
+                onClick={onStartEdit}
+                title={
+                  isBuiltIn
+                    ? t('settings.skillsOverrideCreate')
+                    : t('settings.skillsEdit')
+                }
+                data-testid="skills-edit"
+              >
+                <Icon name="edit" size={14} />
+              </Button>
               {canDelete ? (
                 <Button
                   size="icon"

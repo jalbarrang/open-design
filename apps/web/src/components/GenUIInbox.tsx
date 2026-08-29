@@ -43,7 +43,7 @@ export function GenUIInbox(props: Props) {
     } catch (err) {
       setError((err as Error).message);
     }
-  }, [props.fetchSurfaces, props.projectId, props.workspaceContext]);
+  }, [props.fetchSurfaces, props.projectId]);
 
   useEffect(() => {
     void refresh();

@@ -11,9 +11,6 @@ import {
 } from '../../src/components/ProjectView';
 import { ProjectConversationsHttpError } from '../../src/state/projects';
 import type { SettingsSection } from '../../src/components/SettingsDialog';
-import type { ProjectWorkspaceScopeState } from '../../src/collab/useProjectWorkspaceScope';
-import type { WorkspaceCollabContext } from '@open-design/contracts';
-import type { AmrAuthRetryContinuation } from '../../src/runtime/amr-auth-retry-continuation';
 import type {
   AgentInfo,
   AppConfig,
@@ -38,8 +35,6 @@ const listActiveChatRuns = vi.fn();
 const listProjectRuns = vi.fn();
 const reattachDaemonRun = vi.fn();
 const publishDaemonRunFinishedEvent = vi.fn();
-const fetchVelaLoginStatus = vi.fn();
-const fetchAmrWalletSnapshot = vi.fn();
 const launchAntigravityOauth = vi.fn();
 const streamViaDaemon = vi.fn();
 const streamMessage = vi.fn();
@@ -54,100 +49,6 @@ const analyticsTrackMock = vi.fn();
 /** What the inline question form was told about each answer it handed over. */
 const questionFormSubmitOutcomes: Array<boolean | void> = [];
 const useProjectFileEvents = vi.fn();
-const workspaceScopeMocks = vi.hoisted(() => {
-  const personalContext = (): WorkspaceCollabContext & {
-    workspaceType: 'personal';
-  } => ({
-    workspaceId: 'workspace-personal',
-    workspaceMemberId: 'member-personal',
-    workspaceType: 'personal',
-    role: 'owner',
-    memberStatus: 'active',
-    lifecycleState: 'active',
-    billingState: 'active',
-    planId: null,
-    providerMode: 'platform_credits',
-    seatSummary: {
-      seatLimit: 1,
-      usedSeats: 1,
-      availableSeats: 0,
-      isSeatFull: true,
-    },
-    permissions: {
-      canManageMembers: true,
-      canManageBilling: true,
-      canInviteMembers: true,
-      canManageAutoRecharge: true,
-      canShareProjects: true,
-      canWriteSyncedFiles: true,
-      canViewWorkspaceSettings: true,
-      canManageSharedResources: true,
-    },
-  });
-  return {
-    personalContext,
-    ambientContext: null as WorkspaceCollabContext | null,
-    ambientLoading: false,
-    ambientFailure: null as 'unsupported' | 'unavailable' | null,
-    projectScope: {
-      loading: false,
-      scope: {
-        kind: 'personal' as const,
-        projectId: 'project-1',
-        workspaceId: 'workspace-personal',
-        visibility: 'personal' as const,
-        context: personalContext(),
-      },
-    } as ProjectWorkspaceScopeState,
-  };
-});
-
-function stubAuthoritativePersonalWorkspaceBalance(balanceUsd: string): void {
-  const observedAt = '2026-07-26T00:00:00.000Z';
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-    const url = new URL(String(input), 'http://localhost');
-    if (url.pathname !== '/api/workspace/billing') {
-      throw new Error(`Unexpected fetch: ${String(input)}`);
-    }
-    return new Response(JSON.stringify({
-      summary: null,
-      workspaceBalance: {
-        workspaceId: 'workspace-personal',
-        workspaceMemberId: 'member-personal',
-        balanceUsd,
-        billingScopeVersion: 2,
-        expiresAt: null,
-        updatedAt: observedAt,
-      },
-      workspaceRuntime: {
-        workspaceId: 'workspace-personal',
-        workspaceMemberId: 'member-personal',
-        status: 'fresh',
-        revision: '1',
-        observedAt,
-        softExpiresAt: '2099-07-26T00:00:30.000Z',
-        hardExpiresAt: '2099-07-26T00:02:00.000Z',
-        retryAt: null,
-        errorCode: null,
-        reason: 'authoritative-action-read',
-        sourceGapDetected: false,
-      },
-      authoritativeWorkspaceRead: {
-        workspaceId: 'workspace-personal',
-        workspaceMemberId: 'member-personal',
-        observedAt,
-      },
-    }), { status: 200, headers: { 'content-type': 'application/json' } });
-  }));
-}
-const projectCollabMocks = vi.hoisted(() => ({
-  enabled: false,
-  syncState: 'local_only' as 'local_only' | 'synced' | null,
-  viewerOnly: false,
-  isOwner: false,
-  writerAuthority: 'allowed' as 'allowed' | 'denied' | 'pending',
-}));
-
 vi.mock('../../src/analytics/provider', () => ({
   useAnalytics: () => ({
     track: analyticsTrackMock,
@@ -167,70 +68,10 @@ vi.mock('../../src/providers/anthropic', () => ({
   streamMessage: (...args: unknown[]) => streamMessage(...args),
 }));
 
-vi.mock('../../src/collab/useWorkspaceContext', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/collab/useWorkspaceContext')>()),
-  useWorkspaceContext: () => ({
-    context: workspaceScopeMocks.ambientContext,
-    loading: workspaceScopeMocks.ambientLoading,
-    ...(workspaceScopeMocks.ambientFailure
-      ? { failure: workspaceScopeMocks.ambientFailure }
-      : {}),
-  }),
-  // This suite exercises run/conversation isolation, not remote collaboration.
-  // An authoritative empty catalog proves the fixture project is unshared so
-  // the collab status request's initial unknown window does not disable Chat.
-  lastResolvedTeamProjects: () => [],
-  lastResolvedWorkspaceContext: () => workspaceScopeMocks.ambientContext,
-  // Mirrors the real predicate: only a settled, authoritative "no workspace"
-  // read means AMR has no wallet.
-  workspaceIdentityCanBillAmr: (state: {
-    context: unknown;
-    loading: boolean;
-    failure?: string;
-  }) => state.context !== null || state.loading || Boolean(state.failure),
-  useWorkspaceBilling: () => null,
-}));
-
-// Only the HOOK is stubbed; every pure helper comes from the real module.
-//
-// This factory used to hand-list each export, and that cost three separate
-// debugging rounds: adding ONE export to `useProjectWorkspaceScope` made all 64
-// tests in this file fail with "not a function" at render, and the hand-written
-// copies were free to drift from the semantics under test. `importOriginal`
-// removes the whole failure mode — a new export is picked up automatically and
-// is always the real implementation.
-vi.mock('../../src/collab/useProjectWorkspaceScope', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/collab/useProjectWorkspaceScope')>()),
-  useProjectWorkspaceScope: () => workspaceScopeMocks.projectScope,
-}));
-
-vi.mock('../../src/collab/useProjectCollab', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/collab/useProjectCollab')>()),
-  useProjectCollab: () => ({
-    enabled: projectCollabMocks.enabled,
-    member: null,
-    present: [],
-    publishedVersion: null,
-    syncState: projectCollabMocks.syncState,
-    viewerOnly: projectCollabMocks.viewerOnly,
-    isOwner: projectCollabMocks.isOwner,
-    writerAuthority: projectCollabMocks.writerAuthority,
-    downloadPending: false,
-    reportChange: vi.fn(),
-    requestPublish: vi.fn(),
-    refreshPresence: vi.fn(),
-    checkStatusNow: vi.fn(),
-    applyContentTransferState: vi.fn(),
-  }),
-}));
-
 vi.mock('../../src/providers/daemon', () => ({
   GENERIC_DAEMON_DISCONNECT_CODE: 'GENERIC_DAEMON_DISCONNECT',
   GENERIC_DAEMON_DISCONNECT_MESSAGE: 'daemon stream disconnected before run completed',
   fetchChatRunStatus: (...args: unknown[]) => fetchChatRunStatus(...args),
-  fetchVelaLoginStatus: (...args: unknown[]) => fetchVelaLoginStatus(...args),
-  fetchAmrWalletSnapshot: (...args: unknown[]) => fetchAmrWalletSnapshot(...args),
-  formatVelaBalanceUsd: (raw: string | null | undefined) => (raw == null ? null : `$${raw}`),
   launchAntigravityOauth: (...args: unknown[]) => launchAntigravityOauth(...args),
   listActiveChatRuns: (...args: unknown[]) => listActiveChatRuns(...args),
   listProjectRuns: (...args: unknown[]) => listProjectRuns(...args),
@@ -715,46 +556,6 @@ const createdConversation: Conversation = {
   updatedAt: 2,
 };
 
-type TeamProjectWorkspaceContext = Extract<
-  NonNullable<ProjectWorkspaceScopeState['scope']>,
-  { kind: 'team' }
->['context'];
-
-function teamWorkspaceContext(
-  workspaceId: string,
-  workspaceMemberId: string,
-): TeamProjectWorkspaceContext {
-  return {
-    workspaceId,
-    workspaceType: 'team',
-    workspaceMemberId,
-    role: 'member',
-    memberStatus: 'active',
-    lifecycleState: 'active',
-    billingState: 'active',
-    planId: 'team_pro',
-    providerMode: 'platform_credits',
-    seatSummary: {
-      seatLimit: 5,
-      usedSeats: 2,
-      availableSeats: 3,
-      isSeatFull: false,
-    },
-    permissions: {
-      canManageMembers: false,
-      canManageBilling: false,
-      canInviteMembers: false,
-      canManageAutoRecharge: false,
-      canShareProjects: true,
-      canWriteSyncedFiles: true,
-      canViewWorkspaceSettings: true,
-      canManageSharedResources: false,
-    },
-    teamId: workspaceId,
-    teamName: workspaceId,
-  };
-}
-
 const runningAssistant: ChatMessage = {
   id: 'assistant-a',
   role: 'assistant',
@@ -836,12 +637,11 @@ describe('listConversationsWithRetry', () => {
 
   it('retries a transient materialization 404 on the bounded schedule', async () => {
     vi.useFakeTimers();
-    const teamContext = teamWorkspaceContext('workspace-team', 'member-team');
     listConversations
       .mockRejectedValueOnce(new ProjectConversationsHttpError(404))
       .mockResolvedValueOnce(conversations);
 
-    const result = listConversationsWithRetry('project-1', teamContext);
+    const result = listConversationsWithRetry('project-1');
     await Promise.resolve();
     expect(listConversations).toHaveBeenCalledTimes(1);
 
@@ -852,17 +652,6 @@ describe('listConversationsWithRetry', () => {
     await expect(result).resolves.toEqual(conversations);
     expect(listConversations).toHaveBeenCalledTimes(2);
   });
-
-  it('does not retry a missing Personal project', async () => {
-    listConversations.mockRejectedValueOnce(
-      new ProjectConversationsHttpError(404),
-    );
-
-    await expect(listConversationsWithRetry('project-1')).rejects.toMatchObject({
-      status: 404,
-    });
-    expect(listConversations).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('ProjectView conversation run isolation', () => {
@@ -871,24 +660,6 @@ describe('ProjectView conversation run isolation', () => {
 
   beforeEach(() => {
     window.localStorage.clear();
-    workspaceScopeMocks.ambientContext = null;
-    workspaceScopeMocks.ambientLoading = false;
-    workspaceScopeMocks.ambientFailure = null;
-    workspaceScopeMocks.projectScope = {
-      loading: false,
-      scope: {
-        kind: 'personal',
-        projectId: project.id,
-        workspaceId: 'workspace-personal',
-        visibility: 'personal',
-        context: workspaceScopeMocks.personalContext(),
-      },
-    };
-    projectCollabMocks.enabled = false;
-    projectCollabMocks.syncState = 'local_only';
-    projectCollabMocks.viewerOnly = false;
-    projectCollabMocks.isOwner = false;
-    projectCollabMocks.writerAuthority = 'allowed';
     resolveConversationBMessages = null;
     conversationAMessages = [runningAssistant];
     questionFormSubmitOutcomes.length = 0;
@@ -921,21 +692,6 @@ describe('ProjectView conversation run isolation', () => {
       signal: null,
     });
     reattachDaemonRun.mockImplementation(async () => new Promise<void>(() => {}));
-    fetchVelaLoginStatus.mockResolvedValue({ loggedIn: false });
-    // Positive wallet balance so the pre-run AMR balance gate lets sends
-    // through; the gate's own behavior is covered in
-    // tests/runtime/amr-balance-gate.test.ts.
-    fetchAmrWalletSnapshot.mockResolvedValue({
-      status: 'available',
-      profile: 'prod',
-      user: null,
-      balanceUsd: '10.00',
-      updatedAt: null,
-      fetchedAt: '2026-07-02T00:00:00.000Z',
-      stale: false,
-      source: 'vela_api',
-    });
-    stubAuthoritativePersonalWorkspaceBalance('10.00');
     launchAntigravityOauth.mockResolvedValue({ ok: true });
     streamViaDaemon.mockImplementation(async () => {});
   });
@@ -979,35 +735,6 @@ describe('ProjectView conversation run isolation', () => {
         locale: 'zh-CN',
       }),
     );
-  });
-
-  it.each([
-    ['an old daemon', 'unsupported' as const],
-    ['a revoked scope response', 'forbidden' as const],
-    ['a workspace-directory outage', 'unavailable' as const],
-  ])('keeps non-AMR runs available with %s', async (_label, failure) => {
-    conversationAMessages = [];
-    workspaceScopeMocks.projectScope = {
-      loading: false,
-      scope: null,
-      failure,
-    };
-
-    renderProjectView();
-
-    await waitFor(() =>
-      expect(screen.getByTestId('active-conversation').textContent).toBe(
-        'conv-a',
-      ),
-    );
-    await waitFor(() =>
-      expect(screen.getByTestId('send-message')).toHaveProperty(
-        'disabled',
-        false,
-      ),
-    );
-    fireEvent.click(screen.getByTestId('send-message'));
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
   });
 
   const signedOutUnboundNonAmrCases: Array<{
@@ -1073,46 +800,6 @@ describe('ProjectView conversation run isolation', () => {
     },
   ];
 
-  it.each(signedOutUnboundNonAmrCases)(
-    'keeps signed-out, headerless, unbound $label runs outside the AMR gates',
-    async ({ renderConfig, renderAgents, expectedAgentId }) => {
-      conversationAMessages = [];
-      workspaceScopeMocks.ambientContext = null;
-      workspaceScopeMocks.ambientLoading = false;
-      workspaceScopeMocks.ambientFailure = null;
-      workspaceScopeMocks.projectScope = {
-        loading: false,
-        scope: {
-          kind: 'unbound',
-          projectId: project.id,
-          workspaceId: null,
-          context: null,
-        },
-      };
-      // BYOK's best-effort memory extraction stays entirely in-process.
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
-
-      renderProjectView(renderConfig, project, renderAgents);
-
-      await waitFor(() =>
-        expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'),
-      );
-      expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false);
-      fireEvent.click(screen.getByTestId('send-message'));
-
-      await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-      expect(fetchAmrWalletSnapshot).not.toHaveBeenCalled();
-      expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
-      expect(screen.queryByTestId('amr-low-balance-dialog')).toBeNull();
-      expect(streamViaDaemon).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentId: expectedAgentId,
-          workspaceContext: null,
-        }),
-      );
-    },
-  );
-
   it('preserves the configured system notification for a background completion', async () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(false);
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
@@ -1154,526 +841,6 @@ describe('ProjectView conversation run isolation', () => {
     available: true,
     models: [{ id: 'glm-5', label: 'GLM 5' }],
   }];
-
-  it.each([
-    [
-      'an unbound project',
-      {
-        loading: false,
-        scope: {
-          kind: 'unbound' as const,
-          projectId: project.id,
-          workspaceId: null,
-          context: null,
-        },
-      },
-    ],
-    [
-      'a project pinned to a workspace the caller is not in',
-      {
-        loading: false,
-        scope: {
-          kind: 'unavailable' as const,
-          projectId: project.id,
-          workspaceId: 'workspace-elsewhere',
-          visibility: 'personal' as const,
-          context: null,
-        },
-      },
-    ],
-    [
-      'a workspace-directory outage',
-      { loading: false, scope: null, failure: 'unavailable' as const },
-    ],
-  ])(
-    'lets a signed-in user send an AMR run with %s — they are spending their own quota',
-    async (_label, projectScope) => {
-      conversationAMessages = [];
-      // Signed in: there IS a wallet. This is the whole difference from the
-      // signed-out case below.
-      workspaceScopeMocks.ambientContext = teamWorkspaceContext(
-        'workspace-team',
-        'member-team',
-      );
-      workspaceScopeMocks.projectScope = projectScope;
-
-      renderProjectView({ ...config, agentId: 'amr' }, project, amrAgents);
-
-      await waitFor(() =>
-        expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'),
-      );
-      await waitFor(() =>
-        expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false),
-      );
-      fireEvent.click(screen.getByTestId('send-message'));
-      await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    },
-  );
-
-  it('lets the daemon explicitly reject unbound adoption for a genuinely signed-out caller', async () => {
-    conversationAMessages = [];
-    // An unbound project has no safe wallet for a client-side preflight. Do not
-    // reinterpret it as the account wallet or dead-button the request: the
-    // daemon owns the explicit adoption/authentication rejection.
-    workspaceScopeMocks.ambientContext = null;
-    workspaceScopeMocks.ambientLoading = false;
-    workspaceScopeMocks.ambientFailure = null;
-    workspaceScopeMocks.projectScope = {
-      loading: false,
-      scope: {
-        kind: 'unbound',
-        projectId: project.id,
-        workspaceId: null,
-        context: null,
-      },
-    };
-
-    renderProjectView({ ...config, agentId: 'amr' }, project, amrAgents);
-
-    await waitFor(() =>
-      expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'),
-    );
-    expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false);
-    fireEvent.click(screen.getByTestId('send-message'));
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    expect(fetchAmrWalletSnapshot).not.toHaveBeenCalled();
-    expect(streamViaDaemon).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceContext: null }),
-    );
-  });
-
-  it.each([
-    ['an identity read still in flight', { loading: true, failure: null }],
-    ['a transient identity outage', { loading: false, failure: 'unavailable' as const }],
-    ['an old daemon with no workspace endpoint', { loading: false, failure: 'unsupported' as const }],
-  ])(
-    'does not disable the AMR send on %s — an unsettled read is not a signed-out user',
-    async (_label, identity) => {
-      conversationAMessages = [];
-      workspaceScopeMocks.ambientContext = null;
-      workspaceScopeMocks.ambientLoading = identity.loading;
-      workspaceScopeMocks.ambientFailure = identity.failure;
-      workspaceScopeMocks.projectScope = {
-        loading: false,
-        scope: {
-          kind: 'unbound',
-          projectId: project.id,
-          workspaceId: null,
-          context: null,
-        },
-      };
-
-      renderProjectView({ ...config, agentId: 'amr' }, project, amrAgents);
-
-      await waitFor(() =>
-        expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'),
-      );
-      await waitFor(() =>
-        expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false),
-      );
-    },
-  );
-
-  it.each([
-    [
-      'an old daemon',
-      { loading: false, scope: null, failure: 'unsupported' as const },
-    ],
-    [
-      'a workspace-directory outage',
-      { loading: false, scope: null, failure: 'unavailable' as const },
-    ],
-  ])(
-    'fails closed for a SIGNED-OUT AMR caller when project authority is %s',
-    async (_label, projectScope) => {
-    conversationAMessages = [];
-    // `ambientContext` stays null from beforeEach: no cloud identity, so no
-    // wallet. The project's own scope is not what closes the gate here.
-    workspaceScopeMocks.projectScope = projectScope;
-
-    renderProjectView(
-      { ...config, agentId: 'amr' },
-      project,
-      [{
-        id: 'amr',
-        name: 'AMR',
-        bin: 'amr',
-        available: true,
-        models: [{ id: 'glm-5', label: 'GLM 5' }],
-      }],
-    );
-
-    await waitFor(() =>
-      expect(screen.getByTestId('active-conversation').textContent).toBe(
-        'conv-a',
-      ),
-    );
-    expect(screen.getByTestId('send-message')).toHaveProperty('disabled', true);
-    fireEvent.click(screen.getByTestId('send-message'));
-    expect(streamViaDaemon).not.toHaveBeenCalled();
-  },
-  );
-
-  it('uses the project-bound workspace instead of the ambient workspace for run authorization', async () => {
-    conversationAMessages = [];
-    const workspaceA = teamWorkspaceContext('workspace-a', 'member-a');
-    const workspaceB = teamWorkspaceContext('workspace-b', 'member-b');
-    workspaceScopeMocks.ambientContext = workspaceB;
-    workspaceScopeMocks.projectScope = {
-      loading: false,
-      scope: {
-        kind: 'team',
-        projectId: project.id,
-        workspaceId: workspaceA.workspaceId,
-        visibility: 'personal',
-        context: workspaceA,
-      },
-    };
-
-    renderProjectView(config, { ...project, workspaceId: workspaceA.workspaceId });
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    expect(streamViaDaemon).toHaveBeenCalledWith(
-      expect.objectContaining({
-        projectId: project.id,
-        workspaceContext: workspaceA,
-      }),
-    );
-  });
-
-  it('checks the project-bound team wallet instead of the ambient workspace wallet', async () => {
-    conversationAMessages = [];
-    const workspaceA = teamWorkspaceContext('workspace-a', 'member-a');
-    const workspaceB = teamWorkspaceContext('workspace-b', 'member-b');
-    workspaceScopeMocks.ambientContext = workspaceB;
-    workspaceScopeMocks.projectScope = {
-      loading: false,
-      scope: {
-        kind: 'team',
-        projectId: project.id,
-        workspaceId: workspaceA.workspaceId,
-        visibility: 'personal',
-        context: workspaceA,
-      },
-    };
-    // A team-scoped preflight only accepts a wallet whose epoch is proven for
-    // the exact workspace/member it asked about: the daemon must echo a fresh
-    // `workspaceRuntime` plus the `authoritativeWorkspaceRead` that proves this
-    // very response completed the requested refresh (e65b168c3). Anything less
-    // fails closed, so the fixture has to speak that shape.
-    const observedAt = '2026-07-26T00:00:00.000Z';
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes('/api/workspace/billing')) {
-        const workspaceId = new URL(url, 'http://localhost').searchParams.get('workspaceId');
-        const workspaceMemberId = workspaceId === workspaceA.workspaceId ? 'member-a' : 'member-b';
-        return new Response(JSON.stringify({
-          summary: null,
-          workspaceBalance: {
-            workspaceId,
-            workspaceMemberId,
-            balanceUsd: '10.00',
-            billingScopeVersion: 2,
-            expiresAt: null,
-            updatedAt: observedAt,
-          },
-          workspaceRuntime: {
-            workspaceId,
-            workspaceMemberId,
-            status: 'fresh',
-            revision: '4',
-            observedAt,
-            softExpiresAt: '2099-07-26T00:00:30.000Z',
-            hardExpiresAt: '2099-07-26T00:02:00.000Z',
-            retryAt: null,
-            errorCode: null,
-            reason: 'authoritative-action-read',
-            sourceGapDetected: false,
-          },
-          authoritativeWorkspaceRead: {
-            workspaceId,
-            workspaceMemberId,
-            observedAt,
-          },
-        }), { status: 200, headers: { 'content-type': 'application/json' } });
-      }
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    renderProjectView(
-      { ...config, agentId: 'amr' },
-      { ...project, workspaceId: workspaceA.workspaceId },
-      [{
-        id: 'amr',
-        name: 'AMR',
-        bin: 'amr',
-        available: true,
-        models: [{ id: 'glm-5', label: 'GLM 5' }],
-      }],
-    );
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining(`workspaceId=${encodeURIComponent(workspaceA.workspaceId)}`),
-      { cache: 'no-store' },
-    );
-    // The ambient workspace must never be consulted for a project bound to
-    // another one, and the run has to spawn under the same workspace the
-    // wallet was checked against.
-    const billingUrls = fetchMock.mock.calls
-      .map(([input]) => String(input))
-      .filter((url) => url.includes('/api/workspace/billing'));
-    expect(billingUrls.length).toBeGreaterThan(0);
-    expect(
-      billingUrls.filter((url) =>
-        url.includes(`workspaceId=${encodeURIComponent(workspaceB.workspaceId)}`),
-      ),
-    ).toHaveLength(0);
-    expect(streamViaDaemon).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceContext: workspaceA }),
-    );
-  });
-
-  it('submits the live AMR fallback model when the saved AMR model is stale', async () => {
-    conversationAMessages = [];
-    renderProjectView(
-      {
-        ...config,
-        agentId: 'amr',
-        agentModels: {
-          amr: { model: 'gpt-5.4-mini', reasoning: 'medium' },
-        },
-      },
-      project,
-      [
-        {
-          id: 'amr',
-          name: 'AMR',
-          bin: 'amr',
-          available: true,
-          models: [{ id: 'glm-5', label: 'GLM 5' }],
-        },
-      ],
-    );
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    expect(streamViaDaemon).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agentId: 'amr',
-        model: 'glm-5',
-        reasoning: 'medium',
-      }),
-    );
-  });
-
-  it('hard-blocks the AMR send and shows the balance dialog when the wallet is empty', async () => {
-    conversationAMessages = [];
-    // Both the cached read and the refresh confirmation report an empty
-    // wallet, so the send must be hard-blocked before any run spawns.
-    fetchAmrWalletSnapshot.mockResolvedValue({
-      status: 'available',
-      profile: 'prod',
-      user: null,
-      balanceUsd: '0',
-      codingPlanModels: [],
-      updatedAt: null,
-      fetchedAt: '2026-07-02T00:00:00.000Z',
-      stale: false,
-      source: 'vela_api',
-    });
-    stubAuthoritativePersonalWorkspaceBalance('0');
-    renderProjectView(
-      { ...config, agentId: 'amr' },
-      project,
-      [
-        {
-          id: 'amr',
-          name: 'AMR',
-          bin: 'amr',
-          available: true,
-          models: [{ id: 'glm-5', label: 'GLM 5' }],
-        },
-      ],
-    );
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(screen.getByTestId('amr-balance-dialog')).toBeTruthy());
-    expect(streamViaDaemon).not.toHaveBeenCalled();
-  });
-
-  it('soft-warns on a low AMR wallet and proceeds with the same send on confirmation', async () => {
-    conversationAMessages = [];
-    fetchAmrWalletSnapshot.mockResolvedValue({
-      status: 'available',
-      profile: 'prod',
-      user: { id: 'u-paid', plan: 'plus' },
-      balanceUsd: '1.20',
-      codingPlanModels: [],
-      updatedAt: null,
-      fetchedAt: '2026-07-02T00:00:00.000Z',
-      stale: false,
-      source: 'vela_api',
-    });
-    stubAuthoritativePersonalWorkspaceBalance('1.20');
-    renderProjectView(
-      { ...config, agentId: 'amr' },
-      project,
-      [
-        {
-          id: 'amr',
-          name: 'AMR',
-          bin: 'amr',
-          available: true,
-          models: [{ id: 'glm-5', label: 'GLM 5' }],
-        },
-      ],
-    );
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    // The reminder holds the send: no run yet.
-    await waitFor(() => expect(screen.getByTestId('amr-low-balance-dialog')).toBeTruthy());
-    expect(streamViaDaemon).not.toHaveBeenCalled();
-
-    // "Start anyway" resolves the pending send — the run starts without a re-submit.
-    fireEvent.click(screen.getByTestId('amr-low-balance-dialog-proceed'));
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    expect(streamViaDaemon).toHaveBeenCalledWith(
-      expect.objectContaining({ agentId: 'amr' }),
-    );
-  });
-
-  it('does not soft-block a Free user with a low AMR wallet', async () => {
-    conversationAMessages = [];
-    fetchAmrWalletSnapshot.mockResolvedValue({
-      status: 'available',
-      profile: 'prod',
-      user: { id: 'u-free', plan: 'free' },
-      balanceUsd: '1.20',
-      updatedAt: null,
-      fetchedAt: '2026-07-13T00:00:00.000Z',
-      stale: false,
-      source: 'vela_api',
-    });
-    stubAuthoritativePersonalWorkspaceBalance('1.20');
-    renderProjectView(
-      { ...config, agentId: 'amr' },
-      project,
-      [
-        {
-          id: 'amr',
-          name: 'AMR',
-          bin: 'amr',
-          available: true,
-          models: [{ id: 'glm-5', label: 'GLM 5' }],
-        },
-      ],
-    );
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    expect(screen.queryByTestId('amr-low-balance-dialog')).toBeNull();
-  });
-
-  it('keeps an AMR send queued when the user switches conversations during the gate check', async () => {
-    conversationAMessages = [];
-    fetchPreviewComments.mockResolvedValue([previewComment]);
-    let resolveWallet: (snapshot: unknown) => void = () => {};
-    fetchAmrWalletSnapshot.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveWallet = resolve;
-        }),
-    );
-    renderProjectView(
-      { ...config, agentId: 'amr' },
-      project,
-      [
-        {
-          id: 'amr',
-          name: 'AMR',
-          bin: 'amr',
-          available: true,
-          models: [{ id: 'glm-5', label: 'GLM 5' }],
-        },
-      ],
-    );
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fireEvent.click(screen.getByTestId('attach-first-comment'));
-    await waitFor(() => expect(screen.getByTestId('attached-comment-count').textContent).toBe('1'));
-
-    fireEvent.click(screen.getByTestId('send-message'));
-    await waitFor(() => expect(fetchAmrWalletSnapshot).toHaveBeenCalledTimes(1));
-
-    fireEvent.click(screen.getByTestId('conversation-select-conv-b'));
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-b'));
-    await waitFor(() => {
-      if (!resolveConversationBMessages) throw new Error('Expected conv-b message load to be pending');
-    });
-    await act(async () => {
-      resolveConversationBMessages?.([]);
-    });
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    await act(async () => {
-      resolveWallet({
-        status: 'available',
-        profile: 'prod',
-        user: null,
-        balanceUsd: '10.00',
-        updatedAt: null,
-        fetchedAt: '2026-07-02T00:00:00.000Z',
-        stale: false,
-        source: 'vela_api',
-      });
-    });
-
-    await waitFor(() => {
-      const raw = window.localStorage.getItem('od:chat-queued-sends:project-1:v1');
-      expect(raw).toBeTruthy();
-      const queued = JSON.parse(raw ?? '[]') as Array<{
-        conversationId?: string;
-        prompt?: string;
-        commentAttachments?: Array<{ id?: string }>;
-      }>;
-      expect(queued).toEqual([
-        expect.objectContaining({
-          conversationId: 'conv-a',
-          prompt: 'hello from b',
-          commentAttachments: [expect.objectContaining({ id: previewComment.id })],
-        }),
-      ]);
-    });
-    expect(streamViaDaemon).not.toHaveBeenCalled();
-  });
 
   it('identifies a question-form answer by its occurrence, not by a fresh id', async () => {
     // "At most one user answer message and one non-failed run per
@@ -1735,81 +902,6 @@ describe('ProjectView conversation run isolation', () => {
     expect(screen.getByTestId('user-messages').textContent).not.toContain('Audience: Designers');
   });
 
-  it('reports a question-form answer parked in the queue as accepted', async () => {
-    // The inline form holds the only copy of its answer. Leaving the project
-    // while the pre-run gate is still deciding parks that answer in the
-    // conversation queue — a durable acceptance, not a refusal. Reporting a
-    // refusal instead re-opens the form (and rolls back any file it uploaded
-    // for a send the queue still points at), so the user answers a second
-    // time and the drain sends the same brief twice.
-    conversationAMessages = [];
-    let resolveWallet: (snapshot: unknown) => void = () => {};
-    fetchAmrWalletSnapshot.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveWallet = resolve;
-        }),
-    );
-    renderProjectView(
-      { ...config, agentId: 'amr' },
-      project,
-      [
-        {
-          id: 'amr',
-          name: 'AMR',
-          bin: 'amr',
-          available: true,
-          models: [{ id: 'glm-5', label: 'GLM 5' }],
-        },
-      ],
-    );
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fireEvent.click(screen.getByTestId('submit-question-form'));
-    await waitFor(() => expect(fetchAmrWalletSnapshot).toHaveBeenCalledTimes(1));
-
-    fireEvent.click(screen.getByTestId('conversation-select-conv-b'));
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-b'));
-    await waitFor(() => {
-      if (!resolveConversationBMessages) throw new Error('Expected conv-b message load to be pending');
-    });
-    await act(async () => {
-      resolveConversationBMessages?.([]);
-    });
-
-    await act(async () => {
-      resolveWallet({
-        status: 'available',
-        profile: 'prod',
-        user: null,
-        balanceUsd: '10.00',
-        updatedAt: null,
-        fetchedAt: '2026-07-02T00:00:00.000Z',
-        stale: false,
-        source: 'vela_api',
-      });
-    });
-
-    await waitFor(() => {
-      const raw = window.localStorage.getItem('od:chat-queued-sends:project-1:v1');
-      expect(raw).toBeTruthy();
-      const queued = JSON.parse(raw ?? '[]') as Array<{
-        conversationId?: string;
-        prompt?: string;
-      }>;
-      expect(queued).toEqual([
-        expect.objectContaining({
-          conversationId: 'conv-a',
-          prompt: 'Audience: Designers',
-        }),
-      ]);
-    });
-    await waitFor(() => expect(questionFormSubmitOutcomes).toEqual([true]));
-    expect(streamViaDaemon).not.toHaveBeenCalled();
-  });
-
   it('does not create duplicate empty conversations while a fresh conversation is loading', async () => {
     renderProjectView();
 
@@ -1821,168 +913,6 @@ describe('ProjectView conversation run isolation', () => {
     fireEvent.click(screen.getByTestId('new-conversation'));
 
     expect(createConversation).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not create a conversation for a read-only member of a shared project', async () => {
-    const teamContext = teamWorkspaceContext('workspace-team', 'member-team');
-    workspaceScopeMocks.ambientContext = teamContext;
-    workspaceScopeMocks.projectScope = {
-      loading: false,
-      scope: {
-        kind: 'team',
-        projectId: project.id,
-        workspaceId: teamContext.workspaceId,
-        visibility: 'team',
-        context: teamContext,
-      },
-    };
-    listConversations.mockResolvedValue([]);
-    projectCollabMocks.enabled = true;
-    projectCollabMocks.syncState = 'synced';
-    projectCollabMocks.viewerOnly = true;
-    projectCollabMocks.isOwner = false;
-    projectCollabMocks.writerAuthority = 'denied';
-
-    renderProjectView(config, { ...project, workspaceId: teamContext.workspaceId });
-
-    await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(1));
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(createConversation).not.toHaveBeenCalled();
-    expect(screen.queryByTestId('chat-pane-loading')).toBeNull();
-    expect(screen.getByTestId('active-conversation').textContent).toBe('');
-  });
-
-  it('seeds an empty explicitly Personal project without Team ownership status', async () => {
-    listConversations.mockResolvedValue([]);
-    projectCollabMocks.writerAuthority = 'pending';
-
-    renderProjectView();
-
-    await waitFor(() => expect(createConversation).toHaveBeenCalledTimes(1));
-    expect(createConversation).toHaveBeenCalledWith(
-      project.id,
-      undefined,
-      expect.objectContaining({
-        workspaceContext: workspaceScopeMocks.personalContext(),
-      }),
-    );
-  });
-
-  it('seeds an empty Team project after positive writer authority settles', async () => {
-    const teamContext = teamWorkspaceContext('workspace-team', 'owner-member');
-    workspaceScopeMocks.ambientContext = teamContext;
-    workspaceScopeMocks.projectScope = {
-      loading: false,
-      scope: {
-        kind: 'team',
-        projectId: project.id,
-        workspaceId: teamContext.workspaceId,
-        visibility: 'team',
-        context: teamContext,
-      },
-    };
-    listConversations.mockResolvedValue([]);
-    projectCollabMocks.enabled = true;
-    projectCollabMocks.syncState = 'synced';
-    projectCollabMocks.viewerOnly = false;
-    projectCollabMocks.isOwner = true;
-    projectCollabMocks.writerAuthority = 'allowed';
-
-    renderProjectView(config, { ...project, workspaceId: teamContext.workspaceId });
-
-    await waitFor(() => expect(createConversation).toHaveBeenCalledTimes(1));
-    expect(createConversation).toHaveBeenCalledWith(
-      project.id,
-      undefined,
-      expect.objectContaining({ workspaceContext: teamContext }),
-    );
-  });
-
-  it('does not seed during unknown ownership even when provisional viewerOnly is false', async () => {
-    const teamContext = teamWorkspaceContext('workspace-team', 'member-team');
-    workspaceScopeMocks.ambientContext = teamContext;
-    workspaceScopeMocks.projectScope = {
-      loading: false,
-      scope: {
-        kind: 'team',
-        projectId: project.id,
-        workspaceId: teamContext.workspaceId,
-        visibility: 'team',
-        context: teamContext,
-      },
-    };
-    listConversations.mockResolvedValue([]);
-    projectCollabMocks.enabled = true;
-    projectCollabMocks.syncState = null;
-    projectCollabMocks.viewerOnly = false;
-    projectCollabMocks.isOwner = false;
-    projectCollabMocks.writerAuthority = 'pending';
-
-    const teamProject = { ...project, workspaceId: teamContext.workspaceId };
-    const view = renderProjectView(config, teamProject);
-
-    await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(1));
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(createConversation).not.toHaveBeenCalled();
-
-    projectCollabMocks.syncState = 'synced';
-    projectCollabMocks.viewerOnly = true;
-    projectCollabMocks.writerAuthority = 'denied';
-    view.rerender(projectViewElement(config, teamProject));
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(createConversation).not.toHaveBeenCalled();
-    expect(screen.queryByText('Could not create a conversation for this project.')).toBeNull();
-  });
-
-  it('does not seed after explicit other-owner status revokes provisional writer authority', async () => {
-    const teamContext = teamWorkspaceContext('workspace-team', 'member-team');
-    workspaceScopeMocks.ambientContext = teamContext;
-    workspaceScopeMocks.projectScope = {
-      loading: false,
-      scope: {
-        kind: 'team',
-        projectId: project.id,
-        workspaceId: teamContext.workspaceId,
-        visibility: 'team',
-        context: teamContext,
-      },
-    };
-    let resolveConversations!: (value: Conversation[]) => void;
-    listConversations.mockImplementationOnce(
-      () => new Promise<Conversation[]>((resolve) => {
-        resolveConversations = resolve;
-      }),
-    );
-    projectCollabMocks.enabled = true;
-    projectCollabMocks.syncState = null;
-    projectCollabMocks.viewerOnly = false;
-    projectCollabMocks.isOwner = false;
-    projectCollabMocks.writerAuthority = 'allowed';
-    const teamProject = { ...project, workspaceId: teamContext.workspaceId };
-    const view = renderProjectView(config, teamProject);
-
-    await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(1));
-    projectCollabMocks.syncState = 'synced';
-    projectCollabMocks.viewerOnly = true;
-    projectCollabMocks.writerAuthority = 'denied';
-    view.rerender(projectViewElement(config, teamProject));
-
-    await act(async () => {
-      resolveConversations([]);
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(createConversation).not.toHaveBeenCalled();
   });
 
   it('blocks duplicate new conversations while creation is in flight', async () => {
@@ -2297,76 +1227,6 @@ describe('ProjectView conversation run isolation', () => {
     }));
   });
 
-  it('refreshes the active conversation when a project comment event arrives', async () => {
-    renderProjectView();
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    fireEvent.click(screen.getByTestId('conversation-select-conv-b'));
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-b'));
-    if (!resolveConversationBMessages) throw new Error('Expected conv-b message load to be pending');
-    resolveConversationBMessages([]);
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fetchPreviewComments.mockClear();
-    fetchPreviewComments.mockResolvedValue([previewComment]);
-    const handleProjectEvent = useProjectFileEvents.mock.calls.at(-1)?.[2] as
-      | ((event: { type: 'comment-changed'; projectId: string }) => void)
-      | undefined;
-    await act(async () => {
-      handleProjectEvent?.({ type: 'comment-changed', projectId: project.id });
-    });
-
-    await waitFor(() => {
-      expect(fetchPreviewComments).toHaveBeenCalledWith(
-        project.id,
-        'conv-b',
-        expect.anything(),
-      );
-    });
-    // The daemon GET is project-scoped for a Team share, so a comment whose
-    // local FK anchor is conv-a is intentionally accepted by the conv-b view.
-    expect(previewComment.conversationId).toBe('conv-a');
-  });
-
-  it('sends a project-scoped comment through the active chat when its local anchor belongs to another conversation', async () => {
-    renderProjectView();
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    fireEvent.click(screen.getByTestId('conversation-select-conv-b'));
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-b'));
-    if (!resolveConversationBMessages) throw new Error('Expected conv-b message load to be pending');
-    resolveConversationBMessages([]);
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fetchPreviewComments.mockClear();
-    fetchPreviewComments.mockResolvedValue([previewComment]);
-    const handleProjectEvent = useProjectFileEvents.mock.calls.at(-1)?.[2] as
-      | ((event: { type: 'comment-changed'; projectId: string }) => void)
-      | undefined;
-    await act(async () => {
-      handleProjectEvent?.({ type: 'comment-changed', projectId: project.id });
-    });
-    await waitFor(() => expect(fetchPreviewComments).toHaveBeenCalledWith(
-      project.id,
-      'conv-b',
-      expect.anything(),
-    ));
-
-    fireEvent.click(screen.getByTestId('attach-first-comment'));
-    await waitFor(() => expect(screen.getByTestId('attached-comment-count').textContent).toBe('1'));
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledWith(expect.objectContaining({
-      projectId: project.id,
-      conversationId: 'conv-b',
-      commentAttachments: [expect.objectContaining({
-        id: previewComment.id,
-        comment: previewComment.note,
-      })],
-    })));
-    expect(previewComment.conversationId).toBe('conv-a');
-  });
-
   it('detaches saved comment attachments after queueing them for a busy conversation', async () => {
     fetchPreviewComments.mockResolvedValue([previewComment]);
 
@@ -2577,7 +1437,6 @@ describe('ProjectView conversation run isolation', () => {
         'conv-a',
         previewComment.id,
         'applying',
-        workspaceScopeMocks.personalContext(),
       ),
     );
     patchPreviewCommentStatus.mockClear();
@@ -2829,7 +1688,6 @@ describe('ProjectView conversation run isolation', () => {
         expect.anything(),
         previewComment.id,
         'applying',
-        workspaceScopeMocks.personalContext(),
       ),
     );
     await waitFor(() => expect(screen.getByTestId('send-queued-0')).toBeTruthy());
@@ -3058,10 +1916,6 @@ describe('ProjectView conversation run isolation', () => {
         promptNamedProject.id,
         emptyConversation.id,
         { title: 'Hello From B' },
-        expect.objectContaining({
-          workspaceId: 'workspace-personal',
-          workspaceMemberId: 'member-personal',
-        }),
       ),
     );
     await waitFor(() =>
@@ -3070,10 +1924,6 @@ describe('ProjectView conversation run isolation', () => {
         expect.objectContaining({
           name: 'Hello From B',
           metadata: expect.objectContaining({ nameSource: 'prompt' }),
-        }),
-        expect.objectContaining({
-          workspaceId: 'workspace-personal',
-          workspaceMemberId: 'member-personal',
         }),
       ),
     );
@@ -3117,10 +1967,6 @@ describe('ProjectView conversation run isolation', () => {
         promptNamedProject.id,
         emptyConversation.id,
         { title: 'Agent Title' },
-        expect.objectContaining({
-          workspaceId: 'workspace-personal',
-          workspaceMemberId: 'member-personal',
-        }),
       ),
     );
     await waitFor(() =>
@@ -3129,10 +1975,6 @@ describe('ProjectView conversation run isolation', () => {
         expect.objectContaining({
           name: 'Agent Title',
           metadata: expect.objectContaining({ nameSource: 'agent' }),
-        }),
-        expect.objectContaining({
-          workspaceId: 'workspace-personal',
-          workspaceMemberId: 'member-personal',
         }),
       ),
     );
@@ -3379,81 +2221,6 @@ describe('ProjectView conversation run isolation', () => {
     expect(streamViaDaemon).not.toHaveBeenCalled();
   });
 
-  it('converges a daemon chat back to idle when the first AMR run fails authentication', async () => {
-    conversationAMessages = [];
-    fetchChatRunStatus.mockResolvedValue(null);
-    streamViaDaemon.mockImplementation(
-      async (options: {
-        onRunCreated?: (runId: string) => void;
-        handlers: { onError: (error: Error) => void };
-      }) => {
-        options.onRunCreated?.('run-auth-expired');
-        options.handlers.onError(
-          new Error('Your authentication token has expired. Please sign in again.'),
-        );
-      },
-    );
-
-    renderProjectView();
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(screen.getByTestId('chat-error').textContent).toBe(
-        'Your authentication token has expired. Please sign in again.',
-      ),
-    );
-    await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('idle'));
-    expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false);
-
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(2));
-  });
-
-  it('keeps Chat retry available after a structured AMR insufficient-balance error', async () => {
-    conversationAMessages = [];
-    fetchChatRunStatus.mockResolvedValue(null);
-    streamViaDaemon.mockImplementation(
-      async (options: {
-        onRunCreated?: (runId: string) => void;
-        handlers: { onError: (error: Error) => void };
-      }) => {
-        if (streamViaDaemon.mock.calls.length > 1) return;
-        options.onRunCreated?.('run-amr-balance');
-        const error = new Error(
-          'AMR Cloud reported insufficient balance for this model. Top up your AMR balance at https://open-design.ai/amr/dashboard, then retry this run.',
-        ) as Error & { code: string; details: unknown };
-        error.code = 'AMR_INSUFFICIENT_BALANCE';
-        error.details = {
-          kind: 'amr_account',
-          action: 'recharge',
-          actionUrl: 'https://open-design.ai/amr/dashboard',
-        };
-        options.handlers.onError(error);
-      },
-    );
-
-    renderProjectView();
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByTestId('chat-retry')).toBeTruthy());
-    expect(screen.getByTestId('streaming-state').textContent).toBe('idle');
-
-    fireEvent.click(screen.getByTestId('chat-retry'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(2));
-  });
-
   it('preserves the failed attempt transcript when retry starts a replacement run', async () => {
     const userMessage: ChatMessage = {
       id: 'user-retry',
@@ -3552,143 +2319,6 @@ describe('ProjectView conversation run isolation', () => {
       expect(retryCall.history).toEqual([userMessage]);
     },
   );
-
-  it('routes workspace authorize recovery through AMR mode switching for structured auth failures', async () => {
-    conversationAMessages = [];
-    fetchChatRunStatus.mockResolvedValue(null);
-    const onModeChange = vi.fn();
-    const onAgentChange = vi.fn();
-    const onOpenAmrSettings = vi.fn();
-    const onArmAmrAuthRetryContinuation = vi.fn();
-    streamViaDaemon.mockImplementation(
-      async (options: {
-        onRunCreated?: (runId: string) => void;
-        handlers: { onError: (error: Error) => void };
-      }) => {
-        options.onRunCreated?.('run-amr-auth');
-        const error = new Error(
-          'AMR sign-in is required. Sign in to AMR Cloud again, then retry this run.',
-        ) as Error & { code: string; details: unknown };
-        error.code = 'AMR_AUTH_REQUIRED';
-        error.details = {
-          kind: 'amr_account',
-          action: 'relogin',
-        };
-        options.handlers.onError(error);
-      },
-    );
-
-    renderProjectView(
-      {
-        ...config,
-        agentId: 'amr',
-      },
-      project,
-      [
-        {
-          id: 'amr',
-          name: 'AMR',
-          bin: 'amr',
-          available: true,
-          models: [{ id: 'glm-5', label: 'GLM 5' }],
-        },
-      ],
-      {
-        onModeChange,
-        onAgentChange,
-        onOpenAmrSettings,
-        onArmAmrAuthRetryContinuation,
-      },
-    );
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByTestId('workspace-authorize')).toBeTruthy());
-
-    fireEvent.click(screen.getByTestId('workspace-authorize'));
-
-    expect(onModeChange).toHaveBeenCalledWith('daemon');
-    expect(onAgentChange).toHaveBeenCalledWith('amr');
-    expect(onOpenAmrSettings).toHaveBeenCalledTimes(1);
-    expect(onArmAmrAuthRetryContinuation).toHaveBeenCalledWith(expect.objectContaining({
-      projectId: project.id,
-      conversationId: 'conv-a',
-      assistantId: expect.any(String),
-      originMountId: expect.any(String),
-      workspaceIdentityKey: expect.any(String),
-    }));
-    expect(onArmAmrAuthRetryContinuation.mock.invocationCallOrder[0]).toBeLessThan(
-      onModeChange.mock.invocationCallOrder[0]!,
-    );
-    expect(onArmAmrAuthRetryContinuation.mock.invocationCallOrder[0]).toBeLessThan(
-      onOpenAmrSettings.mock.invocationCallOrder[0]!,
-    );
-    expect(screen.getByTestId('streaming-state').textContent).toBe('idle');
-  });
-
-  it('leaves retry ownership with the App continuation while Settings is open', async () => {
-    conversationAMessages = [];
-    fetchChatRunStatus.mockResolvedValue(null);
-    fetchVelaLoginStatus.mockResolvedValue({ loggedIn: true });
-    const onArmAmrAuthRetryContinuation = vi.fn();
-    streamViaDaemon.mockImplementation(
-      async (options: {
-        onRunCreated?: (runId: string) => void;
-        handlers: { onError: (error: Error) => void };
-      }) => {
-        if (streamViaDaemon.mock.calls.length > 1) return;
-        options.onRunCreated?.('run-amr-auth');
-        const error = new Error(
-          'AMR sign-in is required. Sign in to AMR Cloud again, then retry this run.',
-        ) as Error & { code: string; details: unknown };
-        error.code = 'AMR_AUTH_REQUIRED';
-        error.details = {
-          kind: 'amr_account',
-          action: 'relogin',
-        };
-        options.handlers.onError(error);
-      },
-    );
-
-    renderProjectView(
-      {
-        ...config,
-        agentId: 'amr',
-      },
-      project,
-      [
-        {
-          id: 'amr',
-          name: 'AMR',
-          bin: 'amr',
-          available: true,
-          models: [{ id: 'glm-5', label: 'GLM 5' }],
-        },
-      ],
-      {
-        onOpenAmrSettings: vi.fn(),
-        onArmAmrAuthRetryContinuation,
-      },
-    );
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByTestId('workspace-authorize')).toBeTruthy());
-
-    fireEvent.click(screen.getByTestId('workspace-authorize'));
-
-    expect(onArmAmrAuthRetryContinuation).toHaveBeenCalledTimes(1);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(streamViaDaemon).toHaveBeenCalledTimes(1);
-  });
 
   it('routes Chat retry and terminal launch recovery for antigravity auth failures', async () => {
     conversationAMessages = [];
@@ -3791,53 +2421,6 @@ describe('ProjectView conversation run isolation', () => {
     fireEvent.click(screen.getByTestId('chat-retry'));
     await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(2));
   });
-
-  it('does not promote switching to AMR for upstream outages', async () => {
-    conversationAMessages = [];
-    fetchChatRunStatus.mockResolvedValue(null);
-    streamViaDaemon.mockImplementation(
-      async (options: {
-        onRunCreated?: (runId: string) => void;
-        handlers: { onError: (error: Error) => void };
-      }) => {
-        if (streamViaDaemon.mock.calls.length > 1) return;
-        options.onRunCreated?.('run-upstream-unavailable');
-        const error = new Error('The model provider is temporarily unavailable.') as Error & {
-          code: string;
-        };
-        error.code = 'UPSTREAM_UNAVAILABLE';
-        options.handlers.onError(error);
-      },
-    );
-
-    renderProjectView(
-      {
-        ...config,
-        agentId: 'claude',
-      },
-      project,
-      [
-        {
-          id: 'claude',
-          name: 'Claude',
-          bin: 'claude',
-          available: true,
-          models: [{ id: 'claude-sonnet-4', label: 'Claude Sonnet 4' }],
-        },
-      ],
-    );
-
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
-    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
-
-    fireEvent.click(screen.getByTestId('send-message'));
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByTestId('chat-retry')).toBeTruthy());
-    expect(screen.queryByTestId('workspace-switch-amr')).toBeNull();
-    expect(screen.queryByTestId('workspace-authorize')).toBeNull();
-    expect(screen.queryByTestId('workspace-launch-terminal')).toBeNull();
-  });
 });
 
 function renderProjectView(
@@ -3851,10 +2434,6 @@ function renderProjectView(
     onModeChange?: (mode: 'daemon' | 'api') => void;
     onAgentChange?: (agentId: string) => void;
     onOpenSettings?: (section?: SettingsSection) => void;
-    onOpenAmrSettings?: () => void;
-    onArmAmrAuthRetryContinuation?: (
-      continuation: Omit<AmrAuthRetryContinuation, 'accountIdAtArm' | 'createdAtMs'>,
-    ) => void;
   } = {},
 ) {
   return render(projectViewElement(renderConfig, renderProject, renderAgents, handlers));
@@ -3871,10 +2450,6 @@ function projectViewElement(
     onModeChange?: (mode: 'daemon' | 'api') => void;
     onAgentChange?: (agentId: string) => void;
     onOpenSettings?: (section?: SettingsSection) => void;
-    onOpenAmrSettings?: () => void;
-    onArmAmrAuthRetryContinuation?: (
-      continuation: Omit<AmrAuthRetryContinuation, 'accountIdAtArm' | 'createdAtMs'>,
-    ) => void;
   } = {},
 ) {
   return (
@@ -3892,8 +2467,6 @@ function projectViewElement(
       onAgentModelChange={() => {}}
       onRefreshAgents={() => {}}
       onOpenSettings={handlers.onOpenSettings ?? (() => {})}
-      onOpenAmrSettings={handlers.onOpenAmrSettings}
-      onArmAmrAuthRetryContinuation={handlers.onArmAmrAuthRetryContinuation}
       onBack={() => {}}
       onClearPendingPrompt={() => {}}
       onTouchProject={() => {}}

@@ -31,11 +31,9 @@ import {
   fetchPromptTemplates,
   fetchSkills,
 } from '../../src/providers/registry';
-import { fetchAmrModels, fetchVelaLoginStatus } from '../../src/providers/daemon';
+import { } from '../../src/providers/daemon';
 import { listProjects, listTemplates } from '../../src/state/projects';
-import { resetWorkspaceContextCache } from '../../src/collab/useWorkspaceContext';
 import { resetCoalescedGet } from '../../src/lib/coalesced-get';
-import { workspaceDirectoryFixture } from '../helpers/workspace-context';
 
 // The real router is deliberately NOT mocked: this spec is about which history
 // layer Back lands on, which only the real pushState/popstate bookkeeping can
@@ -86,17 +84,6 @@ vi.mock('../../src/providers/registry', async () => {
     fetchDesignSystems: vi.fn(),
     fetchPromptTemplates: vi.fn(),
     fetchSkills: vi.fn(),
-  };
-});
-
-vi.mock('../../src/providers/daemon', async () => {
-  const actual = await vi.importActual<typeof import('../../src/providers/daemon')>(
-    '../../src/providers/daemon',
-  );
-  return {
-    ...actual,
-    fetchAmrModels: vi.fn(),
-    fetchVelaLoginStatus: vi.fn(),
   };
 });
 
@@ -156,7 +143,6 @@ const project: Project = {
   customInstructions: '',
   createdAt: 1,
   updatedAt: 1,
-  workspaceId: null,
 };
 
 const CONVERSATION_PATH = '/projects/project-1/conversations/conversation-1';
@@ -187,7 +173,6 @@ describe('design-system create page — Back destination', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/');
     resetCoalescedGet();
-    resetWorkspaceContextCache();
     vi.mocked(daemonIsLive).mockResolvedValue(true);
     vi.mocked(fetchAgentsStream).mockResolvedValue([]);
     vi.mocked(fetchSkills).mockResolvedValue([]);
@@ -199,24 +184,12 @@ describe('design-system create page — Back destination', () => {
     vi.mocked(loadConfig).mockReturnValue({ ...baseConfig });
     vi.mocked(mergeDaemonConfig).mockImplementation((local) => local);
     vi.mocked(fetchDaemonConfig).mockResolvedValue({});
-    vi.mocked(fetchAmrModels).mockResolvedValue({
-      source: 'preset',
-      refreshing: false,
-      models: [],
-    });
-    vi.mocked(fetchVelaLoginStatus).mockResolvedValue({
-      loggedIn: false,
-      loginInFlight: false,
-      profile: 'prod',
-      user: null,
-      configPath: '/tmp/amr-config.json',
-    });
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         const url = typeof input === 'string' ? input : input.toString();
         if (url.endsWith('/api/workspace/directory')) {
-          return jsonResponse(workspaceDirectoryFixture([]));
+          return jsonResponse({ items: [] });
         }
         return jsonResponse({});
       }),
@@ -228,7 +201,6 @@ describe('design-system create page — Back destination', () => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     resetCoalescedGet();
-    resetWorkspaceContextCache();
     window.history.replaceState(null, '', '/');
   });
 

@@ -72,17 +72,15 @@ export function DesignSystemsSection({
   const [importedDesignSystem, setImportedDesignSystem] = useState<DesignSystemSummary | null>(null);
   const [highlightedDesignSystemId, setHighlightedDesignSystemId] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const workspaceIdentity = 'local';
-
   useEffect(() => {
     let cancelled = false;
-    fetchDesignSystems(workspaceContext).then((systems) => {
+    fetchDesignSystems().then((systems) => {
       if (!cancelled) setDesignSystems(systems);
     });
     return () => {
       cancelled = true;
     };
-  }, [workspaceIdentity]);
+  }, []);
 
   const disabledDS = useMemo(
     () => new Set(cfg.disabledDesignSystems ?? []),

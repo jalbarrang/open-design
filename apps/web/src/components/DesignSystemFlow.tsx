@@ -316,11 +316,7 @@ async function resolveDesignSystemWorkspaceProject(
   if (!system.projectId) return null;
   const fallbackProject = await getProject(system.projectId);
   if (!fallbackProject) return null;
-  const files = workspaceContext
-    ? await fetchProjectFiles(system.projectId, {
-        requireAuthoritative: true,
-      })
-    : await fetchProjectFiles(system.projectId, { requireAuthoritative: true });
+  const files = await fetchProjectFiles(system.projectId, { requireAuthoritative: true });
   return {
     projectId: system.projectId,
     files,
@@ -1674,11 +1670,9 @@ export function DesignSystemDetailView({
       return undefined;
     }
     let cancelled = false;
-    const detailWorkspaceContext = workspaceContext;
     void getProjectDetail(
       workspaceProjectId,
-      undefined,
-      detailWorkspaceContext,
+      undefined
     ).then((detail) => {
       if (cancelled) return;
       setWorkspaceProjectResolvedDir(detail?.resolvedDir ?? null);
@@ -1686,7 +1680,7 @@ export function DesignSystemDetailView({
     return () => {
       cancelled = true;
     };
-  }, [workspaceContext, workspaceProjectId]);
+  }, [ workspaceProjectId]);
   const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -1830,7 +1824,7 @@ export function DesignSystemDetailView({
     return () => {
       cancelled = true;
     };
-  }, [workspaceContext, workspaceProjectId]);
+  }, [ workspaceProjectId]);
 
   useEffect(() => {
     if (!workspaceProjectId) return undefined;
@@ -1845,7 +1839,7 @@ export function DesignSystemDetailView({
     return () => {
       cancelled = true;
     };
-  }, [workspaceContext, workspaceProjectId]);
+  }, [ workspaceProjectId]);
 
   useEffect(() => {
     if (!workspaceProjectId || !activeConversationId) {
@@ -1937,7 +1931,7 @@ export function DesignSystemDetailView({
       cancelled = true;
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
     };
-  }, [id, onSystemsRefresh, t, workspaceContext]);
+  }, [id, onSystemsRefresh, t]);
 
   useEffect(() => {
     if (
@@ -1983,7 +1977,7 @@ export function DesignSystemDetailView({
       cancelled = true;
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
     };
-  }, [id, onSystemsRefresh, revisionJob?.id, revisionJob?.status, t, workspaceContext]);
+  }, [id, onSystemsRefresh, revisionJob?.id, revisionJob?.status, t]);
 
   const sections = useMemo(() => parseDesignSystemSections(body, t), [body, t]);
   const published = system?.status === 'published';
@@ -1997,7 +1991,7 @@ export function DesignSystemDetailView({
   // is the daemon's own PATCH/DELETE verdict (`canMutateUserDesignSystem`)
   // mirrored onto the GET response, so this stays in lockstep with whatever
   // the backend actually allows.
-  const editable = system?.isEditable !== false && system?.canMutate !== false;
+  const editable = system?.isEditable !== false;
   const activeJob = revisionJob ?? generationJob;
   const pendingRevision = revisions.find((revision) => revision.status === 'pending') ?? null;
   const recentRevisions = revisions.slice(0, 5);
@@ -2231,15 +2225,10 @@ export function DesignSystemDetailView({
     };
     let next: ProjectFile[];
     try {
-      next = workspaceContext
-        ? await fetchProjectFiles(projectId, {
-            fresh: options?.fresh,
-            requireAuthoritative: true,
-          })
-        : await fetchProjectFiles(projectId, {
-            fresh: options?.fresh,
-            requireAuthoritative: true,
-          });
+      next = await fetchProjectFiles(projectId, {
+        fresh: options?.fresh,
+        requireAuthoritative: true,
+      });
     } catch {
       // A failed read says nothing about deletion. Preserve the current
       // snapshot and generation for the active lifetime; a stale lifetime
@@ -2254,7 +2243,7 @@ export function DesignSystemDetailView({
     setWorkspaceFilesGeneration(acceptedGeneration);
     onAcceptedGeneration?.(acceptedGeneration);
     return next;
-  }, [workspaceContext, workspaceFilesScopeKey]);
+  }, [ workspaceFilesScopeKey]);
 
   const syncDesignSystemBodyFromWorkspace = useCallback(async (projectId: string) => {
     if (!system || !editable) return false;
@@ -2272,7 +2261,7 @@ export function DesignSystemDetailView({
     setBody(updated.body);
     await onSystemsRefresh?.();
     return true;
-  }, [body, editable, onSystemsRefresh, system, workspaceContext]);
+  }, [body, editable, onSystemsRefresh, system]);
 
   // Asset counterpart of syncDesignSystemBodyFromWorkspace (spec 04 §9.3,
   // recvqb1t4FrckM): the text sync above PATCHes DESIGN.md content through
@@ -2285,7 +2274,7 @@ export function DesignSystemDetailView({
     if (!system || !editable) return false;
     const result = await syncDesignSystemAssetsFromWorkspaceRequest(system.id);
     return Boolean(result && result.synced.length > 0);
-  }, [editable, system, workspaceContext]);
+  }, [editable, system]);
 
   const refreshDesignSystemWorkspace = useCallback(async (
     projectId: string,
@@ -2320,7 +2309,7 @@ export function DesignSystemDetailView({
       if (!conversationId) return;
       void saveMessage(projectId, conversationId, message);
     },
-    [workspaceContext],
+    [],
   );
 
   const persistWorkspaceTabsState = useCallback(
@@ -2330,7 +2319,7 @@ export function DesignSystemDetailView({
         void saveTabs(workspaceProjectId, next);
       }
     },
-    [workspaceContext, workspaceProjectId],
+    [ workspaceProjectId],
   );
 
   const requestWorkspaceFileOpen = useCallback((name: string) => {
@@ -2894,7 +2883,7 @@ export function DesignSystemDetailView({
                       : t('dsFlow.publishCardWorking')
                   : t('dsFlow.publishCardReady')}
               </p>
-              <label title={system.canMutate === false ? t('dsManager.teamSyncedReadOnly') : undefined}>
+              <label>
                 <input
                   type="checkbox"
                   checked={published}
@@ -3016,7 +3005,7 @@ export function DesignSystemDetailView({
             </div>
             <label
               className="ds-body-editor"
-              title={system.canMutate === false ? t('dsManager.teamSyncedReadOnly') : undefined}
+
             >
               DESIGN.md
               <Textarea
@@ -3030,7 +3019,7 @@ export function DesignSystemDetailView({
               variant="primary"
               disabled={!editable || saving}
               onClick={() => void saveBody()}
-              title={system.canMutate === false ? t('dsManager.teamSyncedReadOnly') : undefined}
+
             >
               {t('ds.saveDesignMd')}
             </Button>

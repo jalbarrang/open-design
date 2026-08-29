@@ -119,10 +119,7 @@ export function useCritiqueReplay(
     (async () => {
       let raw: string;
       try {
-        const fetched = options.workspaceContext
-          ? await fetcher(transcriptUrl, {
-            })
-          : await fetcher(transcriptUrl);
+        const fetched = await fetcher(transcriptUrl);
         if (cancelled) return;
         if (typeof fetched === 'string') {
           raw = fetched;

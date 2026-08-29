@@ -311,7 +311,7 @@ function mcpMatches(server: McpServerConfig, needle: string): boolean {
  * project-only design-toolbox row.
  */
 export function ComposerPlusMenu({
-  workspaceContext = null,
+
   connectors,
   onPickConnector,
   onAddConnector,

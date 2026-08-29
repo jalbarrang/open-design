@@ -299,7 +299,7 @@ const EMPTY_WORKSPACE_ITEMS: WorkspaceContextItem[] = [];
 
 export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   {
-    workspaceContext = null,
+
     active = true,
     prompt,
     onPromptChange,
@@ -2264,7 +2264,7 @@ function PluginPromptPresets({
   pendingPluginId,
   plugins,
   pulseFirstPreset = false,
-  workspaceContext = null,
+
 }: {
   activePluginId: string | null;
   chipId: string;
@@ -2400,7 +2400,7 @@ function PluginPromptPresetCard({
   pending,
   pulse = false,
   record,
-  workspaceContext = null,
+
 }: {
   active: boolean;
   chipId: string;
@@ -2416,7 +2416,7 @@ function PluginPromptPresetCard({
   // hover-pan clip when one exists (same as the gallery cards).
   const preview = useMemo(
     () => inferPluginPreview(record, { preferBaked: true}),
-    [record, workspaceContext],
+    [record],
   );
   // Home cards keep their richer structured-preview path as the last-resort
   // fallback (the detail modal injects a simpler one).

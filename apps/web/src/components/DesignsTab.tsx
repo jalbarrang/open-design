@@ -222,7 +222,7 @@ export function DesignsTab({
 		});
 
 		return () => controller.abort();
-	}, [isActive, projects, workspaceContextLoading]);
+	}, [isActive, projects]);
 
 	useEffect(() => {
 		if (!isActive) return;
@@ -300,7 +300,7 @@ export function DesignsTab({
 			}));
 		});
 		return () => controller.abort();
-	}, [isActive, projects, workspaceContextLoading]);
+	}, [isActive, projects]);
 
 	useEffect(() => {
 		if (!menuOpenId) return;

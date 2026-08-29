@@ -38,7 +38,6 @@ import type {
 import {
   applyPlugin,
   renderPluginBriefTemplate,
-  resolvedWorkspaceContextForWrite,
 } from '../state/projects';
 import { useI18n } from '../i18n';
 import { ContextChipStrip } from './ContextChipStrip';
@@ -103,26 +102,6 @@ export const PluginsSection = forwardRef<PluginsSectionHandle, Props>(
     const [applied, setApplied] = useState<ApplyResult | null>(null);
     const [activeRecord, setActiveRecord] = useState<InstalledPluginRecord | null>(null);
 
-    const workspaceContextForAction = useCallback(() => {
-      if (props.projectId) {
-        if (projectCollab.workspaceContextLoading) {
-          throw new Error(
-            'Workspace context is unavailable. Try again when workspace sync finishes.',
-          );
-        }
-        return projectCollab.workspaceContext;
-      }
-      if (shellWorkspace.identityChangePending) {
-        throw new Error(
-          'Workspace context is unavailable. Try again when workspace sync finishes.',
-        );
-      }
-      return resolvedWorkspaceContextForWrite(shellWorkspace);
-    }, [
-      props.projectId,
-      projectCollab.workspaceContextLoading,
-    ]);
-
     const handleApplied = useCallback(
       (record: InstalledPluginRecord | null, result: ApplyResult) => {
         setActiveRecord(record);
@@ -157,12 +136,6 @@ export const PluginsSection = forwardRef<PluginsSectionHandle, Props>(
       ref,
       () => ({
         applyById: async (pluginId, record = null) => {
-          let workspaceContext;
-          try {
-            workspaceContext = workspaceContextForAction();
-          } catch {
-            return null;
-          }
           const result = await applyPlugin(pluginId, {
             ...(props.projectId ? { projectId: props.projectId } : {}),
             locale,
@@ -177,7 +150,6 @@ export const PluginsSection = forwardRef<PluginsSectionHandle, Props>(
       [
         props.projectId,
         locale,
-        workspaceContextForAction,
         handleApplied,
         clear,
         activeRecord,

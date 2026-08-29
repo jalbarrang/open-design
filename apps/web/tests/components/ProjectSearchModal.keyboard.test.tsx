@@ -13,7 +13,6 @@ import {
 } from '../../src/components/ProjectSearchModal';
 import { I18nProvider } from '../../src/i18n';
 import type { Project } from '../../src/types';
-import type { WorkspaceCollabContext } from '@open-design/contracts';
 
 afterEach(() => cleanup());
 
@@ -35,33 +34,14 @@ const PROJECTS = [
   project('middle', 'Middle deck', 2_000),
 ];
 
-const WORKSPACE_CONTEXT = {
-  workspaceId: 'workspace-team',
-  workspaceType: 'team',
-  workspaceMemberId: 'member-1',
-  role: 'member',
-  memberStatus: 'active',
-  lifecycleState: 'active',
-  permissions: {
-    canShareProjects: false,
-    canWriteSyncedFiles: false,
-  },
-} as WorkspaceCollabContext;
-
 function renderPalette(
   onOpenProject = vi.fn(),
   onClose = vi.fn(),
   projects = PROJECTS,
-  workspaceContext: WorkspaceCollabContext | null = null,
 ) {
   render(
     <I18nProvider>
-      <ProjectSearchModal
-        projects={projects}
-        workspaceContext={workspaceContext}
-        onOpenProject={onOpenProject}
-        onClose={onClose}
-      />
+      <ProjectSearchModal projects={projects} onOpenProject={onOpenProject} onClose={onClose} />
     </I18nProvider>,
   );
   return { onOpenProject, onClose };
@@ -73,18 +53,6 @@ function activeName(): string | undefined {
 }
 
 describe('ProjectSearchModal keyboard navigation', () => {
-  it('searches personal drafts together with shared workspace projects', () => {
-    const personalProject = project('personal-white-shoes', '白色慢跑鞋棚拍商品图', 4_000);
-    const sharedProject = project('shared-blue-shoes', '共享蓝色跑鞋', 3_000);
-    const projects = buildProjectSearchCatalog([personalProject], [sharedProject]);
-
-    renderPalette(vi.fn(), vi.fn(), projects);
-    fireEvent.change(screen.getByTestId('project-search-input'), {
-      target: { value: '白色' },
-    });
-
-    expect(screen.getByTestId('project-search-item-personal-white-shoes')).toBeTruthy();
-  });
 
   it('uses the shared catalog card when the same project appears twice', () => {
     const localCard = project('shared-project', 'Stale local title', 1_000);
@@ -159,21 +127,5 @@ describe('ProjectSearchModal keyboard navigation', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(activeName()).toBeUndefined();
-  });
-
-  it('uses server-derived project authority for Team project cover URLs', () => {
-    const teamProject = {
-      ...project('team-project', 'Team project', 4_000),
-      metadata: {
-        entryFile: 'cover.png',
-        kind: 'image',
-      },
-    } as Project;
-    renderPalette(vi.fn(), vi.fn(), [teamProject], WORKSPACE_CONTEXT);
-
-    const image = screen.getByTestId('project-search-item-team-project').querySelector('img');
-    expect(image?.getAttribute('src')).toBe(
-      '/api/projects/team-project/raw/cover.png?v=4000',
-    );
   });
 });

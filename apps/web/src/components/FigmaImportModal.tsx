@@ -42,7 +42,7 @@ const FIGMA_URL_RE = /^https:\/\/(?:www\.)?figma\.com\/(?:file|design)\/[A-Za-z0
 export function FigmaImportModal({
   onClose,
   resolveProjectId,
-  workspaceContext = null,
+
   onImported,
   onFigmaUrl,
 }: Props) {
@@ -100,7 +100,7 @@ export function FigmaImportModal({
     setStatus('done');
     // Hand the snapshot + prompt to the host (prefill composer / navigate).
     onImported(outcome.result, projectId);
-  }, [file, notes, onImported, resolveProjectId, workspaceContext]);
+  }, [file, notes, onImported, resolveProjectId]);
 
   const submitUrl = useCallback(() => {
     const trimmed = url.trim();

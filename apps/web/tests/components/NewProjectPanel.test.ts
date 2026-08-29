@@ -4,11 +4,6 @@ import { supportedModels } from '../../src/components/NewProjectPanel';
 import { AUDIO_MODELS_BY_KIND, IMAGE_MODELS, VIDEO_MODELS } from '../../src/media/models';
 
 describe('NewProjectPanel image provider visibility', () => {
-  it('shows Vela image models without exposing Codex image models', () => {
-    const imageModels = supportedModels('image', IMAGE_MODELS);
-    expect(imageModels.some((model) => model.provider === 'vela')).toBe(true);
-    expect(imageModels.map((model) => String(model.provider))).not.toContain('codex');
-  });
 
   it('shows Nano Banana in supported image models', () => {
     const models = supportedModels('image', IMAGE_MODELS);

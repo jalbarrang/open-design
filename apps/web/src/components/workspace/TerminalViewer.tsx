@@ -217,7 +217,7 @@ export function TerminalViewer({
     if (last && last.cols === cols && last.rows === rows) return;
     lastSizeRef.current = { cols, rows };
     void resizeTerminal(projectId, sessionId, cols, rows);
-  }, [projectId, sessionId, workspaceContext]);
+  }, [projectId, sessionId]);
 
   useEffect(() => {
     const container = surfaceRef.current;
@@ -356,7 +356,7 @@ export function TerminalViewer({
       // or when the daemon shuts down.
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, sessionId, workspaceContext]);
+  }, [projectId, sessionId]);
 
   // Re-fit when the banner appears/disappears so the surface reclaims the row.
   useEffect(() => {
@@ -380,7 +380,7 @@ export function TerminalViewer({
     } else {
       setPhase('unavailable');
     }
-  }, [projectId, sessionId, workspaceContext]);
+  }, [projectId, sessionId]);
 
   const stopped = phase === 'ended' || phase === 'unavailable';
   const connecting = phase === 'connecting';

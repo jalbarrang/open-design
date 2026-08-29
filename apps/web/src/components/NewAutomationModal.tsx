@@ -467,14 +467,6 @@ export function NewAutomationModal({
           ...(selectedPluginIds.length > 0 ? { pluginIds: selectedPluginIds } : {}),
           ...(selectedMcpIds.length > 0 ? { mcpServerIds: selectedMcpIds } : {}),
           ...(selectedConnectorIds.length > 0 ? { connectorIds: selectedConnectorIds } : {}),
-          ...(target.mode === 'create_each_run' && workspaceContext
-            ? {
-                workspaceScope: {
-                  workspaceId: workspaceContext.workspaceId,
-                  workspaceMemberId: workspaceContext.workspaceMemberId,
-                },
-              }
-            : {}),
         },
         enabled: true,
       };

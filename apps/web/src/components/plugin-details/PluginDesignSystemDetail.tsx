@@ -79,7 +79,7 @@ export function PluginDesignSystemDetail({
   onDuplicate,
   isApplying,
   hideUseAction,
-  workspaceContext = null,
+
   onSharePopoverItemClick,
 }: Props) {
   const { t, locale } = useI18n();
@@ -112,7 +112,7 @@ export function PluginDesignSystemDetail({
         void fetchDesignSystemPreview(dsRef).then((html) => setTokensHtml(html));
       }
     },
-    [dsRef, showcaseHtml, tokensHtml, workspaceContext],
+    [dsRef, showcaseHtml, tokensHtml],
   );
 
   const handleSidebarToggle = useCallback(
@@ -123,7 +123,7 @@ export function PluginDesignSystemDetail({
         setSpecBody(body),
       );
     },
-    [record.id, assetPath, specBody, workspaceContext],
+    [record.id, assetPath, specBody],
   );
 
   // When no upstream design system is referenced we still need a view

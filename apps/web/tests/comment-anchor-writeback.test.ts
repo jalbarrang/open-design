@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { planLostAnchorWriteBacks, type CommentAnchorResolution } from '../src/comments.js';
-import { persistCommentAnchor, persistCommentAnchors } from '../src/collab/comment-anchor-client.js';
 import type { PreviewComment } from '../src/types.js';
-import type { WorkspaceCollabContext } from '@open-design/contracts';
+import { persistCommentAnchors } from '../src/comment-anchor-client.js';
 
 const POS = { x: 10, y: 20, width: 30, height: 40 };
 
@@ -59,35 +58,6 @@ describe('planLostAnchorWriteBacks', () => {
 });
 
 describe('persistCommentAnchor', () => {
-  it('PATCHes the anchor route with the anchor state + last-good position', async () => {
-    const fetchMock = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => ({ ok: true, status: 200 }) as unknown as Response);
-    await persistCommentAnchor({
-      projectId: 'p 1',
-      conversationId: 'conv',
-      writeBack: { commentId: 'c1', anchorState: 'lost', lastGoodPosition: POS },
-      fetch: fetchMock as unknown as typeof fetch,
-      workspaceContext: {
-        workspaceId: 'workspace-a',
-        workspaceMemberId: 'member-a',
-        workspaceType: 'team',
-        role: 'member',
-        memberStatus: 'active',
-        lifecycleState: 'active',
-        permissions: {
-          canShareProjects: true,
-          canWriteSyncedFiles: true,
-        },
-      } as WorkspaceCollabContext,
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('/api/projects/p%201/conversations/conv/comments/c1/anchor');
-    expect(init?.method).toBe('PATCH');
-    const headers = new Headers(init?.headers);
-    expect(headers.get('x-od-workspace-id')).toBe('workspace-a');
-    expect(headers.get('x-od-workspace-member-id')).toBe('member-a');
-    expect(JSON.parse(String(init?.body))).toEqual({ anchorState: 'lost', lastGoodPosition: POS });
-  });
 
   it('persistCommentAnchors reports failures without aborting the batch', async () => {
     const fetchMock = vi.fn(async (url: RequestInfo | URL) => {

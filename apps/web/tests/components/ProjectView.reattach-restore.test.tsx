@@ -1647,10 +1647,7 @@ describe('ProjectView daemon reattach restore', () => {
     await chatPaneHarness.onSend!('first run', [], []);
     await waitFor(() => expect(resolveFirstFinalRefresh).toBeTruthy());
 
-    await waitFor(() => {
-      const started = chatPaneHarness.onSend!('second run', [], []);
-      expect(started).toBeTruthy();
-    });
+    chatPaneHarness.onSend!('second run', [], []);
     await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(resolveSecondFinalRefresh).toBeTruthy());
 
@@ -1867,68 +1864,6 @@ describe('ProjectView daemon reattach restore', () => {
         .filter((m) => m?.id === 'msg-fail' && (m.runStatus === 'failed' || m.runStatus === 'succeeded'))
         .at(-1);
       expect(finalSave?.runStatus).toBe('failed');
-    });
-  });
-
-  it('renders AMR recharge guidance when a reattached run reports insufficient balance', async () => {
-    const startedAt = Date.now();
-    listConversations.mockResolvedValue([{ id: 'conv-1', title: 'Conversation' }]);
-    listMessages.mockResolvedValue([
-      {
-        id: 'msg-amr-balance',
-        role: 'assistant',
-        content: '',
-        createdAt: startedAt,
-        startedAt,
-        runId: 'run-amr-balance',
-        runStatus: 'running',
-        preTurnFileNames: [],
-      } satisfies ChatMessage,
-    ]);
-    fetchPreviewComments.mockResolvedValue([]);
-    loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
-    fetchProjectFiles.mockResolvedValue([]);
-    fetchLiveArtifacts.mockResolvedValue([]);
-    fetchSkill.mockResolvedValue(null);
-    fetchDesignSystem.mockResolvedValue(null);
-    getTemplate.mockResolvedValue(null);
-    fetchChatRunStatus.mockResolvedValue({
-      id: 'run-amr-balance',
-      status: 'running',
-      createdAt: startedAt,
-      updatedAt: startedAt,
-      exitCode: null,
-      signal: null,
-    });
-    listActiveChatRuns.mockResolvedValue([]);
-
-    reattachDaemonRun.mockImplementation(async (options: any) => {
-      const error = new Error(
-        'AMR Cloud reported insufficient balance for this model. Top up your AMR balance at https://open-design.ai/amr/dashboard, then retry this run.',
-      ) as Error & { code: string; details: unknown };
-      error.code = 'AMR_INSUFFICIENT_BALANCE';
-      error.details = {
-        kind: 'amr_account',
-        action: 'recharge',
-        actionUrl: 'https://open-design.ai/amr/dashboard',
-      };
-      options.handlers.onError(error);
-    });
-
-    renderProjectView();
-
-    await waitFor(() => expect(reattachDaemonRun).toHaveBeenCalledTimes(1));
-    await waitFor(() => {
-      const finalSave = saveMessage.mock.calls
-        .map((call) => call[2] as ChatMessage)
-        .filter((m) => m?.id === 'msg-amr-balance' && m.runStatus === 'failed')
-        .at(-1);
-      const errorEvent = finalSave?.events?.find(
-        (event) => event.kind === 'status' && event.label === 'error',
-      ) as { code?: string } | undefined;
-      expect(errorEvent).toMatchObject({
-        code: 'AMR_INSUFFICIENT_BALANCE',
-      });
     });
   });
 

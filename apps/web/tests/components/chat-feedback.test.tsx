@@ -159,16 +159,6 @@ describe('chat assistant feedback', () => {
     expect(screen.getByRole('group', { name: 'Feedback' })).toBeTruthy();
   });
 
-  it('hides conversation fork actions from read-only project viewers', () => {
-    renderChatPane({
-      messages: [completedAssistant()],
-      onForkFromMessage: vi.fn(),
-      viewerOnly: true,
-    });
-
-    expect(screen.queryByRole('button', { name: 'Fork from here' })).toBeNull();
-  });
-
   it('collects positive and negative feedback on completed artifact results', () => {
     const { onAssistantFeedback } = renderChatPane({
       messages: [completedArtifactAssistant()],

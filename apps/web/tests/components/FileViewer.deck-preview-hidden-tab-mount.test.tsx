@@ -1,3 +1,6 @@
+type CollabContextValue = Record<string, unknown>;
+const workspaceContextFixture = (_input?: unknown) => ({});
+function CollabProvider({ children }: { value: unknown; children: ReactNode }) { return <>{children}</>; }
 // @vitest-environment jsdom
 // Red spec for issue #6583: a deck preview that mounts while the browser tab
 // is HIDDEN stays permanently white after the user returns to the tab.
@@ -31,11 +34,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
-import { CollabProvider, type CollabContextValue } from '../../src/collab/collab-context';
 import { FileViewer } from '../../src/components/FileViewer';
 import { resetSharedCancellableGet } from '../../src/lib/shared-cancellable-get';
 import type { ProjectFile } from '../../src/types';
-import { workspaceContextFixture } from '../helpers/workspace-context';
 
 const WORKSPACE_CONTEXT = workspaceContextFixture({
   workspaceId: 'ws-deck-hidden-mount',

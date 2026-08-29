@@ -5,7 +5,6 @@ import {
   type OpenDesignHostProjectImportSuccess,
 } from '@open-design/host';
 import { pickLocalFolderPath } from '../state/projects';
-import { resolvedWorkspaceContextForWrite } from '../state/projects';
 import { formatPickAndImportFailure } from '../utils/pickAndImportError';
 
 interface UseOpenFolderImportArgs {

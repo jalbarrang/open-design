@@ -27,15 +27,7 @@ interface Props {
    * wins. A warning surfaces in development; production stays silent.
    */
   fetchInterrupt?: (url: string, init: RequestInit) => Promise<Response>;
-  /**
-   * Exact project Workspace authority override. Production callers normally
-   * omit this and the mount resolves the persisted project binding itself.
-   * Explicit `null` selects the legacy/unbound compatibility path.
-   */
-  /** Caller identity used only to authorize the persisted-scope lookup. */
-  callerWorkspaceContext?: WorkspaceCollabContext | null;
-  /** Workspace id persisted on the project read model. */
-  persistedProjectWorkspaceId?: string | null;
+
 }
 
 /**
@@ -52,26 +44,11 @@ interface Props {
  */
 export function CritiqueTheaterMount(props: Props) {
   if (!props.enabled || !props.projectId) return null;
-
-  const sharedProps = {
-    projectId: props.projectId,
-    ...(props.connectionFactory
-      ? { connectionFactory: props.connectionFactory }
-      : {}),
-    ...(props.fetchInterrupt ? { fetchInterrupt: props.fetchInterrupt } : {}),
-  };
-  if ('workspaceContext' in props) {
-    return (
-      <ResolvedCritiqueTheaterMount
-        {...sharedProps}
-      />
-    );
-  }
   return (
-    <PersistedScopeCritiqueTheaterMount
-      {...sharedProps}
-      callerWorkspaceContext={props.callerWorkspaceContext ?? null}
-      persistedProjectWorkspaceId={props.persistedProjectWorkspaceId}
+    <ResolvedCritiqueTheaterMount
+      projectId={props.projectId}
+      {...(props.connectionFactory ? { connectionFactory: props.connectionFactory } : {})}
+      {...(props.fetchInterrupt ? { fetchInterrupt: props.fetchInterrupt } : {})}
     />
   );
 }
@@ -79,55 +56,6 @@ export function CritiqueTheaterMount(props: Props) {
 type ResolvedProps = Pick<Props, 'connectionFactory' | 'fetchInterrupt'> & {
   projectId: string;
 };
-
-function PersistedScopeCritiqueTheaterMount({
-  projectId,
-  connectionFactory,
-  fetchInterrupt,
-  callerWorkspaceContext,
-  persistedProjectWorkspaceId,
-}: Omit<ResolvedProps, 'workspaceContext'> & {
-  callerWorkspaceContext: WorkspaceCollabContext | null;
-  persistedProjectWorkspaceId?: string | null;
-}) {
-  const projectScope = useProjectWorkspaceScope(
-    projectId,
-    callerWorkspaceContext,
-    persistedProjectWorkspaceId,
-  );
-  const resolvedContext = projectWorkspaceContext(projectScope.scope);
-  const pinnedRef = useRef<{
-    projectId: string;
-    context: WorkspaceCollabContext | null;
-    ready: boolean;
-  }>({
-    projectId,
-    context: null,
-    ready: false,
-  });
-
-  if (pinnedRef.current.projectId !== projectId) {
-    pinnedRef.current = { projectId, context: null, ready: false };
-  }
-  if (resolvedContext) {
-    pinnedRef.current = { projectId, context: resolvedContext, ready: true };
-  } else if (projectScope.scope?.kind === 'unbound') {
-    pinnedRef.current = { projectId, context: null, ready: true };
-  }
-
-  // Shell navigation broadcasts a context refresh. While the persisted
-  // project binding is revalidated, keep the last exact project identity:
-  // never borrow shell B and never reconnect an A-bound stream headerless.
-  // The daemon still authorizes the exact A identity on every request.
-  if (!pinnedRef.current.ready) return null;
-  return (
-    <ResolvedCritiqueTheaterMount
-      projectId={projectId}
-      {...(connectionFactory ? { connectionFactory } : {})}
-      {...(fetchInterrupt ? { fetchInterrupt } : {})}
-    />
-  );
-}
 
 function ResolvedCritiqueTheaterMount({
   projectId,

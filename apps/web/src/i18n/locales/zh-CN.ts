@@ -300,7 +300,7 @@ export const zhCN: Dict = {
     "选择或创建品牌系统，让生成结果跟随真实的颜色、字体和产品语言。",
   "settings.onboardingExecutionTitle": "选择模型来源",
   "settings.onboardingExecutionBody":
-    "使用 OpenDesign 托管服务、连接本地 Agent，或使用你自己的模型 Key。",
+    "连接本地 Agent，或使用你自己的模型 Key。",
   "settings.onboardingAmrCloudBenefitOfficial": "官方推荐",
   "settings.onboardingAmrCloudBenefitReady": "免部署即用",
   "settings.onboardingAmrCloudBenefitModels":

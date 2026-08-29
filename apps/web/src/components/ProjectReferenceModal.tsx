@@ -35,7 +35,6 @@ function projectMeta(project: Project): string {
 
 export function ProjectReferenceModal({
   currentProjectId,
-  workspaceContext = null,
   onClose,
   onSelect,
 }: Props) {
@@ -113,17 +112,7 @@ export function ProjectReferenceModal({
         // `ensureDir` materializes a managed project's folder before we read
         // its resolved dir, so an empty (never-generated) project references
         // to a real directory instead of a path that fails existence checks.
-        const persistedProjectWorkspaceId = project.workspaceId?.trim() ?? '';
-        const projectWorkspaceContext =
-          persistedProjectWorkspaceId
-          && workspaceContext?.workspaceId === persistedProjectWorkspaceId
-            ? workspaceContext
-            : null;
-        const detail = await getProjectDetail(
-          project.id,
-          { ensureDir: true },
-          projectWorkspaceContext,
-        );
+        const detail = await getProjectDetail(project.id, { ensureDir: true });
         const resolvedDir =
           detail?.resolvedDir?.trim() || detail?.project.metadata?.baseDir?.trim() || '';
         if (!detail || !resolvedDir) {

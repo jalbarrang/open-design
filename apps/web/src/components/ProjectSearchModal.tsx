@@ -44,7 +44,7 @@ export function buildProjectSearchCatalog(
 
 export function ProjectSearchModal({
   projects,
-  workspaceContext = null,
+
   onOpenProject,
   onClose,
 }: Props) {

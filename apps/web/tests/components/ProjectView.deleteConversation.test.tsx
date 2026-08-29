@@ -254,7 +254,7 @@ describe('ProjectView conversation delete', () => {
       await chatPaneProps.onDeleteConversation!('conv-1');
     });
 
-    expect(deleteConversation).toHaveBeenCalledWith('project-1', 'conv-1', null);
+    expect(deleteConversation).toHaveBeenCalledWith('project-1', 'conv-1');
     expect(onProjectsRefresh).toHaveBeenCalledTimes(1);
   });
 
@@ -287,7 +287,7 @@ describe('ProjectView conversation delete', () => {
       await chatPaneProps.onDeleteConversation!('conv-1');
     });
 
-    expect(deleteConversation).toHaveBeenCalledWith('project-1', 'conv-1', null);
+    expect(deleteConversation).toHaveBeenCalledWith('project-1', 'conv-1');
     expect(onProjectsRefresh).not.toHaveBeenCalled();
   });
 
@@ -320,42 +320,6 @@ describe('ProjectView conversation delete', () => {
 
     await waitFor(() => expect(chatPaneProps.activeConversationId).toBe('conv-2'));
     expect(chatPaneProps.conversations?.map((conversation) => conversation.id)).toEqual(['conv-2']);
-  });
-
-  it('re-seeds a fresh conversation when deleting the last remaining history item', async () => {
-    listConversations.mockResolvedValue([{ id: 'conv-1', title: 'Conversation 1' }]);
-    listMessages.mockResolvedValue([]);
-    fetchPreviewComments.mockResolvedValue([]);
-    loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
-    fetchProjectFiles.mockResolvedValue([]);
-    fetchLiveArtifacts.mockResolvedValue([]);
-    fetchSkill.mockResolvedValue(null);
-    fetchDesignSystem.mockResolvedValue(null);
-    getTemplate.mockResolvedValue(null);
-    fetchChatRunStatus.mockResolvedValue(null);
-    listActiveChatRuns.mockResolvedValue([]);
-    reattachDaemonRun.mockResolvedValue(undefined);
-    deleteConversation.mockResolvedValue(true);
-    createConversation.mockResolvedValue({ id: 'conv-fresh', title: 'Fresh conversation' });
-
-    renderProjectView(vi.fn());
-
-    await waitFor(() => expect(chatPaneProps.onDeleteConversation).toBeDefined());
-    await waitFor(() => expect(chatPaneProps.activeConversationId).toBe('conv-1'));
-
-    await act(async () => {
-      await chatPaneProps.onDeleteConversation!('conv-1');
-    });
-
-    await waitFor(() =>
-      expect(createConversation).toHaveBeenCalledWith(
-        'project-1',
-        undefined,
-        { workspaceContext: null },
-      ),
-    );
-    await waitFor(() => expect(chatPaneProps.activeConversationId).toBe('conv-fresh'));
-    expect(chatPaneProps.conversations?.map((conversation) => conversation.id)).toEqual(['conv-fresh']);
   });
 
   it('keeps the latest unanswered question form in chat instead of the workspace panel', async () => {

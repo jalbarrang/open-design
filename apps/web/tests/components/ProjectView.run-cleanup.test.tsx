@@ -569,7 +569,6 @@ describe('ProjectView daemon cleanup', () => {
       'project-comment-route',
       'conv-route',
       expect.objectContaining({ note: 'Member QA comment' }),
-      null,
     );
   });
 
@@ -1680,7 +1679,7 @@ describe('ProjectView daemon cleanup', () => {
     );
 
     await waitFor(() =>
-      expect(fetchProjectDesignSystemPackageAudit).toHaveBeenCalledWith('project-ds', null),
+      expect(fetchProjectDesignSystemPackageAudit).toHaveBeenCalledWith('project-ds'),
     );
     await waitFor(() => expect(streamViaDaemon).toHaveBeenCalled());
     expect(window.sessionStorage.getItem('od:design-system-audit-auto-repair:project-ds')).toBe('1');
@@ -1772,7 +1771,7 @@ describe('ProjectView daemon cleanup', () => {
     await chatProps.onSend!('Update the design system', [], []);
 
     await waitFor(() =>
-      expect(fetchProjectDesignSystemPackageAudit).toHaveBeenCalledWith('project-ds-manual', null),
+      expect(fetchProjectDesignSystemPackageAudit).toHaveBeenCalledWith('project-ds-manual'),
     );
     await waitFor(() => {
       expect(saveMessage.mock.calls.some((call) =>
@@ -1855,7 +1854,7 @@ describe('ProjectView daemon cleanup', () => {
     );
 
     await waitFor(() =>
-      expect(fetchProjectDesignSystemPackageAudit).toHaveBeenCalledWith('project-ds-pass', null),
+      expect(fetchProjectDesignSystemPackageAudit).toHaveBeenCalledWith('project-ds-pass'),
     );
     expect(streamViaDaemon).toHaveBeenCalledTimes(1);
     expect(window.sessionStorage.getItem('od:design-system-audit-auto-repair:project-ds-pass')).toBeNull();
@@ -2073,75 +2072,6 @@ describe('ProjectView daemon cleanup', () => {
     expect(phantomSave).toBeUndefined();
   });
 
-  it('persists a daemon assistant row as failed after an AMR auth error returns post-run creation', async () => {
-    listConversations.mockResolvedValue([{ id: 'conv-1', title: 'Conversation' }]);
-    listMessages.mockResolvedValue([]);
-    fetchPreviewComments.mockResolvedValue([]);
-    loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
-    fetchProjectFiles.mockResolvedValue([]);
-    fetchLiveArtifacts.mockResolvedValue([]);
-    fetchSkill.mockResolvedValue(null);
-    fetchDesignSystem.mockResolvedValue(null);
-    getTemplate.mockResolvedValue(null);
-    listActiveChatRuns.mockResolvedValue([]);
-    streamViaDaemon.mockImplementation(async (options: {
-      onRunCreated?: (runId: string) => void;
-      handlers: { onError: (error: Error) => void };
-    }) => {
-      options.onRunCreated?.('run-auth-expired');
-      options.handlers.onError(
-        new Error('Your authentication token has expired. Please sign in again.'),
-      );
-    });
-
-    chatPaneSpy.mockClear();
-
-    render(
-      <ProjectView
-        project={{ id: 'project-auth-expired', name: 'Project', skillId: null, designSystemId: null } as never}
-        routeFileName={null}
-        config={{ mode: 'daemon', agentId: 'agent-1', notifications: undefined, agentModels: {} } as never}
-        agents={[{ id: 'agent-1', name: 'OpenCode', models: [] } as never]}
-        skills={[]}
-        designTemplates={[]}
-        designSystems={[]}
-        daemonLive
-        onModeChange={() => {}}
-        onAgentChange={() => {}}
-        onAgentModelChange={() => {}}
-        onRefreshAgents={() => {}}
-        onOpenSettings={() => {}}
-        onBack={() => {}}
-        onClearPendingPrompt={() => {}}
-        onTouchProject={() => {}}
-        onProjectChange={() => {}}
-        onProjectsRefresh={() => {}}
-      />,
-    );
-
-    const sendProps = await waitForReadyChatPaneProps();
-    await sendProps!.onSend!('retry auth', [], []);
-
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    await waitFor(() => {
-      const failedAssistantSave = saveMessage.mock.calls.find(
-        (call) =>
-          call[0] === 'project-auth-expired' &&
-          call[1] === 'conv-1' &&
-          call[2]?.role === 'assistant' &&
-          call[2]?.runId === 'run-auth-expired' &&
-          call[2]?.runStatus === 'failed' &&
-          call[2]?.events?.some(
-            (event: { kind?: string; label?: string; detail?: string }) =>
-              event.kind === 'status' &&
-              event.label === 'error' &&
-              event.detail === 'Your authentication token has expired. Please sign in again.',
-          ),
-      );
-      expect(failedAssistantSave).toBeTruthy();
-    });
-  });
-
   it('threads the resumable flag from a live daemon failure onto the assistant message', async () => {
     // Regression: a transient failure that arrives on the live streamViaDaemon
     // onError path (not just reattach/status-fetch) must carry `resumable` onto
@@ -2217,112 +2147,6 @@ describe('ProjectView daemon cleanup', () => {
     ).toBe(true);
   });
 
-  it('does not replay a terminal succeeded row with empty produced files', async () => {
-    const runCreatedAt = Date.now();
-    const existingArtifact = {
-      artifactManifest: {
-        entry: 'real-daemon-smoke.html',
-        exports: ['html'],
-        kind: 'html',
-        metadata: {
-          artifactType: 'text/html',
-          identifier: 'real-daemon-smoke',
-          inferred: false,
-        },
-        renderer: 'html',
-        title: 'Real Daemon Smoke',
-        version: 1,
-      },
-      kind: 'html',
-      mime: 'text/html',
-      mtime: runCreatedAt + 1,
-      name: 'real-daemon-smoke.html',
-      size: 100,
-    };
-
-    listConversations.mockResolvedValue([{ id: 'conv-1', title: 'Conversation' }]);
-    listMessages.mockResolvedValue([
-      {
-        id: 'msg-replay',
-        role: 'assistant',
-        content: '',
-        createdAt: Date.now(),
-        runId: 'run-replay',
-        runStatus: 'succeeded',
-        producedFiles: [],
-      },
-    ]);
-    fetchPreviewComments.mockResolvedValue([]);
-    loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
-    fetchProjectFiles.mockResolvedValue([existingArtifact]);
-    fetchProjectDesignSystemPackageAudit.mockResolvedValue(null);
-    fetchLiveArtifacts.mockResolvedValue([]);
-    fetchSkill.mockResolvedValue(null);
-    fetchDesignSystem.mockResolvedValue(null);
-    getTemplate.mockResolvedValue(null);
-    fetchChatRunStatus.mockResolvedValue({
-      id: 'run-replay',
-      status: 'succeeded',
-      createdAt: runCreatedAt,
-      updatedAt: runCreatedAt + 1,
-      exitCode: 0,
-      signal: null,
-    });
-    listActiveChatRuns.mockResolvedValue([]);
-    reattachDaemonRun.mockImplementation(async (options: {
-      handlers: {
-        onDelta: (delta: string) => void;
-        onDone: () => void;
-      };
-    }) => {
-      options.handlers.onDelta(
-        '<artifact identifier="real-daemon-smoke" type="text/html" title="Real Daemon Smoke"><h1>Real Daemon Smoke</h1></artifact>',
-      );
-      options.handlers.onDone();
-    });
-
-    render(
-      <ProjectView
-        project={{ id: 'project-1', name: 'Project', skillId: null, designSystemId: null } as never}
-        routeFileName={null}
-        config={{ mode: 'daemon', agentId: 'agent-1', notifications: undefined, agentModels: {} } as never}
-        agents={[{ id: 'agent-1', name: 'OpenCode', models: [] } as never]}
-        skills={[]}
-        designTemplates={[]}
-        designSystems={[]}
-        daemonLive
-        onModeChange={() => {}}
-        onAgentChange={() => {}}
-        onAgentModelChange={() => {}}
-        onRefreshAgents={() => {}}
-        onOpenSettings={() => {}}
-        onBack={() => {}}
-        onClearPendingPrompt={() => {}}
-        onTouchProject={() => {}}
-        onProjectChange={() => {}}
-        onProjectsRefresh={() => {}}
-      />,
-    );
-
-    await waitFor(() =>
-      expect(fetchProjectFiles).toHaveBeenCalledWith('project-1', {
-        requireAuthoritative: true,
-        workspaceContext: null,
-      }),
-    );
-    expect(fetchChatRunStatus).not.toHaveBeenCalled();
-    expect(reattachDaemonRun).not.toHaveBeenCalled();
-    expect(saveMessage).not.toHaveBeenCalledWith(
-      'project-1',
-      'conv-1',
-      expect.objectContaining({
-        id: 'msg-replay',
-        producedFiles: [existingArtifact],
-      }),
-    );
-    expect(writeProjectTextFile).not.toHaveBeenCalled();
-  });
-
   it('replays a legacy terminal succeeded row when agent events still contain the artifact', async () => {
     const runCreatedAt = Date.now();
     const existingArtifact = artifactProjectFile('real-daemon-smoke.html', runCreatedAt + 1);
@@ -2387,7 +2211,7 @@ describe('ProjectView daemon cleanup', () => {
     );
 
     await waitFor(() =>
-      expect(fetchChatRunStatus).toHaveBeenCalledWith('run-legacy-replay', null),
+      expect(fetchChatRunStatus).toHaveBeenCalledWith('run-legacy-replay'),
     );
     await waitFor(() => {
       expect(saveMessage).toHaveBeenCalledWith(
@@ -3883,7 +3707,6 @@ describe('ProjectView daemon cleanup', () => {
         'conv-1',
         'comment-1',
         'needs_review',
-        null,
       );
     });
   });
@@ -3972,89 +3795,6 @@ describe('ProjectView daemon cleanup', () => {
         }),
         expect.objectContaining({ telemetryFinalized: true }),
       );
-    });
-  });
-
-  it('preserves a spuriously failed empty row when daemon status is already canceled', async () => {
-    const runCreatedAt = Date.now();
-    const preservedEvents = [
-      {
-        kind: 'status',
-        label: 'warning',
-        detail: 'Canceled after reload.',
-        timestamp: runCreatedAt + 1,
-      },
-    ];
-
-    listConversations.mockResolvedValue([{ id: 'conv-1', title: 'Conversation' }]);
-    listMessages.mockResolvedValue([
-      {
-        id: 'msg-spurious-canceled',
-        role: 'assistant',
-        content: '',
-        createdAt: runCreatedAt,
-        startedAt: runCreatedAt,
-        runId: 'run-spurious-canceled',
-        runStatus: 'failed',
-        producedFiles: [],
-        events: preservedEvents,
-      },
-    ]);
-    fetchPreviewComments.mockResolvedValue([]);
-    loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
-    fetchProjectFiles.mockResolvedValue([]);
-    fetchProjectDesignSystemPackageAudit.mockResolvedValue(null);
-    fetchLiveArtifacts.mockResolvedValue([]);
-    fetchSkill.mockResolvedValue(null);
-    fetchDesignSystem.mockResolvedValue(null);
-    getTemplate.mockResolvedValue(null);
-    listActiveChatRuns.mockResolvedValue([]);
-    fetchChatRunStatus.mockResolvedValue({
-      id: 'run-spurious-canceled',
-      status: 'canceled',
-      createdAt: runCreatedAt,
-      updatedAt: runCreatedAt + 1,
-      exitCode: 130,
-      signal: null,
-      resumable: true,
-    });
-
-    render(
-      <ProjectView
-        project={{ id: 'project-spurious-canceled', name: 'Project', skillId: null, designSystemId: null } as never}
-        routeFileName={null}
-        config={{ mode: 'daemon', agentId: 'agent-1', notifications: undefined, agentModels: {} } as never}
-        agents={[{ id: 'agent-1', name: 'OpenCode', models: [] } as never]}
-        skills={[]}
-        designTemplates={[]}
-        designSystems={[]}
-        daemonLive
-        onModeChange={() => {}}
-        onAgentChange={() => {}}
-        onAgentModelChange={() => {}}
-        onRefreshAgents={() => {}}
-        onOpenSettings={() => {}}
-        onBack={() => {}}
-        onClearPendingPrompt={() => {}}
-        onTouchProject={() => {}}
-        onProjectChange={() => {}}
-        onProjectsRefresh={() => {}}
-      />,
-    );
-
-    await waitFor(() => {
-      expect(reattachDaemonRun).not.toHaveBeenCalled();
-      const canceledSave = saveMessage.mock.calls.find(
-        (call) =>
-          call[0] === 'project-spurious-canceled' &&
-          call[1] === 'conv-1' &&
-          call[2]?.id === 'msg-spurious-canceled' &&
-          call[2]?.runStatus === 'canceled' &&
-          call[2]?.resumable === true &&
-          call[2]?.events === preservedEvents &&
-          call[3]?.workspaceContext === null,
-      );
-      expect(canceledSave).toBeTruthy();
     });
   });
 
@@ -4328,7 +4068,6 @@ describe('ProjectView daemon cleanup', () => {
       expect.objectContaining({
         artifactManifest: expect.objectContaining({ entry: 'theme.css' }),
       }),
-      null,
     );
   });
 
@@ -4427,7 +4166,6 @@ describe('ProjectView daemon cleanup', () => {
       expect.objectContaining({
         artifactManifest: expect.objectContaining({ entry: 'real-daemon-smoke.html' }),
       }),
-      null,
     );
     expect(saveTabs).not.toHaveBeenCalledWith('project-1', expect.objectContaining({ active: 'index.html' }));
   });

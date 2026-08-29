@@ -322,7 +322,7 @@ export const ptBR: Dict = {
   'settings.onboardingSystemsTitle': 'Traga seu design system',
   'settings.onboardingSystemsBody': 'Escolha ou crie um sistema de marca para que o trabalho gerado siga as cores, a tipografia e a linguagem real do produto.',
   'settings.onboardingExecutionTitle': 'Escolha a origem do modelo',
-  'settings.onboardingExecutionBody': 'Use o OpenDesign Hosted, conecte um agente local ou utilize sua própria chave de modelo.',
+  'settings.onboardingExecutionBody': 'Conecte um agente local ou utilize sua própria chave de modelo.',
   'settings.onboardingAmrCloudBenefitOfficial': 'Recomendado oficialmente',
   'settings.onboardingAmrCloudBenefitReady': 'Sem deploy',
   'settings.onboardingAmrCloudBenefitModels': 'Acesse Claude, GPT, Fable 5 e 5.6 sol com desconto por tempo limitado e alta simultaneidade.',

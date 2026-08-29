@@ -79,7 +79,7 @@ export function PluginsHomeSection({
   subtitle,
   emptyMessage,
   cardLayout = 'rich',
-  workspaceContext = null,
+
 }: Props) {
   const { locale, t } = useI18n();
   const { savedPluginIds, savePluginId } = useSavedPluginIds();

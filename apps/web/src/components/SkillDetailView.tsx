@@ -99,7 +99,7 @@ export function SkillDetailView({
     return () => {
       cancelled = true;
     };
-  }, [summary.id, reloadToken, workspaceContext]);
+  }, [summary.id, reloadToken]);
 
   useEffect(() => {
     titleRef.current?.focus();

@@ -151,7 +151,7 @@ export function BrandsTab({ onApplyDesignSystem, onOpenProject, onDesignSystemsR
       });
       if (result) handleCreated(result.id, result.projectId, result.conversationId);
     },
-    [runExtract, handleCreated, mutationWorkspaceContext],
+    [runExtract, handleCreated],
   );
 
   const isEmpty = brands !== null && (brands ?? []).length === 0;
@@ -283,7 +283,6 @@ function BrandListItem({
           faviconSize={64}
           className={styles.itemLogo}
           fallbackClassName={styles.itemLogoFallback}
-          readGeneration={workspaceReadGeneration}
         />
       </span>
       <span className={styles.itemMeta}>

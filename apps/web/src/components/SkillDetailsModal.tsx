@@ -49,7 +49,7 @@ export function SkillDetailsModal({ skillId, summary, onClose, onUse }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [skillId, reloadToken, workspaceContext]);
+  }, [skillId, reloadToken]);
 
   useEffect(() => {
     closeRef.current?.focus();

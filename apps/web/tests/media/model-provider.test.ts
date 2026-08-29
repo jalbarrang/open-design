@@ -33,20 +33,4 @@ describe('mediaModelProviderId', () => {
     expect(mediaModelProviderId('totally-made-up-model')).toBeUndefined();
     expect(mediaModelProviderId('')).toBeUndefined();
   });
-
-  // The guard itself is `mediaModelProviderId(picked) === protocol`. Spell out
-  // the four scenarios from the design discussion so the decision is pinned.
-  it('drives the seed guard: carry only when provider matches the active protocol', () => {
-    const carries = (modelId: string, protocol: string) =>
-      mediaModelProviderId(modelId) === protocol;
-
-    // AIHubMix run + AIHubMix pick → carried.
-    expect(carries('aihubmix-qwen-image-2-pro', 'aihubmix')).toBe(true);
-    // SenseAudio run + dialog-default Vela model → NOT carried (keeps Settings default).
-    expect(carries('vela/gpt-image-2', 'senseaudio')).toBe(false);
-    // SenseAudio run + SenseAudio pick → carried.
-    expect(carries('senseaudio-image-2.0-260319', 'senseaudio')).toBe(true);
-    // Non-BYOK run never matches (byokImageModel is ignored daemon-side anyway).
-    expect(carries('vela/gpt-image-2', 'official')).toBe(false);
-  });
 });

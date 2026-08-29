@@ -34,11 +34,11 @@ export function PluginPreviewHero({
   pluginId,
   pluginTitle,
   examples,
-  workspaceContext = null,
+
 }: Props) {
   const items = useMemo<NormalizedExample[]>(
     () => examples.map((e, idx) => normalize(pluginId, e, idx)),
-    [pluginId, examples, workspaceContext],
+    [pluginId, examples],
   );
   const [activeKey, setActiveKey] = useState<string | null>(
     items[0]?.key ?? null,

@@ -1,7 +1,7 @@
 import {
-  buildWorkspacePermissions,
-  buildWorkspaceSeatSummary,
-  type WorkspaceCollabContext,
+
+
+
 } from '@open-design/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -60,48 +60,6 @@ describe('buildProxyMessages', () => {
     ]);
   });
 
-  it('reads Anthropic image attachments with the captured exact Workspace scope', async () => {
-    const workspaceContext: WorkspaceCollabContext = {
-      workspaceId: 'workspace-a',
-      workspaceType: 'team',
-      workspaceMemberId: 'member-a',
-      role: 'member',
-      memberStatus: 'active',
-      lifecycleState: 'active',
-      billingState: 'active',
-      providerMode: 'platform_credits',
-      planId: null,
-      seatSummary: buildWorkspaceSeatSummary({ seatLimit: 5, usedSeats: 2 }),
-      permissions: buildWorkspacePermissions({ role: 'member', lifecycleState: 'active' }),
-      teamId: 'team-a',
-    };
-    const pngBytes = new Uint8Array([137, 80, 78, 71]);
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      headers: {
-        get: (name: string) => (name.toLowerCase() === 'content-type' ? 'image/png' : null),
-      },
-      arrayBuffer: async () => pngBytes.buffer,
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    await buildProxyMessages(
-      '/api/proxy/anthropic/stream',
-      [
-        userMessage('Describe it', [
-          { path: 'references/logo.png', name: 'logo.png', kind: 'image', size: 4 },
-        ]),
-      ],
-      { projectId: 'project-1', workspaceContext },
-    );
-
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(String(url)).toBe('/api/projects/project-1/raw/references/logo.png');
-    const headers = new Headers((init as RequestInit).headers);
-    expect(headers.get('x-od-workspace-id')).toBe('workspace-a');
-    expect(headers.get('x-od-workspace-member-id')).toBe('member-a');
-  });
-
   it('serializes Anthropic image blocks in user-visible attachment order', async () => {
     const pngBytes = new Uint8Array([137, 80, 78, 71]);
     vi.stubGlobal(
@@ -155,93 +113,6 @@ describe('buildProxyMessages', () => {
     expect(messages).toEqual([
       { role: 'user', content: 'Describe the attached image' },
     ]);
-  });
-
-  it('sends Anthropic image content blocks in the proxy request body', async () => {
-    const workspaceContext: WorkspaceCollabContext = {
-      workspaceId: 'workspace-a',
-      workspaceType: 'team',
-      workspaceMemberId: 'member-a',
-      role: 'member',
-      memberStatus: 'active',
-      lifecycleState: 'active',
-      billingState: 'active',
-      providerMode: 'platform_credits',
-      planId: null,
-      seatSummary: buildWorkspaceSeatSummary({ seatLimit: 5, usedSeats: 2 }),
-      permissions: buildWorkspacePermissions({ role: 'member', lifecycleState: 'active' }),
-      teamId: 'team-a',
-    };
-    const pngBytes = new Uint8Array([137, 80, 78, 71]);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        headers: {
-          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'image/png' : null),
-        },
-        arrayBuffer: async () => pngBytes.buffer,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        body: new ReadableStream({
-          start(controller) {
-            controller.enqueue(
-              new TextEncoder().encode('event: end\ndata: {}\n\n'),
-            );
-            controller.close();
-          },
-        }),
-      });
-    vi.stubGlobal('fetch', fetchMock);
-
-    await streamProxyEndpoint(
-      '/api/proxy/anthropic/stream',
-      {
-        apiKey: 'test-api-key',
-        baseUrl: 'https://anthropic-compatible.example',
-        model: 'vision-model',
-      } as any,
-      'System prompt',
-      [
-        userMessage('Describe the attached image', [
-          { path: 'references/logo.png', name: 'logo.png', kind: 'image', size: 4 },
-        ]),
-      ],
-      new AbortController().signal,
-      {
-        onDelta: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-      },
-      { projectId: 'project-1', workspaceContext },
-    );
-
-    const proxyInit = fetchMock.mock.calls[1]?.[1] as RequestInit;
-    const proxyHeaders = new Headers(proxyInit.headers);
-    expect(proxyHeaders.get('x-od-workspace-id')).toBe('workspace-a');
-    expect(proxyHeaders.get('x-od-workspace-member-id')).toBe('member-a');
-    expect(proxyHeaders.get('x-od-workspace-type')).toBe('team');
-    expect(proxyHeaders.get('x-od-workspace-role')).toBe('member');
-    expect(JSON.parse(String(proxyInit.body))).toMatchObject({
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Describe the attached image' },
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: 'image/png',
-                data: 'iVBORw==',
-              },
-            },
-          ],
-        },
-      ],
-      projectId: 'project-1',
-    });
   });
 
   it('keeps a text fallback when a supported Anthropic image cannot be read', async () => {

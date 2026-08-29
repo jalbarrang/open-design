@@ -51,7 +51,7 @@ describe('HandoffButton zero-editors fallback', () => {
     const fallback = (await screen.findByText('Finder')).closest('button') as HTMLButtonElement;
     fireEvent.click(fallback);
 
-    await waitFor(() => expect(openProjectInEditor).toHaveBeenCalledWith('p1', 'finder', null));
+    await waitFor(() => expect(openProjectInEditor).toHaveBeenCalledWith('p1', 'finder'));
   });
 
   it('surfaces a daemon spawn failure inline so the fallback is not a silent no-op', async () => {
@@ -76,70 +76,6 @@ describe('HandoffButton zero-editors fallback', () => {
 
     const errorEl = await screen.findByTestId('handoff-fallback-error');
     expect(errorEl.textContent).toContain('daemon refused: ENOENT');
-  });
-
-  it('copies a framework-specific CLI handoff prompt with the local project path', async () => {
-    fetchHostEditors.mockResolvedValue({
-      platform: 'darwin',
-      editors: [
-        {
-          id: 'cursor',
-          label: 'Cursor',
-          available: true,
-        },
-      ],
-    });
-    copyToClipboard.mockResolvedValue(true);
-    const agents: AgentInfo[] = [
-      {
-        id: 'claude',
-        name: 'Claude Code',
-        bin: 'claude',
-        available: true,
-      },
-      {
-        id: 'codex',
-        name: 'Codex CLI',
-        bin: 'codex',
-        available: false,
-      },
-    ];
-
-    render(
-      <I18nProvider initial="zh-CN">
-        <HandoffButton
-          projectId="p1"
-          projectKind="prototype"
-          projectName="Landing"
-          projectDir="/tmp/open-design/Landing"
-          agents={agents}
-          metricsConsent
-          installationId="od-install-abc"
-        />
-      </I18nProvider>,
-    );
-
-    fireEvent.click(await screen.findByTestId('handoff-caret'));
-    fireEvent.click(await screen.findByRole('tab', { name: '复制给 CLI' }));
-    // The "OpenDesign Cloud website" link was removed from the CLI tab
-    // (acceptance #101); the CLI agent cards remain the surface here.
-    expect(screen.queryByRole('link', { name: /打开 OpenDesign Cloud 官网/ })).toBeNull();
-    expect(screen.getByTestId('handoff-cli-item-amr').textContent).toContain('OpenDesign');
-    expect(screen.getByTestId('handoff-cli-item-amr').textContent).not.toContain('未安装');
-    expect(
-      screen.getByTestId('handoff-cli-item-amr').compareDocumentPosition(
-        screen.getByTestId('handoff-cli-item-codex'),
-      ) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    fireEvent.click(await screen.findByRole('button', { name: 'Vue.js' }));
-    fireEvent.click(await screen.findByTestId('handoff-cli-item-claude'));
-
-    await waitFor(() => expect(copyToClipboard).toHaveBeenCalledTimes(1));
-    const prompt = copyToClipboard.mock.calls[0]?.[0] as string;
-    expect(prompt).toContain('/tmp/open-design/Landing');
-    expect(prompt).toContain('Vue.js');
-    expect(prompt).toContain('Claude Code');
-    expect(prompt).toContain('真实可运行');
   });
 
   it('keeps the project path hidden behind a compact copy row', async () => {

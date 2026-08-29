@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   agentRefreshOptionsForConfig,
-  amrWalletValueLabel,
+
   canFetchProviderModels,
   canRunProviderConnectionTest,
   deriveAboutUpdateControl,
@@ -26,7 +26,7 @@ import {
 import { deriveUpdaterModel } from '../../src/lib/updater';
 import type { OpenDesignHostUpdaterStatusSnapshot } from '@open-design/host';
 import type { AppConfig, AppVersionInfo, ConnectionTestResponse } from '../../src/types';
-import type { WorkspaceCollabContext } from '@open-design/contracts';
+import type { } from '@open-design/contracts';
 
 const originalFetch = globalThis.fetch;
 
@@ -79,27 +79,8 @@ afterEach(() => {
 });
 
 describe('SettingsDialog Orbit artifact scope', () => {
-  const context = {
-    workspaceId: 'workspace-team',
-    workspaceType: 'team',
-    workspaceMemberId: 'member-1',
-    role: 'member',
-    memberStatus: 'active',
-    lifecycleState: 'active',
-    permissions: {
-      canShareProjects: false,
-      canWriteSyncedFiles: false,
-    },
-  } as WorkspaceCollabContext;
-
-  it('adds navigation scope for a bound Workspace artifact', () => {
-    expect(orbitLiveArtifactHref('project-1', 'artifact-1', context)).toBe(
-      '/api/live-artifacts/artifact-1/preview?projectId=project-1&workspaceId=workspace-team&workspaceMemberId=member-1',
-    );
-  });
-
   it('preserves the unscoped local artifact URL for legacy projects', () => {
-    expect(orbitLiveArtifactHref('project-1', 'artifact-1', null)).toBe(
+    expect(orbitLiveArtifactHref('project-1', 'artifact-1')).toBe(
       '/api/live-artifacts/artifact-1/preview?projectId=project-1',
     );
   });
@@ -649,101 +630,6 @@ describe('SettingsDialog custom model picker state', () => {
   });
 });
 
-describe('SettingsDialog AMR wallet display state', () => {
-  it('keeps the last balance visible while a refresh is pending', () => {
-    expect(
-      amrWalletValueLabel({
-        balance: '$0.10',
-        loadingLabel: 'Loading',
-        ready: false,
-        snapshot: {
-          status: 'available',
-          profile: 'local',
-          user: { id: 'user-1', email: 'amr@example.com' },
-          balanceUsd: '0.1000',
-          updatedAt: '2026-06-23T06:05:18.782Z',
-          fetchedAt: '2026-06-23T06:05:19.000Z',
-          stale: false,
-          source: 'daemon_cache',
-        },
-        unavailableLabel: 'Balance temporarily unavailable',
-      }),
-    ).toBe('$0.10');
-  });
-
-  it('shows re-auth guidance when the daemon reports missing or rejected wallet credentials', () => {
-    expect(
-      amrWalletValueLabel({
-        balance: null,
-        loadingLabel: 'Loading',
-        ready: true,
-        snapshot: {
-          status: 'unavailable',
-          profile: 'local',
-          user: { id: 'user-1', email: 'amr@example.com' },
-          balanceUsd: null,
-          updatedAt: null,
-          fetchedAt: '2026-06-23T06:05:19.000Z',
-          stale: false,
-          source: 'unavailable',
-          error: {
-            code: 'unauthorized',
-            message: 'AMR wallet authorization expired. Sign in again to refresh wallet access.',
-          },
-        },
-        unavailableLabel: 'Balance temporarily unavailable',
-      }),
-    ).toBe('AMR wallet authorization expired. Sign in again to refresh wallet access.');
-
-    expect(
-      amrWalletValueLabel({
-        balance: null,
-        loadingLabel: 'Loading',
-        ready: true,
-        snapshot: {
-          status: 'unavailable',
-          profile: 'local',
-          user: { id: 'user-1', email: 'amr@example.com' },
-          balanceUsd: null,
-          updatedAt: null,
-          fetchedAt: '2026-06-23T06:05:19.000Z',
-          stale: false,
-          source: 'unavailable',
-          error: {
-            code: 'missing_control_key',
-            message: 'Sign in again to refresh AMR wallet credentials.',
-          },
-        },
-        unavailableLabel: 'Balance temporarily unavailable',
-      }),
-    ).toBe('Sign in again to refresh AMR wallet credentials.');
-  });
-
-  it('keeps transient wallet failures on the temporary-unavailable copy', () => {
-    expect(
-      amrWalletValueLabel({
-        balance: null,
-        loadingLabel: 'Loading',
-        ready: true,
-        snapshot: {
-          status: 'unavailable',
-          profile: 'local',
-          user: { id: 'user-1', email: 'amr@example.com' },
-          balanceUsd: null,
-          updatedAt: null,
-          fetchedAt: '2026-06-23T06:05:19.000Z',
-          stale: false,
-          source: 'unavailable',
-          error: {
-            code: 'network',
-            message: 'AMR wallet balance is temporarily unavailable.',
-          },
-        },
-        unavailableLabel: 'Balance temporarily unavailable',
-      }),
-    ).toBe('Balance temporarily unavailable');
-  });
-});
 
 describe('SettingsDialog API Base URL validation', () => {
   it('accepts public http/https URLs and loopback local providers', () => {
@@ -1330,52 +1216,6 @@ describe('SettingsDialog Orbit run behavior', () => {
     expect(calls[1]).toMatchObject({
       url: '/api/orbit/run',
       method: 'POST',
-    });
-  });
-
-  it('pins a manual Orbit run to the exact tab Workspace identity', () => {
-    const configured = configForManualOrbitRun(
-      {
-        ...baseConfig,
-        orbit: {
-          enabled: true,
-          time: '09:30',
-          templateSkillId: null,
-        },
-      },
-      {
-        workspaceId: 'workspace-a',
-        workspaceMemberId: 'member-a',
-        workspaceType: 'team',
-        workspaceName: 'A',
-        role: 'owner',
-        memberStatus: 'active',
-        lifecycleState: 'active',
-        billingState: 'active',
-        planId: 'team_basic',
-        providerMode: 'platform_credits',
-        seatSummary: {
-          seatLimit: 3,
-          usedSeats: 1,
-          availableSeats: 2,
-          isSeatFull: false,
-        },
-        permissions: {
-          canManageMembers: true,
-          canManageBilling: true,
-          canInviteMembers: true,
-          canManageAutoRecharge: true,
-          canShareProjects: true,
-          canWriteSyncedFiles: true,
-          canViewWorkspaceSettings: true,
-          canManageSharedResources: true,
-        },
-      },
-    );
-
-    expect(configured.orbit?.workspaceScope).toEqual({
-      workspaceId: 'workspace-a',
-      workspaceMemberId: 'member-a',
     });
   });
 });

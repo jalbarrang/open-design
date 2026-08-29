@@ -73,42 +73,6 @@ describe('NewProjectPanel media provider badges', () => {
     expect(screen.queryByTestId('model-picker-option-gpt-image-2')).toBeNull();
   });
 
-  it('uses Vela as the default image provider without media API credentials', async () => {
-    const onCreate = vi.fn();
-    render(
-      <NewProjectPanel
-        skills={[]}
-        designSystems={[]}
-        defaultDesignSystemId={null}
-        templates={[]}
-        onDeleteTemplate={vi.fn()}
-        promptTemplates={[]}
-        onCreate={onCreate}
-        mediaProviders={{}}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Media' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Image' }));
-    await waitFor(() => {
-      expect(screen.getByTestId('model-picker-trigger').textContent).toContain('gpt-image-2 (Cloud)');
-    });
-    fireEvent.change(screen.getByTestId('new-project-name'), {
-      target: { value: 'Vela default image' },
-    });
-    fireEvent.click(screen.getByTestId('create-project'));
-
-    expect(onCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        metadata: expect.objectContaining({
-          kind: 'image',
-          imageModel: 'vela/gpt-image-2',
-          imageAspect: '1:1',
-        }),
-      }),
-    );
-  });
-
   it('does not treat OpenAI OAuth-only markers as usable image credentials', () => {
     render(
       <NewProjectPanel
@@ -137,43 +101,5 @@ describe('NewProjectPanel media provider badges', () => {
 
     expect(screen.queryByText('OpenAI')).toBeNull();
     expect(screen.queryByTestId('model-picker-option-gpt-image-2')).toBeNull();
-  });
-
-  it('keeps the managed Vela default when another provider is configured', () => {
-    const onCreate = vi.fn();
-    render(
-      <NewProjectPanel
-        skills={[]}
-        designSystems={[]}
-        defaultDesignSystemId={null}
-        templates={[]}
-        onDeleteTemplate={vi.fn()}
-        promptTemplates={[]}
-        onCreate={onCreate}
-        mediaProviders={{
-          volcengine: {
-            apiKey: '',
-            apiKeyConfigured: true,
-            apiKeyTail: '5678',
-            baseUrl: '',
-          },
-        }}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Media' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Image' }));
-    fireEvent.change(screen.getByTestId('new-project-name'), {
-      target: { value: 'Configured provider image' },
-    });
-    fireEvent.click(screen.getByTestId('create-project'));
-
-    expect(onCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        metadata: expect.objectContaining({
-          imageModel: 'vela/gpt-image-2',
-        }),
-      }),
-    );
   });
 });

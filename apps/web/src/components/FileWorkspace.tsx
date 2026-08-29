@@ -106,8 +106,7 @@ import {
   type LocalizedText,
   type WorkspaceContextItem,
 } from '@open-design/contracts';
-import { createTerminal, killTerminal, listPlugins, moveWorkspaceProject } from '../state/projects';
-import { MoveToTeamConfirmDialog, moveConfirmSkipped } from './MoveToTeamConfirmDialog';
+import { createTerminal, killTerminal, listPlugins } from '../state/projects';
 import { DesignFilesPanel, type DesignFilesNavState } from './DesignFilesPanel';
 import {
   DesignBrowserPanel,
@@ -351,14 +350,6 @@ interface Props {
   materializationPending?: boolean;
   /** Optional override for the read-only notice text. */
   readonlyNotice?: string;
-  /**
-   * Team-share file-sync state for the project. It is rendered on the Design
-   * Files root tab and open design-file tabs (never terminal / side-chat /
-   * browser tabs). `downloading` — a non-owner member's local copy has not
-   * caught up to the published head. `uploading` — the owner's local edits
-   * have not yet been published. Null once caught up / not a shared project.
-   */
-  fileSyncBadge?: FileSyncBadgeState | null;
 }
 
 function noop(): void {}
@@ -1361,7 +1352,6 @@ export function FileWorkspace({
   viewerOnly = false,
   materializationPending = false,
   readonlyNotice,
-  fileSyncBadge = null,
 }: Props) {
   const refreshFilesWithoutResult = useCallback(async () => {
     await onRefreshFiles();
@@ -1411,15 +1401,8 @@ export function FileWorkspace({
     materializationPending && materializedProjectRef.current !== projectId;
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
-  const fileSyncBadgeLabel = fileSyncBadge
-    ? fileSyncBadge === 'downloading'
-      ? t('workspace.fileSyncDownloading')
-      : t('workspace.fileSyncUploading')
-    : null;
   const designFilesTabLabel = t('workspace.designFiles');
-  const designFilesTabTitle = fileSyncBadgeLabel
-    ? `${designFilesTabLabel} · ${fileSyncBadgeLabel}`
-    : designFilesTabLabel;
+  const designFilesTabTitle = designFilesTabLabel;
 
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -1466,11 +1449,6 @@ export function FileWorkspace({
   // "+" launcher (file search + registry-driven create-new actions:
   // Side Chat, Terminal, Browser).
   const [launcherOpen, setLauncherOpen] = useState(false);
-  const [projectShareMenuOpen, setProjectShareMenuOpen] = useState(false);
-  const [projectShareAccess, setProjectShareAccess] = useState<'private' | 'workspace'>('private');
-  const [projectShareAccessMenuOpen, setProjectShareAccessMenuOpen] = useState(false);
-  const [projectShareConfirm, setProjectShareConfirm] = useState<'private' | 'workspace' | null>(null);
-  const [projectShareBusy, setProjectShareBusy] = useState(false);
   const [pageCreatorOpen, setPageCreatorOpen] = useState(false);
   const [pageCreatorQuery, setPageCreatorQuery] = useState('');
   const [pageCreatorCategory, setPageCreatorCategory] =
@@ -1491,7 +1469,6 @@ export function FileWorkspace({
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const launcherBtnRef = useRef<HTMLButtonElement | null>(null);
-  const projectShareRef = useRef<HTMLDivElement | null>(null);
   const tabsBarRef = useRef<HTMLDivElement | null>(null);
   // Focus-mode dock host for the workspace tab strip (workspaceTabsDock.ts).
   const focusTabsDockRef = useWorkspaceTabsDockRef();
@@ -1667,7 +1644,7 @@ export function FileWorkspace({
       cancelled = true;
       window.removeEventListener('open-design:plugins-changed', load);
     };
-  }, [workspaceContext]);
+  }, []);
 
   const loadSketchFile = useCallback((file: ProjectFile): Promise<boolean> => {
     const sourceKey = sketchFileSourceKey(projectId, file);
@@ -1682,9 +1659,7 @@ export function FileWorkspace({
     const inFlight = { promise: null as Promise<boolean> | null };
     const promise = (async () => {
       try {
-        const text = workspaceContext
-          ? await fetchProjectFileText(projectId, file.name)
-          : await fetchProjectFileText(projectId, file.name);
+        const text = await fetchProjectFileText(projectId, file.name);
         const doc = parseSketchWorkspaceDocument(text);
         if (activeProjectIdRef.current !== projectId) return false;
         setSketches((curr) => {
@@ -1713,7 +1688,7 @@ export function FileWorkspace({
     inFlight.promise = promise;
     sketchPreloadInFlightRef.current.set(sourceKey, promise);
     return promise;
-  }, [projectId, workspaceContext]);
+  }, [projectId]);
 
   const liveArtifactEntries = useMemo(
     () => liveArtifacts.map(liveArtifactSummaryToWorkspaceEntry),
@@ -1724,7 +1699,7 @@ export function FileWorkspace({
     const next = await fetchProjectFolders(projectId);
     setProjectFolders(next);
     return next;
-  }, [projectId, workspaceContext]);
+  }, [projectId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1736,7 +1711,7 @@ export function FileWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [projectId, workspaceContext]);
+  }, [projectId]);
 
   // True when the Design Files tab has nothing to attach: no files, no live
   // artifacts, no folders. Mirrors DesignFilesPanel's own empty-state gate so
@@ -3744,42 +3719,6 @@ export function FileWorkspace({
     };
   }, [browserTabs.length, designSystemProject, tabNames.length]);
 
-  useEffect(() => {
-    if (!projectShareMenuOpen) return;
-    const onDocClick = (event: MouseEvent) => {
-      if (!projectShareRef.current) return;
-      if (!projectShareRef.current.contains(event.target as Node)) {
-        setProjectShareMenuOpen(false);
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setProjectShareMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [projectShareMenuOpen]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const refreshShareAccess = () => void projectIsSharedWithWorkspace(projectId).then((shared) => {
-      if (!cancelled) setProjectShareAccess(shared ? 'workspace' : 'private');
-    });
-    refreshShareAccess();
-    window.addEventListener(TEAM_PROJECTS_CHANGED_EVENT, refreshShareAccess);
-    return () => {
-      cancelled = true;
-      window.removeEventListener(TEAM_PROJECTS_CHANGED_EVENT, refreshShareAccess);
-    };
-  }, [projectId, projectShareMenuOpen, workspaceContext]);
-
-  useEffect(() => {
-    if (!projectShareMenuOpen) setProjectShareAccessMenuOpen(false);
-  }, [projectShareMenuOpen]);
-
   const isActiveSketch = activeFile?.kind === 'sketch' && isSketchName(activeFile.name);
   const activeSketch = activeFile && isActiveSketch ? sketches[activeFile.name] : null;
   // The "+" launcher's create-new actions come from the registry. `openTab`
@@ -3819,50 +3758,6 @@ export function FileWorkspace({
   };
   // A read-only viewer gets no launcher edit actions (new file, import, etc.).
   const launcherActions = viewerOnly ? [] : buildLauncherActions(launcherContext);
-  // Crossing the team-space boundary routes through the shared 转入/移出
-  // 团队空间 confirmation (same dialog + 不再提示 skip key as the project
-  // grid) instead of silently moving the project.
-  function setProjectWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
-    setProjectShareAccessMenuOpen(false);
-    if (nextAccess === projectShareAccess || projectShareBusy || viewerOnly) return;
-    if (moveConfirmSkipped()) {
-      void commitProjectWorkspaceShareAccess(nextAccess);
-      return;
-    }
-    setProjectShareConfirm(nextAccess);
-  }
-
-  async function commitProjectWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
-    if (projectShareBusy) return;
-    setProjectShareBusy(true);
-    try {
-      await moveWorkspaceProject({
-        projectId,
-        visibility: nextAccess === 'workspace' ? 'team' : 'personal',
-      });
-      setProjectShareAccess(nextAccess);
-      notifyTeamProjectsChanged();
-      setLauncherToast({
-        message:
-          nextAccess === 'workspace'
-            ? t('fileViewer.workspaceShareSuccess')
-            : t('fileViewer.workspaceUnshareSuccess'),
-        tone: 'success',
-      });
-    } catch (error) {
-      console.warn('[FileWorkspace] failed to update workspace project sharing', error);
-      setLauncherToast({
-        message:
-          nextAccess === 'workspace'
-            ? t('fileViewer.workspaceShareFailed')
-            : t('fileViewer.workspaceUnshareFailed'),
-        tone: 'error',
-      });
-    } finally {
-      setProjectShareBusy(false);
-    }
-  }
-
   return (
     <div
       className={[
@@ -3872,17 +3767,7 @@ export function FileWorkspace({
       ].filter(Boolean).join(' ')}
       data-testid="file-workspace"
     >
-      {projectShareConfirm ? (
-        <MoveToTeamConfirmDialog
-          action={projectShareConfirm === 'workspace' ? 'to-team' : 'to-personal'}
-          onCancel={() => setProjectShareConfirm(null)}
-          onConfirm={() => {
-            const next = projectShareConfirm;
-            setProjectShareConfirm(null);
-            if (next) void commitProjectWorkspaceShareAccess(next);
-          }}
-        />
-      ) : null}
+
       <SketchEnginePrewarm />
       <div className="ws-tabs-shell">
         {onFocusModeChange && focusMode ? (
@@ -3964,11 +3849,7 @@ export function FileWorkspace({
             title={designFilesTabTitle}
           >
             <span className="tab-icon" aria-hidden>
-              {fileSyncBadge ? (
-                <FileSyncBadge state={fileSyncBadge} size={14} />
-              ) : (
-                <Icon name="grid" size={14} />
-              )}
+              <Icon name="grid" size={14} />
             </span>
             <span className="ws-tab-label">{designFilesTabLabel}</span>
           </button>
@@ -4029,17 +3910,12 @@ export function FileWorkspace({
             // terminal / side-chat tab has no on-disk content to sync, and a
             // live artifact is baked output, not the source file being pulled
             // or published.
-            const tabSyncBadge =
-              fileSyncBadge && !isTerminal && !isSideChat && !liveArtifact
-                ? fileSyncBadge
-                : null;
             return (
               <Tab
                 key={name}
                 label={label}
                 iconNameOverride={iconNameOverride}
-                syncBadge={tabSyncBadge}
-                active={activeTab === name}
+                  active={activeTab === name}
                 onActivate={handlers.onActivate}
                 onClose={handlers.onClose}
                 kind={kind}
@@ -4217,8 +4093,6 @@ export function FileWorkspace({
           <DesignFilesPanel
             projectId={projectId}
             projectKind={projectKind}
-            viewerOnly
-            downloadPending
             files={[]}
             folders={[]}
             liveArtifacts={[]}
@@ -4264,8 +4138,6 @@ export function FileWorkspace({
             projectId={projectId}
             projectKind={projectKind}
             filesRefreshKey={filesRefreshKey}
-            viewerOnly={viewerOnly}
-            downloadPending={fileSyncBadge === 'downloading'}
             rootDirName={rootDirName}
             reloading={reloading}
             running={Boolean(streaming)}
@@ -4737,7 +4609,7 @@ function DesignSystemProjectPanel({
       Promise.resolve(onRefreshFiles()),
       Promise.resolve(onDesignSystemsRefresh?.()),
     ]);
-  }, [brandId, onDesignSystemsRefresh, onRefreshFiles, projectId, workspaceContext]);
+  }, [brandId, onDesignSystemsRefresh, onRefreshFiles, projectId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -7468,7 +7340,7 @@ function DesignSystemInlinePreview({
     return () => {
       cancelled = true;
     };
-  }, [file.kind, file.mtime, file.name, projectId, workspaceContext]);
+  }, [file.kind, file.mtime, file.name, projectId]);
 
   if (file.kind === 'html') {
     return (
@@ -8306,7 +8178,6 @@ const Tab = memo(function Tab({
   closable = true,
   kind,
   iconNameOverride,
-  syncBadge,
   liveArtifact,
   draggable = false,
   dragging = false,
@@ -8327,9 +8198,6 @@ const Tab = memo(function Tab({
   kind?: ProjectFile['kind'] | 'live-artifact' | 'browser';
   /** Force a specific icon (e.g. non-file tabs like terminal:<id> / chat:<id>). */
   iconNameOverride?: IconName;
-  /** Team-share sync state for this tab's file. Replaces the file-type icon
-   *  with an animated downloading/uploading badge while set. */
-  syncBadge?: FileSyncBadgeState | null;
   liveArtifact?: LiveArtifactWorkspaceEntry;
   draggable?: boolean;
   dragging?: boolean;
@@ -8342,13 +8210,8 @@ const Tab = memo(function Tab({
 }) {
   const t = useT();
   const iconName = iconNameOverride ?? kindIconName(kind);
-  const syncBadgeLabel = syncBadge
-    ? syncBadge === 'downloading'
-      ? t('workspace.fileSyncDownloading')
-      : t('workspace.fileSyncUploading')
-    : null;
   const tabTitle = title ?? (meta ? `${label} ${meta}` : label);
-  const tabTooltip = syncBadgeLabel ? `${tabTitle} · ${syncBadgeLabel}` : tabTitle;
+  const tabTooltip = tabTitle;
   return (
     <div
       className={[
@@ -8382,11 +8245,7 @@ const Tab = memo(function Tab({
       onDrop={draggable ? onDrop : undefined}
       onDragEnd={draggable ? onDragEnd : undefined}
     >
-      {syncBadge ? (
-        <span className="tab-icon">
-          <FileSyncBadge state={syncBadge} size={13} />
-        </span>
-      ) : iconName ? (
+      {iconName ? (
         <span className="tab-icon" aria-hidden>
           <Icon name={iconName} size={13} />
         </span>

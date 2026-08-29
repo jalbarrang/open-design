@@ -72,7 +72,7 @@ export function PluginCard({
   onOpenDetails,
   onShareAction,
   layout = 'rich',
-  workspaceContext = null,
+
 }: Props) {
   const { locale, t } = useI18n();
   const [useMenuOpen, setUseMenuOpen] = useState(false);
@@ -80,7 +80,7 @@ export function PluginCard({
   // opens the live interactive page (it calls inferPluginPreview without this).
   const preview = useMemo(
     () => inferPluginPreview(record, { preferBaked: true}),
-    [record, workspaceContext],
+    [record],
   );
   const title = localizePluginTitle(locale, record);
   const description = localizePluginDescription(locale, record);

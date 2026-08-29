@@ -8,13 +8,6 @@ import {
 } from '../../src/analytics/run-task';
 
 describe('run task analytics lineage', () => {
-  it('uses the canonical provider ids expected by the run dashboard', () => {
-    expect(['amr', 'claude', 'codex'].map(runAgentProviderId)).toEqual([
-      'amr',
-      'claude_code',
-      'codex_cli',
-    ]);
-  });
 
   it('starts a new user intent at task run index zero', () => {
     expect(buildInitialTaskAnalytics('task-1')).toEqual({

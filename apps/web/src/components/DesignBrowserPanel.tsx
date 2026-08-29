@@ -1771,7 +1771,7 @@ export function DesignBrowserPanel({
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : t('designBrowser.status.screenshotFailed'));
     }
-  }, [currentUrl, onAddImageToChat, onRefreshFiles, projectId, t, webviewNode, workspaceContext]);
+  }, [currentUrl, onAddImageToChat, onRefreshFiles, projectId, t, webviewNode]);
 
   useEffect(() => {
     const node = webviewNode;

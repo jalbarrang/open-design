@@ -31,10 +31,6 @@ function isUserSystem(system: DesignSystemSummary): boolean {
   return system.source === 'user' || system.isEditable === true;
 }
 
-function isTeamSystem(system: DesignSystemSummary): boolean {
-  return system.teamShared === true || system.teamSynced === true;
-}
-
 interface PopoverAnchor {
   left: number;
   width: number;
@@ -203,18 +199,14 @@ export function DesignSystemPicker({
     });
   }, [query, designSystems, locale]);
 
-  // Split the filtered list into the same scopes the Design Systems tab uses:
-  // personal first, then team-shared systems, then official presets.
-  const { userSystems, teamSystems, officialSystems } = useMemo(() => {
+  const { userSystems, officialSystems } = useMemo(() => {
     const mine: DesignSystemSummary[] = [];
-    const team: DesignSystemSummary[] = [];
     const official: DesignSystemSummary[] = [];
     for (const system of filtered) {
-      if (isTeamSystem(system)) team.push(system);
-      else if (isUserSystem(system)) mine.push(system);
+      if (isUserSystem(system)) mine.push(system);
       else official.push(system);
     }
-    return { userSystems: mine, teamSystems: team, officialSystems: official };
+    return { userSystems: mine, officialSystems: official };
   }, [filtered]);
 
   const selectDesignSystem = (id: string | null) => {
@@ -381,16 +373,6 @@ export function DesignSystemPicker({
                   </div>
                 ) : null}
                 {userSystems.map(renderOption)}
-                {teamSystems.length > 0 ? (
-                  <div
-                    className="project-ds-picker-group-label"
-                    role="presentation"
-                    data-testid="project-ds-picker-group-team"
-                  >
-                    {t('pluginsView.tab.team')}
-                  </div>
-                ) : null}
-                {teamSystems.map(renderOption)}
                 {officialSystems.length > 0 ? (
                   <div
                     className="project-ds-picker-group-label"

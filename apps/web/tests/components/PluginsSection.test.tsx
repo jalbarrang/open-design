@@ -27,14 +27,6 @@ const workspaceContextState = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../../src/collab/useWorkspaceContext', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/collab/useWorkspaceContext')>();
-  return {
-    ...actual,
-    useWorkspaceContext: () => workspaceContextState.current,
-  };
-});
-
 import { PluginsSection } from '../../src/components/PluginsSection';
 
 const PLUGIN_ROW = {
@@ -116,15 +108,6 @@ afterEach(() => {
 });
 
 describe('PluginsSection', () => {
-  it('does not throw or issue a headerless read while Workspace identity is unresolved', () => {
-    workspaceContextState.current = {
-      context: null,
-      loading: true,
-    };
-
-    expect(() => render(<PluginsSection />)).not.toThrow();
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
 
   it('renders only the rail when no plugin is applied', async () => {
     render(<PluginsSection />);

@@ -153,9 +153,7 @@ async function renderApiAttachmentBlock(
       language = codeFenceLanguage(path);
     }
   } else if (maxContentChars > 0 && API_ATTACHMENT_PREVIEW_KINDS.has(kind)) {
-    const preview = workspaceContext
-      ? await fetchProjectFilePreview(projectId, path)
-      : await fetchProjectFilePreview(projectId, path);
+    const preview = await fetchProjectFilePreview(projectId, path);
     const previewText = preview
       ? preview.sections
           .map((section) => [`## ${section.title}`, ...section.lines].join('\n'))

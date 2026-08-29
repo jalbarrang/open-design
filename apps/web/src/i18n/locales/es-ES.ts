@@ -322,7 +322,7 @@ export const esES: Dict = {
   'settings.onboardingSystemsTitle': 'Incorpora tu sistema de diseño',
   'settings.onboardingSystemsBody': 'Elige o crea un sistema de marca para que el trabajo generado respete los colores, la tipografía y el lenguaje de producto reales.',
   'settings.onboardingExecutionTitle': 'Elige la fuente del modelo',
-  'settings.onboardingExecutionBody': 'Usa OpenDesign Hosted, conecta un agente local o utiliza tu propia clave de modelo.',
+  'settings.onboardingExecutionBody': 'Conecta un agente local o utiliza tu propia clave de modelo.',
   'settings.onboardingAmrCloudBenefitOfficial': 'Recomendado oficialmente',
   'settings.onboardingAmrCloudBenefitReady': 'Sin despliegue',
   'settings.onboardingAmrCloudBenefitModels': 'Accede a Claude, GPT, Fable 5 y 5.6 sol con un descuento por tiempo limitado y alta concurrencia.',

@@ -1325,9 +1325,7 @@ function AppInner() {
       // not race an eager bootstrap snapshot against its first onActive; the
       // 250ms fallback covers shells where the stream never opens.
       {
-        const designSystemsCatalogIdentity = JSON.stringify([
-          'workspace-account',
-        ]);
+        const designSystemsCatalogIdentity = currentWorkspaceCatalogIdentity;
         const designSystemsRequestGeneration =
           (designSystemsRequestGenerationRef.current.get(designSystemsCatalogIdentity) ?? 0) + 1;
         designSystemsRequestGenerationRef.current.set(
@@ -1659,9 +1657,7 @@ function AppInner() {
     // verifies that exact membership instead of consulting mutable ambient
     // Workspace state, and the same identity key prevents an A response from
     // committing after the UI has moved to B.
-    const issuedCatalogIdentity = JSON.stringify([
-      'workspace-account',
-    ]);
+    const issuedCatalogIdentity = currentWorkspaceCatalogIdentity;
     const requestGeneration =
       (designSystemsRequestGenerationRef.current.get(issuedCatalogIdentity) ?? 0) + 1;
     designSystemsRequestGenerationRef.current.set(issuedCatalogIdentity, requestGeneration);
@@ -1676,7 +1672,7 @@ function AppInner() {
     // so do not leave a successful refresh hidden behind bootstrap's loader
     // when that duplicate request is cancelled or stalls.
     setDsLoading(false);
-  }, []);
+  }, [currentWorkspaceCatalogIdentity]);
 
   // The design-system catalog is verified against the exact Workspace/member
   // identity. Re-read whenever either half changes; a role replacement can
@@ -1696,10 +1692,7 @@ function AppInner() {
     // headerless read is not the "unfiltered" list — it is the list with every
     // workspace-claimed skill removed, including the ones claimed by the
     // workspace the user is actually in.
-    const issuedCatalogIdentity = JSON.stringify([
-      'workspace-account',
-      'local',
-    ]);
+    const issuedCatalogIdentity = currentWorkspaceCatalogIdentity;
     const requestGeneration =
       (skillsRequestGenerationRef.current.get(issuedCatalogIdentity) ?? 0) + 1;
     skillsRequestGenerationRef.current.set(issuedCatalogIdentity, requestGeneration);
@@ -1714,7 +1707,7 @@ function AppInner() {
       items: list,
     });
     markSkillRegistryReady('functional');
-  }, [markSkillRegistryReady]);
+  }, [currentWorkspaceCatalogIdentity, markSkillRegistryReady]);
 
   // The skills catalog is workspace-scoped on the daemon exactly like the
   // design-system catalog above, and needs the same workspace-keyed refresh for
@@ -2672,9 +2665,8 @@ function AppInner() {
   ): Promise<boolean> => {
     const routeFileName = fileName ?? null;
     const hintedProjectName = projectTitleHint?.name.trim() || null;
-    const requiresBoundCatalogProject = projectTitleHint?.authoritative === true;
-    const knownUnboundLocalProject = !requiresBoundCatalogProject
-      && projectsRef.current.some((project) => project.id === id);
+    const requiresBoundCatalogProject = false;
+    const knownUnboundLocalProject = projectsRef.current.some((project) => project.id === id);
     const openingAuthorizationGeneration = projectAuthorizationGenerationRef.current;
     const openingScopeKey = UNRESOLVED_PROJECT_LIST_SCOPE;
     const expectedWorkspaceId = null;
@@ -3655,12 +3647,6 @@ function AppInner() {
       appVersionInfo={appVersionInfo}
       welcome={presentation === 'modal' ? settingsWelcome : false}
       initialSection={settingsInitialSection}
-      initialHighlight={settingsHighlight}
-      persistedProjectWorkspaceId={
-        route.kind === 'project'
-          ? null
-          : null
-      }
       composioConfigLoading={composioConfigLoading}
       onPersist={handleConfigPersist}
       onSilentUpdatePreferenceChange={handleSilentUpdatePreferenceChange}
@@ -3668,7 +3654,6 @@ function AppInner() {
       onPersistComposioKey={handleConfigPersistComposioKey}
       onClose={handleCloseSettings}
       onResetOnboarding={handleResetOnboarding}
-      onAmrSignedOut={handleActiveCloudSignOut}
       onRefreshAgents={refreshAgents}
       daemonMediaProviders={daemonMediaProviders}
       daemonMediaProvidersFetchState={daemonMediaProvidersFetchState}
@@ -3915,11 +3900,6 @@ function AppInner() {
             activeProject.id
           )}
           project={activeProject}
-          initialWorkspaceScope={
-            routeProjectSnapshotRef.current?.project.id === activeProject.id
-              ? routeProjectSnapshotRef.current.workspaceScope
-              : undefined
-          }
           initialProjectDetail={
             routeProjectSnapshotRef.current?.project.id === activeProject.id
             && routeProjectSnapshotRef.current.resolvedDir !== undefined
@@ -3928,15 +3908,6 @@ function AppInner() {
                   resolvedDir: routeProjectSnapshotRef.current.resolvedDir,
                 }
               : undefined
-          }
-          initialMaterializationPending={
-            routeProjectSnapshotRef.current?.project.id === activeProject.id
-              ? routeProjectSnapshotRef.current.awaitingFirstMaterialization
-                ?? (activeProject=== undefined)
-              : undefined
-          }
-          projectAuthorizationKey={
-            activeProjectAuthorizationKey ?? activeProject.id
           }
           routeFileName={route.fileName}
           routeConversationId={route.conversationId ?? null}
@@ -3952,7 +3923,6 @@ function AppInner() {
           onApiModelChange={handleApiModelChange}
           onRefreshAgents={refreshAgents}
           onOpenSettings={openSettings}
-          onOpenAmrSettings={openAmrSettings}
           onOpenMcpSettings={openMcpSettings}
           onBrowsePlugins={openPluginRegistry}
           onOpenConnectors={openConnectorIntegrations}
@@ -4036,7 +4006,6 @@ function AppInner() {
         onPersistComposioKey={handleConfigPersistComposioKey}
         onOpenSettings={openSettings}
         onCompleteOnboarding={handleCompleteOnboarding}
-        onSignedOut={handleActiveCloudSignOut}
       />
     );
   }
