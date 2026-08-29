@@ -1031,6 +1031,10 @@ export interface Dict {
   // which groups the completion sound and desktop notification rows.
   'settings.systemPrefsTitle': string;
   'settings.systemPrefsHint': string;
+  'settings.theme': string;
+  'settings.themeLight': string;
+  'settings.themeDark': string;
+  'settings.themeSystem': string;
   'settings.notifications': string;
   'settings.notificationsHint': string;
   'settings.notifyCompletionSound': string;

@@ -1076,7 +1076,11 @@ function validateSketchEmbeddableUrl(link: string): boolean {
 
 function readExcalidrawTheme(): 'light' | 'dark' {
   if (typeof document === 'undefined') return 'light';
-  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const attr = document.documentElement.getAttribute('data-theme');
+  if (attr === 'dark' || attr === 'light') return attr;
+  // System mode: the attribute is absent, so follow the OS preference —
+  // same resolution as `resolveCurrentTheme()` in state/appearance.ts.
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function cloneJson<T>(value: unknown, fallback: T): T {

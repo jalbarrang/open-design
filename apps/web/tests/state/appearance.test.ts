@@ -1,12 +1,30 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_ACCENT_COLOR,
   applyAppearanceToDocument,
   normalizeAccentColor,
   resolveAccentColor,
+  resolveAppTheme,
+  resolveCurrentTheme,
 } from '../../src/state/appearance';
+
+function stubSystemPrefersDark(dark: boolean): void {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches: dark && query.includes('prefers-color-scheme: dark'),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
+}
 
 describe('normalizeAccentColor', () => {
   it('accepts six-digit hex colors and normalizes casing', () => {
@@ -37,8 +55,8 @@ describe('applyAppearanceToDocument', () => {
     document.documentElement.style.removeProperty('--accent-hover');
   });
 
-  it('applies the forced light theme and accent variables to the root element', () => {
-    applyAppearanceToDocument({ accentColor: '#4F46E5' });
+  it('applies the explicit light theme and accent variables to the root element', () => {
+    applyAppearanceToDocument({ theme: 'light', accentColor: '#4F46E5' });
 
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
     expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#4f46e5');
@@ -58,12 +76,12 @@ describe('applyAppearanceToDocument', () => {
     document.documentElement.style.removeProperty('--bg-app');
   });
 
-  it('applies accent variables while forcing a stale dark theme back to light', () => {
-    document.documentElement.setAttribute('data-theme', 'dark');
+  it('stamps a stale light attribute back to dark when the theme changes', () => {
+    document.documentElement.setAttribute('data-theme', 'light');
 
-    applyAppearanceToDocument({ accentColor: '#10B981' });
+    applyAppearanceToDocument({ theme: 'dark', accentColor: '#10B981' });
 
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
     expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#10b981');
     expect(document.documentElement.style.getPropertyValue('--accent-strong')).toContain('#10b981');
     expect(document.documentElement.style.getPropertyValue('--accent-soft')).toContain('#10b981');
@@ -91,5 +109,55 @@ describe('applyAppearanceToDocument', () => {
 
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
     expect(document.documentElement.style.getPropertyValue('--accent')).toBe(DEFAULT_ACCENT_COLOR);
+  });
+
+  it('removes the attribute in system mode so the CSS media query resolves', () => {
+    stubSystemPrefersDark(true);
+    document.documentElement.setAttribute('data-theme', 'light');
+
+    applyAppearanceToDocument({ theme: 'system', accentColor: '#10B981' });
+
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+  });
+});
+
+describe('resolveAppTheme', () => {
+  it('honors valid persisted themes', () => {
+    expect(resolveAppTheme('dark')).toBe('dark');
+    expect(resolveAppTheme('light')).toBe('light');
+    expect(resolveAppTheme('system')).toBe('system');
+  });
+
+  it('falls back to the default for missing or invalid values', () => {
+    expect(resolveAppTheme(undefined)).toBe('light');
+    expect(resolveAppTheme(null)).toBe('light');
+    expect(resolveAppTheme('sepia' as never)).toBe('light');
+  });
+});
+
+describe('resolveCurrentTheme', () => {
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-theme');
+    vi.unstubAllGlobals();
+  });
+
+  it('reads an explicit dark attribute', () => {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    expect(resolveCurrentTheme()).toBe('dark');
+  });
+
+  it('reads an explicit light attribute even on a dark OS', () => {
+    stubSystemPrefersDark(true);
+    document.documentElement.setAttribute('data-theme', 'light');
+    expect(resolveCurrentTheme()).toBe('light');
+  });
+
+  it('falls back to prefers-color-scheme when the attribute is absent (system mode)', () => {
+    stubSystemPrefersDark(true);
+    document.documentElement.removeAttribute('data-theme');
+    expect(resolveCurrentTheme()).toBe('dark');
+
+    stubSystemPrefersDark(false);
+    expect(resolveCurrentTheme()).toBe('light');
   });
 });

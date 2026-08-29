@@ -43,46 +43,68 @@ function accentVars(accentColor: string): Record<(typeof ACCENT_VARS)[number], s
   };
 }
 
-/**
- * The one appearance OpenDesign ships.
- *
- * Product removed the theme setting: the workspace surfaces have no dark
- * tokens, so a dark app is a broken app. `data-theme` is therefore a constant
- * rather than a preference — and it must always be PRESENT, not merely
- * non-dark. Every dark rule in the app is gated on the attribute being absent
- * (`html:not([data-theme])` in CSS) or falls back to `prefers-color-scheme`
- * when the attribute is missing (`shiki`, `ConnectorLogo`, `SketchEditor`,
- * `TerminalViewer`, `connectorBrandColor`, `MentionNode`). Stamping it
- * unconditionally is what keeps a dark OS from leaking through.
- */
-export const FORCED_APP_THEME = 'light' as const;
+export const APP_THEMES = ['system', 'light', 'dark'] as const;
 
-/**
- * Coerce any persisted theme to the only one that still exists.
- *
- * Changing the default alone cannot fix an existing install: every user who
- * ever opened the old picker has `'dark'` — or `'system'`, which resolves dark
- * on a dark OS — written to localStorage, and a stored value does not move
- * when the default does. Config reads funnel through here so those installs
- * come back light.
- */
-export function resolveAppTheme(persisted?: AppTheme | null): AppTheme {
-  return persisted === FORCED_APP_THEME ? persisted : FORCED_APP_THEME;
+export const DEFAULT_APP_THEME = 'light' as const;
+
+export function isAppTheme(value: unknown): value is AppTheme {
+  return typeof value === 'string' && (APP_THEMES as readonly string[]).includes(value);
 }
 
+/**
+ * Resolve a persisted theme to a usable one.
+ *
+ * Dark mode is back, so stored values are honored again — but a fresh install
+ * (or a corrupted value) starts light, which is the shipped brand appearance.
+ */
+export function resolveAppTheme(persisted?: AppTheme | null): AppTheme {
+  return isAppTheme(persisted) ? persisted : DEFAULT_APP_THEME;
+}
+
+/**
+ * The theme currently live on the document, resolved to a concrete value.
+ *
+ * `data-theme` carries the EXPLICIT choice ('light'/'dark'); the attribute is
+ * absent in system mode, where the CSS tokens' `html:not([data-theme])` +
+ * `prefers-color-scheme` blocks take over. Anything reading the theme outside
+ * CSS (shiki, connector logos, Excalidraw, …) should go through here so
+ * system mode resolves consistently instead of silently reading light.
+ */
+export function resolveCurrentTheme(): 'light' | 'dark' {
+  if (typeof document === 'undefined') return 'light';
+  const attr = document.documentElement.getAttribute('data-theme');
+  if (attr === 'dark' || attr === 'light') return attr;
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+/**
+ * Stamp the app appearance onto `<html>`.
+ *
+ * Theme semantics: an explicit 'light'/'dark' sets `data-theme`; 'system'
+ * REMOVES the attribute so the CSS prefers-color-scheme blocks apply. The
+ * attribute must always reflect a deliberate state — an unstamped system
+ * mode is the intended system behavior, never an accident, which is what
+ * the old light-only pinning guarded against.
+ *
+ * The desktop host bridge keeps the native window material (macOS vibrancy
+ * glass) in step with the theme; 'system' restores following the OS.
+ * Feature-detected — browsers and older host builds have no appearance
+ * capability.
+ */
 export function applyAppearanceToDocument({
+  theme = DEFAULT_APP_THEME,
   accentColor,
 }: {
+  theme?: AppTheme;
   accentColor?: string;
 }): void {
   const root = document.documentElement;
-  root.setAttribute('data-theme', FORCED_APP_THEME);
-  // Desktop shell: keep the native window appearance (the macOS vibrancy
-  // glass material) in step with the app theme. Without this the glass
-  // follows the OS appearance, so the light app over a dark OS sat on dark
-  // glass and read as a muddy gray (#94). Feature-detected — browsers and
-  // older host builds have no appearance capability.
-  getOpenDesignHost()?.appearance?.setTheme(FORCED_APP_THEME);
+  if (theme === 'system') {
+    root.removeAttribute('data-theme');
+  } else {
+    root.setAttribute('data-theme', theme);
+  }
+  getOpenDesignHost()?.appearance?.setTheme(theme);
 
   const normalized = resolveAccentColor(accentColor);
   const vars = accentVars(normalized);
