@@ -6,7 +6,6 @@ import {
 } from '@open-design/host';
 import { pickLocalFolderPath } from '../state/projects';
 import { resolvedWorkspaceContextForWrite } from '../state/projects';
-import { useWorkspaceContext } from '../collab/useWorkspaceContext';
 import { formatPickAndImportFailure } from '../utils/pickAndImportError';
 
 interface UseOpenFolderImportArgs {
@@ -20,7 +19,6 @@ export function useOpenFolderImport({
   onImportFolder,
   onImportFolderResponse,
 }: UseOpenFolderImportArgs) {
-  const workspaceContextState = useWorkspaceContext();
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<{ message: string; details?: string } | null>(null);
   const hasHostPickAndImport = isOpenDesignHostAvailable();
@@ -34,7 +32,6 @@ export function useOpenFolderImport({
       try {
         const result = await pickAndImportHostProject({
           skillId: skillId ?? null,
-          workspaceContext: resolvedWorkspaceContextForWrite(workspaceContextState),
         });
         if (!result) return;
         if (result.ok === true) {
@@ -72,7 +69,6 @@ export function useOpenFolderImport({
     onImportFolder,
     onImportFolderResponse,
     skillId,
-    workspaceContextState,
   ]);
 
   return {

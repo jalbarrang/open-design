@@ -30,14 +30,13 @@ describe('runtime_type on daemon run analytics', () => {
   it('falls back to the derived runtime when the hint is missing or invalid', () => {
     const derived = deriveConfigureGlobals({
       mode: 'daemon',
-      agentId: 'amr',
-      agents: [{ id: 'amr', available: true }],
-      amrAuthorized: true,
+      agentId: 'claude',
+      agents: [{ id: 'claude', available: true }],
     }).runtime_type;
-    expect(derived).toBe('amr_cloud');
-    expect(runtimeTypeForRunAnalytics({ derived, hint: undefined })).toBe('amr_cloud');
-    expect(runtimeTypeForRunAnalytics({ derived, hint: 'bogus' })).toBe('amr_cloud');
-    expect(runtimeTypeForRunAnalytics({ derived, hint: 42 })).toBe('amr_cloud');
+    expect(derived).toBe('local_cli');
+    expect(runtimeTypeForRunAnalytics({ derived, hint: undefined })).toBe('local_cli');
+    expect(runtimeTypeForRunAnalytics({ derived, hint: 'bogus' })).toBe('local_cli');
+    expect(runtimeTypeForRunAnalytics({ derived, hint: 42 })).toBe('local_cli');
   });
 });
 

@@ -196,7 +196,7 @@ function summarizeModelStepEvents(events) {
     cancelled,
     incomplete,
     retryCount,
-    // AMR/OpenCode reports provider usage per model step. Summing the unique
+    // OpenCode reports provider usage per model step. Summing the unique
     // step records recovers the turn total without treating the values as
     // cumulative snapshots or double-counting repeated lifecycle frames.
     reasoningTokens: reasoningTokenSampleCount > 0 ? reasoningTokens : undefined,
@@ -560,19 +560,12 @@ function durableRunState(run) {
       ? { designSystemSelectionSource: run.designSystemSelectionSource }
       : {}),
     ...(typeof run.clientType === 'string' ? { clientType: run.clientType } : {}),
-    ...(run.workspaceScope !== undefined ? { workspaceScope: run.workspaceScope } : {}),
     ...(run.analyticsTelemetry ? { analyticsTelemetry: run.analyticsTelemetry } : {}),
     ...(run.promptTelemetry ? { promptTelemetry: run.promptTelemetry } : {}),
     ...(run.promptCache ? { promptCache: run.promptCache } : {}),
     ...(run.analyticsRecovery ? { analyticsRecovery: run.analyticsRecovery } : {}),
     ...(run.externalPluginAnalytics
       ? { externalPluginAnalytics: run.externalPluginAnalytics }
-      : {}),
-    ...(typeof run.manualResumeAttemptCount === 'number'
-      ? { manualResumeAttemptCount: run.manualResumeAttemptCount }
-      : {}),
-    ...(typeof run.rechargeWaitDurationMs === 'number'
-      ? { rechargeWaitDurationMs: run.rechargeWaitDurationMs }
       : {}),
     ...(typeof run.artifactOriginStatus === 'string'
       ? { artifactOriginStatus: run.artifactOriginStatus }
@@ -940,8 +933,6 @@ export function createChatRunService({
       // can't lazily re-open a stream nothing will ever close (FD leak).
       eventsLogClosed: false,
       cleanupGeneration: 0,
-      manualResumeAttemptCount: 0,
-      rechargeWaitDurationMs: 0,
     };
     if (
       meta.odNextTaskInputSnapshot
@@ -949,9 +940,6 @@ export function createChatRunService({
       && !Array.isArray(meta.odNextTaskInputSnapshot)
     ) {
       run.odNextTaskInputSnapshot = meta.odNextTaskInputSnapshot;
-    }
-    if (Object.prototype.hasOwnProperty.call(meta, 'workspaceScope')) {
-      run.workspaceScope = meta.workspaceScope ?? null;
     }
     runs.set(run.id, run);
     if (run.clientRequestId) runIdsByClientRequestId.set(run.clientRequestId, run.id);
@@ -1095,74 +1083,6 @@ export function createChatRunService({
     }, ttlMs).unref?.();
   };
 
-  const prepareRestart = (run) => {
-    if (!run || !TERMINAL_RUN_STATUSES.has(run.status)) return null;
-    const resumedAt = Date.now();
-    const rechargeWaitDurationMs = Math.max(0, resumedAt - run.updatedAt);
-    // Invalidate the cleanup timer scheduled for the prior terminal attempt.
-    run.cleanupGeneration = (run.cleanupGeneration ?? 0) + 1;
-    run.status = 'queued';
-    run.updatedAt = resumedAt;
-    run.terminalAt = null;
-    run.exitCode = null;
-    run.signal = null;
-    run.error = null;
-    run.errorCode = null;
-    run.failureCategory = null;
-    run.failureDetail = null;
-    run.failureAction = null;
-    run.resumable = false;
-    run.cancelRequested = false;
-    run.cancelOrigin = null;
-    run.terminalTrigger = null;
-    run.runtimeFailureObservedBeforeCancellation = false;
-    run.retryRestartTimer = null;
-    run.retryAttemptCount = 0;
-    run.retryFinalResult = undefined;
-    run.retrySuppressedReason = undefined;
-    run.retryOriginFailure = null;
-    run.retryOriginErrorCode = null;
-    run.artifactCount = undefined;
-    run.artifactPaths = undefined;
-    run.artifactOutcome = undefined;
-    run.deliverableValid = undefined;
-    run.deliverableValidation = undefined;
-    run.deliverableEntryFile = undefined;
-    run.deliverableArtifactKind = undefined;
-    run.endedWithUnfinishedWork = false;
-    run.child = null;
-    run.acpSession = null;
-    run.childPid = null;
-    run.processGroupId = null;
-    run.childExitObservedAt = null;
-    run.stdinOpen = false;
-    run.eventsLogStream = null;
-    run.eventsLogClosed = false;
-    // A resumed attempt is a fresh execution, so it must not inherit the prior
-    // attempt's lifecycle marks. Keeping them makes every phase boundary
-    // measure from before the recharge pause, putting the wait time inside the
-    // new attempt's model-active window. Only the logical run start survives,
-    // so queue time is still measured from when the user asked for the run.
-    run.analyticsTelemetry = {
-      ...(run.analyticsTelemetry?.startRequestedAt !== undefined
-        ? { startRequestedAt: run.analyticsTelemetry.startRequestedAt }
-        : {}),
-      attemptStartedAt: resumedAt,
-      attemptIndex: 0,
-    };
-    run.manualResumeAttemptCount = (run.manualResumeAttemptCount ?? 0) + 1;
-    run.rechargeWaitDurationMs =
-      (run.rechargeWaitDurationMs ?? 0) + rechargeWaitDurationMs;
-    persistState(run);
-    emit(run, 'run_resume_attempted', {
-      runId: run.id,
-      attempt: run.manualResumeAttemptCount,
-      reason: 'recharge',
-      rechargeWaitDurationMs: run.rechargeWaitDurationMs,
-    });
-    return run;
-  };
-
   // Lazily open the per-run event log on first emit. The directory may
   // not exist yet; mkdir is recursive so it's safe to call repeatedly.
   // Disk failures are best-effort — if we can't write, the run still
@@ -1280,12 +1200,6 @@ export function createChatRunService({
     ...(typeof run.clientType === 'string' ? { clientType: run.clientType } : {}),
     ...(run.externalPluginAnalytics
       ? { externalPluginAnalytics: run.externalPluginAnalytics }
-      : {}),
-    ...(typeof run.manualResumeAttemptCount === 'number'
-      ? { manualResumeAttemptCount: run.manualResumeAttemptCount }
-      : {}),
-    ...(typeof run.rechargeWaitDurationMs === 'number'
-      ? { rechargeWaitDurationMs: run.rechargeWaitDurationMs }
       : {}),
     ...(typeof run.artifactOriginStatus === 'string'
       ? { artifactOriginStatus: run.artifactOriginStatus }
@@ -1900,7 +1814,6 @@ export function createChatRunService({
   return {
     create,
     createOrReuse,
-    prepareRestart,
     start,
     get,
     findByPluginWorkflowId,

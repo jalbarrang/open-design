@@ -207,49 +207,6 @@ describe('OrbitService', () => {
     }
   });
 
-  it('preserves persisted Workspace scope for execution without a membership re-check', async () => {
-    const dataDir = await mkdtemp(path.join(os.tmpdir(), 'orbit-test-'));
-    try {
-      const service = new OrbitService(dataDir);
-      service.configure({
-        enabled: false,
-        time: '08:00',
-        workspaceScope: {
-          workspaceId: 'workspace-a',
-          workspaceMemberId: 'member-a',
-        },
-      });
-      const sideEffects = { projects: 0, agentRuns: 0 };
-      service.setRunHandler(async (request) => {
-        expect(request.workspaceScope).toEqual({
-          workspaceId: 'workspace-a',
-          workspaceMemberId: 'member-a',
-        });
-        sideEffects.projects += 1;
-        sideEffects.agentRuns += 1;
-        return {
-          projectId: 'project-a',
-          agentRunId: 'agent-run-a',
-          completion: Promise.resolve({
-            agentRunId: 'agent-run-a',
-            status: 'succeeded',
-          }),
-        };
-      });
-
-      await expect(service.start('manual')).resolves.toMatchObject({
-        projectId: 'project-a',
-        agentRunId: 'agent-run-a',
-      });
-      expect(sideEffects).toEqual({ projects: 1, agentRuns: 1 });
-      await vi.waitFor(async () => {
-        expect((await service.status()).lastRun).not.toBeNull();
-      });
-    } finally {
-      await rm(dataDir, { recursive: true, force: true });
-    }
-  });
-
   it('localizes the template example prompt passed to the run handler for Chinese Orbit runs', async () => {
     const dataDir = await mkdtemp(path.join(os.tmpdir(), 'orbit-test-'));
     try {

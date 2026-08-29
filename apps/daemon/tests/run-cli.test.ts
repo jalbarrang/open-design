@@ -264,30 +264,6 @@ describe('od run CLI', () => {
     ]);
   });
 
-  it('forwards explicit Workspace scope through continue status and creation requests', async () => {
-    stub = await startRunStubServer(true);
-
-    const result = await runCli([
-      'run',
-      'continue',
-      'run-1',
-      '--workspace',
-      'team-workspace',
-      '--workspace-member',
-      'creator-member',
-      '--daemon-url',
-      stub.baseUrl,
-    ]);
-
-    expect(result.code).toBe(0);
-    expect(result.stderr).toBe('');
-    expect(stub.requests).toHaveLength(2);
-    for (const request of stub.requests) {
-      expect(request.headers['x-od-workspace-id']).toBe('team-workspace');
-      expect(request.headers['x-od-workspace-member-id']).toBe('creator-member');
-    }
-  });
-
   it.each([
     {
       label: 'list',

@@ -1,9 +1,5 @@
 <h1 align="center">OpenDesign：The open-source Claude Design alternative</h1>
 
-> ⚡ **[OpenDesign Cloud——官方模型服务。](https://open-design.ai/zh/pricing/)** 一次充值，即可在 OpenDesign 里直接使用 Agent 与图像模型：GPT、Claude 与 DeepSeek Agent 模型，以及 GPT Image 2.0、Seedream 5.0 Pro 与 Nano Banana 2.0 图像模型。
->
-> 🚀 **[DeepSeek V4 Flash 与 V4 Pro 现已上线。](https://open-design.ai/zh/pricing/)** 面向原型、演示文稿、设计系统与日常 Agent 任务，直接使用顶级智能。OpenDesign 会员可在应用内无限量使用两周。
->
 > 🧩 **[现已支持 DeepSeek Harness。](https://open-design.ai/zh/agents/deepseek-harness-design/)** 将 DeepSeek 官方 `dsh` Agent Harness 作为原生运行时接入 OpenDesign，支持结构化思考、工具调用、模型发现、取消与会话恢复；生成文件仍进入 OpenDesign 的实时预览与交付流程。
 
 <p align="center">
@@ -13,7 +9,6 @@
 <p align="center">
   <a href="https://open-design.ai/">官网</a> ·
   <a href="https://open-design.ai/">下载</a> ·
-  <a href="https://open-design.ai/cloud/">OpenDesign Cloud</a> ·
   <a href="https://discord.gg/mHAjSMV6gz">Discord</a> ·
   <a href="https://x.com/OpenDesignHQ">关注 @OpenDesignHQ</a>
 </p>
@@ -138,7 +133,7 @@ OpenDesign 是这样一种产物：Anthropic 随 Claude Design 推出的 **Agent
 ¹ Claude Desktop 的自动 MCP 配置目前仅在 macOS 和 Windows 上支持。
 
 <p align="center">
-  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="OpenDesign 支持的 26 个编码 Agent CLI — DeepSeek Harness · Claude Code · Codex · OpenCode · Hermes · Antigravity · Vela · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
+  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="OpenDesign 支持的 26 个编码 Agent CLI — DeepSeek Harness · Claude Code · Codex · OpenCode · Hermes · Antigravity · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
 </p>
 
 **未安装任何 CLI？** `POST /api/proxy/{anthropic,openai,azure,google,ollama,senseaudio}/stream` 的 BYOK 代理提供同样的循环（无需 spawn 进程）——粘贴 `baseUrl` + `apiKey` + `model`，支持 OpenAI、Anthropic、Azure OpenAI、Google Gemini、Ollama、LM Studio、vLLM 或任何 OpenAI 兼容端点。每个目标的 SSRF 防护在守护进程边缘拦截内网 IP / link-local / CGNAT。
@@ -575,7 +570,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 - [x] Sidecar 协议 + Electron 桌面 + IPC 自动化
 - [x] 工件 Lint API + 五维自评预输出门控
 - [x] **0.8.0**——插件市场基础设施（261 个官方插件、manifest 规范、逐 Agent 安装脚本）
-- [x] **0.9.0**——OpenDesign Cloud（应用内置的官方模型服务：零配置，一键登录）
+- [x] ~~**0.9.0**——OpenDesign Cloud（应用内置的官方模型服务：零配置，一键登录）~~ (removed — OpenDesign is local CLI + BYOK only)
 - [x] **0.10.0**——一体化设计工作区：一个窗口内完成完整创作闭环（参考 → 素材 → 交互编辑 → 动效 → 交付）
 - [x] **0.11.0**——_The Bazaar_：在开放中构建——人人都可以挑选和贡献的插件与设计系统社区市场
 - [x] **0.12.0**——_品牌设计系统_：把你已经拥有的品牌变成可复用、可移植的 `DESIGN.md` 系统

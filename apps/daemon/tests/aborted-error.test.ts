@@ -21,15 +21,6 @@ import { isAbortedOperationError } from '../src/integrations/aborted-error.js';
 // never classify a real timeout or transport failure as a cancellation, or a
 // genuine fault would be silently swallowed.
 describe('isAbortedOperationError', () => {
-  it('recognizes a deliberately aborted vela command', () => {
-    const error = new Error('vela command aborted', {
-      cause: 'This operation was aborted',
-    });
-    error.name = 'AbortError';
-    Object.assign(error, { code: 'ABORT_ERR' });
-
-    expect(isAbortedOperationError(error)).toBe(true);
-  });
 
   it('recognizes an abort identified only by its code', () => {
     // DOMException-shaped aborts from other layers carry the code but may not

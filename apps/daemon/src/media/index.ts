@@ -81,7 +81,6 @@ import {
   resolveHyperFramesCliPath,
   resolveHyperFramesNodeBin,
 } from './hyperframes-runtime.js';
-import { renderVelaImage, renderVelaVideo } from './vela.js';
 import {
   ensureProject,
   kindFor,
@@ -132,15 +131,6 @@ type MediaContext = {
   provider: MediaProvider | null;
   prompt: string;
   aspect: string | undefined;
-  /**
-   * Published quality tier the caller asked for, passed through verbatim and
-   * left undefined when they asked for nothing. Only the Vela renderer reads
-   * it today; the OpenAI branches keep deriving their own `body.quality` from
-   * the model id, which is a different vocabulary ('hd' / 'standard').
-   */
-  quality: string | undefined;
-  /** Published output resolution the caller asked for. Vela renderer only. */
-  resolution: string | undefined;
   length: number | undefined;
   duration: number | undefined;
   voice: string;
@@ -154,7 +144,6 @@ type MediaContext = {
   /** Additional reference images for multi-image i2v / style reference flows. */
   imageRefs: ImageRef[];
   projectRoot: string;
-  workspaceId: string | undefined;
   onProviderRequestSettled:
     | ((summary: ImageGenerationRequestSummary & { providerId: string }) => void)
     | undefined;
@@ -332,11 +321,10 @@ function clampWithWarning(value: unknown, allowed: number[], flagName: string): 
  */
 export async function generateMedia(args: {
   projectRoot: string; projectsRoot: string; projectId: string; surface: MediaSurface; model: string;
-  prompt?: string; output?: string; aspect?: string; quality?: string; resolution?: string;
+  prompt?: string; output?: string; aspect?: string;
   length?: number; duration?: number; voice?: string;
   audioKind?: AudioKind; language?: string; loop?: boolean; promptInfluence?: number;
   compositionDir?: string; image?: string; images?: string[]; onProgress?: ProgressFn; requestInit?: MediaRequestInit;
-  workspaceId?: string;
   onProviderRequestSettled?: (summary: ImageGenerationRequestSummary & { providerId: string }) => void;
 }) {
   const {
@@ -348,8 +336,6 @@ export async function generateMedia(args: {
     prompt,
     output,
     aspect,
-    quality,
-    resolution,
     length,
     duration,
     voice,
@@ -360,7 +346,6 @@ export async function generateMedia(args: {
     compositionDir,
     image,
     requestInit,
-    workspaceId,
     onProviderRequestSettled,
   } = args;
 
@@ -445,15 +430,7 @@ export async function generateMedia(args: {
   // when stubs are swapped for paid integrations.
   const lengthClamp =
     surface === 'video'
-      ? def.provider === 'vela'
-        ? {
-            value:
-              typeof length === 'number' && Number.isFinite(length)
-                ? length
-                : undefined,
-            warning: null,
-          }
-        : clampWithWarning(length, VIDEO_LENGTHS_SEC, 'length')
+      ? clampWithWarning(length, VIDEO_LENGTHS_SEC, 'length')
       : { value: undefined, warning: null };
   const usesProviderSpecificAudioDuration =
     def.provider === 'elevenlabs'
@@ -498,10 +475,9 @@ export async function generateMedia(args: {
 
   // Resolve any user-configured model alias BEFORE we hand the id to a
   // dispatcher (issue #1277). Catalog lookup + surface validation above
-  // resolved product shorthands to `def.id`, so use that canonical id here:
-  // e.g. `nano-banana` must reach Vela as `nano-banana-2`, never as an
-  // unregistered wire model. The alias only changes what the provider
-  // receives on the wire. lefarcen + codex P2 on PR #1309: keep BOTH values on ctx so
+  // resolved product shorthands to `def.id`, so use that canonical id here.
+  // The alias only changes what the provider receives on the wire. Keep both
+  // values on ctx so
   // capability branches (DALL-E sizing, gpt-image quality, gpt-4o-mini-tts
   // instructions, MINIMAX/FISHAUDIO TTS map) continue to key off the
   // catalog id while the provider's request body carries the alias.
@@ -515,11 +491,6 @@ export async function generateMedia(args: {
     provider: findProvider(def.provider),
     prompt: prompt || '',
     aspect: aspect || defaultAspectFor(surface),
-    // No default tier or resolution here on purpose: unlike aspect, an absent
-    // one is a meaningful request. Substituting a value would take the pricing
-    // decision away from the provider's own default.
-    quality: typeof quality === 'string' && quality.trim() ? quality.trim() : undefined,
-    resolution: typeof resolution === 'string' && resolution.trim() ? resolution.trim() : undefined,
     length: clampedLength,
     duration: clampedDuration,
     voice: voice || '',
@@ -539,7 +510,6 @@ export async function generateMedia(args: {
     requestInit: requestInit || {},
     imageRefs,
     projectRoot,
-    workspaceId,
     onProviderRequestSettled,
   };
 
@@ -576,19 +546,6 @@ export async function generateMedia(args: {
     ) {
       providerId = 'custom-image';
       const result = await renderCustomOpenAIImage(ctx, customImageCredentials!);
-      bytes = result.bytes;
-      providerNote = result.providerNote;
-      suggestedExt = result.suggestedExt;
-    } else if (def.provider === 'vela' && surface === 'image') {
-      const result = await renderVelaImage(ctx);
-      bytes = result.bytes;
-      providerNote = result.providerNote;
-      suggestedExt = result.suggestedExt;
-    } else if (def.provider === 'vela' && surface === 'video') {
-      const result = await renderVelaVideo({
-        ...ctx,
-        onProgress: args.onProgress,
-      });
       bytes = result.bytes;
       providerNote = result.providerNote;
       suggestedExt = result.suggestedExt;
@@ -780,7 +737,7 @@ export async function generateMedia(args: {
     // HyperFrames is a local render, not a remote provider. Falling back
     // to a stub here hides actionable composition/preflight failures and
     // can make the agent retry or narrate a fake MP4 as success.
-    if (def.provider === 'hyperframes' || def.provider === 'vela') {
+    if (def.provider === 'hyperframes') {
       throw err;
     }
     // A real provider failed (network blip, 4xx, missing key, …). We

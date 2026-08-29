@@ -1,9 +1,5 @@
 <h1 align="center">OpenDesign: открытая альтернатива Claude Design</h1>
 
-> ⚡ **[OpenDesign Cloud — официальный сервис моделей.](https://open-design.ai/zh/pricing/)** Одно пополнение открывает доступ к агентным и графическим моделям в OpenDesign: GPT, Claude и DeepSeek для агентов; GPT Image 2.0, Seedream 5.0 Pro и Nano Banana 2.0 для изображений.
->
-> 🚀 **[DeepSeek V4 Flash и V4 Pro уже доступны.](https://open-design.ai/zh/pricing/)** Используйте передовой интеллект для прототипов, презентаций, дизайн-систем и повседневных агентных задач. Участники OpenDesign могут пользоваться обеими моделями без ограничений две недели прямо в приложении.
->
 > 🧩 **[DeepSeek Harness теперь поддерживается.](https://open-design.ai/zh/agents/deepseek-harness-design/)** Подключите официальный Agent Harness `dsh` от DeepSeek к OpenDesign как нативную среду выполнения со структурированным мышлением, вызовами инструментов, поиском моделей, отменой и возобновлением сессии. Созданные файлы остаются в рабочем процессе OpenDesign для живого предпросмотра и передачи результата.
 
 <p align="center">
@@ -13,7 +9,6 @@
 <p align="center">
   <a href="https://open-design.ai/?utm_source=github&utm_medium=referral&utm_content=readme_website">Сайт</a> ·
   <a href="https://open-design.ai/?utm_source=github&utm_medium=referral&utm_content=readme_download">Скачать</a> ·
-  <a href="https://open-design.ai/cloud/?utm_source=github&utm_medium=referral&utm_content=readme_cloud">OpenDesign Cloud</a> ·
   <a href="https://discord.gg/mHAjSMV6gz">Discord</a> ·
   <a href="https://x.com/OpenDesignHQ">Подписаться @OpenDesignHQ</a>
 </p>
@@ -133,7 +128,7 @@ OpenDesign превращает этот цикл в **файловую сист
 `od mcp install <agent> --print` для предпросмотра без изменений · `--uninstall` для удаления · полный список через `od mcp install --help`.
 
 <p align="center">
-  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="25 CLI кодинг-агента, которые поддерживает OpenDesign — Claude Code · Codex · OpenCode · Hermes · Antigravity · Vela · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
+  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="25 CLI кодинг-агента, которые поддерживает OpenDesign — Claude Code · Codex · OpenCode · Hermes · Antigravity · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
 </p>
 
 **Нет установленного CLI?** BYOK-прокси по адресу `POST /api/proxy/{anthropic,openai,azure,google,ollama,senseaudio}/stream` даёт вам тот же цикл (без запуска процессов) — вставьте `baseUrl` + `apiKey` + `model`, с поддержкой OpenAI, Anthropic, Azure OpenAI, Google Gemini, Ollama, LM Studio, vLLM или любого OpenAI-совместимого эндпоинта. Защита от SSRF для каждой цели блокирует внутренние IP / link-local / CGNAT на границе демона.
@@ -580,7 +575,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 - [x] Sidecar-протокол + десктоп на Electron + IPC-автоматизация
 - [x] API линтинга артефактов + пятимерный гейт самокритики перед выдачей
 - [x] **0.8.0** — инфраструктура маркетплейса плагинов (261 официальный плагин, спецификация манифеста, скрипты установки для каждого агента)
-- [x] **0.9.0** — OpenDesign Cloud (официальный сервис моделей, встроенный в приложение: без настройки, вход в один клик)
+- [x] ~~**0.9.0** — OpenDesign Cloud (официальный сервис моделей, встроенный в приложение: без настройки, вход в один клик)~~ (removed — OpenDesign is local CLI + BYOK only)
 - [x] **0.10.0** — универсальное рабочее пространство дизайна: весь craft-цикл в одном окне (референсы → материалы → интерактивное редактирование → motion → handoff)
 - [x] **0.11.0** — _The Bazaar_: разработка в открытую — community-маркетплейс плагинов и дизайн-систем, которые можно выбирать и пополнять
 - [x] **0.12.0** — _Brand-backed Design System_: превращайте уже существующий бренд в переиспользуемую переносимую систему `DESIGN.md`

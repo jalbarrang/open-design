@@ -81,19 +81,7 @@ import {
   type ProviderTestRequest,
 } from '@open-design/contracts/api/connectionTest';
 import { googleGenerateContentUrl } from './integrations/google-models.js';
-import { readVelaCredentialRevision, resolveAmrProfile } from './integrations/vela.js';
-import { amrModelLoadingCache } from './runtimes/amr-model-cache.js';
-import { buildAmrModelCacheKey } from './runtimes/amr-model-probe.js';
-import {
-  fetchVelaPresetModels,
-  fetchVelaRemoteModelsWithRetry,
-} from './runtimes/defs/amr.js';
-import {
-  getRememberedLiveModels,
-  preferFreshLiveModels,
-  resolveDefaultModelFromOptions,
-  resolveModelForAgent,
-} from './runtimes/models.js';
+import { resolveModelForAgent } from './runtimes/models.js';
 import {
   BYOK_OPENCODE_PROVIDER_ID,
   buildOpenCodeByokProviderConfig,
@@ -2278,29 +2266,9 @@ async function resolveConnectionTestModelForAgent(
   requestedModel: string | null,
   env: NodeJS.ProcessEnv,
   liveModelScope: string | null,
-  launchPath?: string | null,
+  _launchPath?: string | null,
 ): Promise<string | null> {
-  const resolved = resolveModelForAgent(def, requestedModel, env, liveModelScope);
-  if (def.id !== 'amr' || resolved !== 'default' || !launchPath) return resolved;
-
-  try {
-    const cacheKey = buildAmrModelCacheKey({
-      launchPath,
-      env,
-      credentialRevision: readVelaCredentialRevision(env),
-    });
-    const catalog = await amrModelLoadingCache.get(cacheKey, {
-      fetchPreset: () => fetchVelaPresetModels(launchPath, env),
-      fetchRemote: () => fetchVelaRemoteModelsWithRetry(launchPath, env),
-    });
-    const liveModels = preferFreshLiveModels(
-      catalog.models ?? [],
-      getRememberedLiveModels(def.id, liveModelScope),
-    );
-    return resolveDefaultModelFromOptions(liveModels) ?? resolved;
-  } catch {
-    return resolved;
-  }
+  return resolveModelForAgent(def, requestedModel, env, liveModelScope);
 }
 
 async function testAgentConnectionInternal(
@@ -2625,7 +2593,7 @@ async function testAgentConnectionInternal(
       undefined,
       { resolvedBin: executableResolution.selectedPath },
     );
-    const liveModelScope = input.agentId === 'amr' ? resolveAmrProfile(baseEnv) : null;
+    const liveModelScope = null;
     const mmdRouteLaunchEnv = input.agentId === 'claude'
       ? await loadMmdRouteLaunchEnv(
           {

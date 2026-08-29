@@ -1,9 +1,5 @@
 import { expect, test } from '@/playwright/suite';
-import {
-  applyStandardMocks,
-  routeSignedOutVelaStatus,
-} from '@/playwright/mock-factory';
-import { mockAmrPersonalWorkspace } from '@/playwright/amr';
+import { applyStandardMocks } from '@/playwright/mock-factory';
 import { T } from '@/timeouts';
 
 const RECENT_PROJECTS = Array.from({ length: 6 }, (_, i) => ({
@@ -17,9 +13,8 @@ const RECENT_PROJECTS = Array.from({ length: 6 }, (_, i) => ({
 
 // Regression boundary: the desktop update-ready prompt and the home composer's
 // model picker can be open at the same time. The updater lives in the shared
-// top-right cluster for both signed-in and signed-out shells. Signed-in keeps
-// the prompt within the viewport; signed-out stays clear of the raised composer
-// card and its popover in a compact window.
+// top-right cluster, so the prompt must both stay within the viewport and stay
+// clear of the raised composer card and its popover in a compact window.
 
 test.beforeEach(async ({ page }) => {
   await applyStandardMocks(page);
@@ -82,14 +77,13 @@ test.beforeEach(async ({ page }) => {
 });
 
 for (const direction of ['ltr', 'rtl'] as const) {
-  test(`[P1] signed-in ${direction.toUpperCase()} update prompt opens below the standalone rocket within the viewport`, async ({
+  test(`[P1] ${direction.toUpperCase()} update prompt opens below the standalone rocket within the viewport`, async ({
     page,
   }) => {
-    await mockAmrPersonalWorkspace(page);
     await page.setViewportSize({ width: 700, height: 600 });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.getByText('Loading OpenDesign…').waitFor({ state: 'hidden', timeout: T.long });
-    await expect(page.getByTestId('entry-nav-account')).toBeVisible();
+    await expect(page.getByTestId('entry-nav-updater')).toBeVisible();
     await page.locator('html').evaluate((element, dir) => element.setAttribute('dir', dir), direction);
 
     const updaterButton = page.getByTestId('entry-nav-updater');
@@ -128,16 +122,13 @@ for (const direction of ['ltr', 'rtl'] as const) {
   });
 }
 
-test('[P1] signed-out update prompt stays clear of the composer and its agent picker', async ({ page }) => {
-  await routeSignedOutVelaStatus(page);
+test('[P1] update prompt stays clear of the composer and its agent picker', async ({ page }) => {
   await page.setViewportSize({ width: 700, height: 600 });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.getByText('Loading OpenDesign…').waitFor({ state: 'hidden', timeout: T.long });
   await expect(page.getByTestId('home-hero')).toBeVisible();
 
-  // Signed-out has no account capsule, but the updater keeps the same
-  // top-right cluster home and remains directly actionable.
-  await expect(page.getByTestId('entry-nav-account')).toHaveCount(0);
+  // The updater lives in the top-right cluster and stays directly actionable.
   const updaterButton = page
     .locator('.entry-top-right-cluster')
     .getByTestId('entry-nav-updater');
@@ -159,8 +150,8 @@ test('[P1] signed-out update prompt stays clear of the composer and its agent pi
   await expect(page.getByTestId('inline-model-switcher-popover')).toBeVisible();
   await expect(popup).toBeVisible();
 
-  // Moving the signed-out updater from the rail footer to the top-right cluster
-  // removes the old collision altogether. Keep the geometry assertion after
+  // Moving the updater from the rail footer to the top-right cluster removes
+  // the old collision altogether. Keep the geometry assertion after
   // both surfaces open so a future repositioning cannot silently put the
   // prompt back across the composer or its popover.
   const overlapAreas = await page.evaluate(() => {
@@ -185,5 +176,5 @@ test('[P1] signed-out update prompt stays clear of the composer and its agent pi
     overlapAreas,
     'popup, composer card, and agent picker must all be measurable',
   ).not.toBeNull();
-  expect(overlapAreas, 'signed-out updater prompt must stay clear of composer surfaces').toEqual([0, 0]);
+  expect(overlapAreas, 'updater prompt must stay clear of composer surfaces').toEqual([0, 0]);
 });

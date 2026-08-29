@@ -56,7 +56,6 @@ import {
   runAgentProviderId,
 } from '../analytics/run-task';
 import { useCoalescedCallback } from '../hooks/useCoalescedCallback';
-import { requestAmrArtifactUpgrade } from '../runtime/amr-artifact-upgrade';
 import {
   resolveQuestionFormStrategyTaskExecutionId,
   strategySettledMessageFields,
@@ -125,10 +124,6 @@ import { playSound, showCompletionNotification } from '../utils/notifications';
 import { randomUUID } from '../utils/uuid';
 import { DEFAULT_NOTIFICATIONS, KNOWN_PROVIDERS } from '../state/config';
 import type { TodoItem } from '../runtime/todos';
-import type {
-  AmrAuthRetryContinuation,
-  AmrAuthRetryPersonalAdoptionWitness,
-} from '../runtime/amr-auth-retry-continuation';
 import {
   appendErrorStatusEvent,
   removeErrorStatusEvent,
@@ -144,14 +139,6 @@ import {
 } from '../runtime/design-delivery';
 import { notifyArtifactDelivered } from './experience-survey-trigger';
 import { RESUME_CONTINUE_PROMPT } from '../runtime/resume';
-import {
-  amrBalanceGateScopeForWorkspaceContext,
-  amrBalanceGateScopesMatch,
-  checkAmrBalanceGate,
-  isAmrBalanceGateScope,
-  type AmrBalanceGateScope,
-} from '../runtime/amr-balance-gate';
-import { isPaidAmrPlan, resolveAmrPlan } from '../runtime/amr-low-balance-plan';
 import { AmrBalanceDialog } from './AmrBalanceDialog';
 import { AmrLowBalanceDialog, type AmrLowBalanceDecision } from './AmrLowBalanceDialog';
 import {
@@ -218,7 +205,6 @@ import type {
   ChatSessionMode,
   InstalledPluginRecord,
   RunContextSelection,
-  WorkspaceCollabContext,
   WorkspaceContextItem,
 } from '@open-design/contracts';
 import type {
@@ -258,31 +244,6 @@ import { Icon } from './Icon';
 import { useWorkspaceTabsDockRef } from './workspaceTabsDock';
 import { localizePluginTitle } from './plugins-home/localization';
 import { DesignSystemPicker } from './DesignSystemPicker';
-import { PresenceBar } from '../collab/PresenceBar';
-import { useProjectCollab } from '../collab/useProjectCollab';
-import {
-  currentUserDirectoryEntry,
-  useTeamMembers,
-} from '../collab/useTeamMembers';
-import { workspaceIdentityCacheKey } from '../collab/workspace-identity';
-import {
-  useWorkspaceContext,
-  workspaceIdentityCanBillAmr,
-} from '../collab/useWorkspaceContext';
-import {
-  projectWorkspaceContext,
-  projectWorkspaceScopeAuthorizesAmr,
-  projectWorkspaceScopeReady,
-  runWorkspaceIdentity,
-  runWorkspacePersonalAdoptionWitness,
-  useProjectWorkspaceScope,
-} from '../collab/useProjectWorkspaceScope';
-import {
-  CollabProvider,
-  type CollabContextValue,
-  type ProjectResourceAuthority,
-} from '../collab/collab-context';
-import { persistCommentAnchors } from '../collab/comment-anchor-client';
 import type { AnchorWriteBack } from '../comments';
 import { PluginDetailsModal } from './PluginDetailsModal';
 import { DesignSystemPreviewModal } from './DesignSystemPreviewModal';
@@ -438,14 +399,12 @@ function conversationForkPoint(
 
 export async function listConversationsWithRetry(
   projectId: string,
-  workspaceContext?: WorkspaceCollabContext | null,
 ): Promise<Conversation[]> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= CONVERSATION_LOAD_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
       return await listConversations(projectId, {
         throwOnError: true,
-        workspaceContext,
       });
     } catch (err) {
       lastError = err;
@@ -724,7 +683,6 @@ interface Props {
 }
 
 export type ProjectRenameFenceToken = Readonly<{
-  accountGeneration: number;
   scopeKey: string;
   projectId: string;
   mutationVersion: number;
@@ -783,7 +741,6 @@ type ConversationMaterializationRecovery = {
   projectId: string;
   authorityKey: string;
   generation: number;
-  workspaceContext: WorkspaceCollabContext;
   errorMessage: string;
 };
 export function reconcileConversationRecoveryGlobalError(
@@ -1897,7 +1854,6 @@ export function ProjectView({
     };
   }, [projectAuthorizationKey]);
   const analytics = useAnalytics();
-  const ambientWorkspaceContextState = useWorkspaceContext();
   const workspaceContextState = workspaceContextOverride !== undefined
     ? {
         context: workspaceContextOverride,
@@ -1908,7 +1864,6 @@ export function ProjectView({
   const { context: workspaceContext } = workspaceContextState;
   const projectWorkspaceScopeState = useProjectWorkspaceScope(
     project.id,
-    workspaceContext,
     project.workspaceId,
     initialWorkspaceScope,
   );
@@ -1917,12 +1872,10 @@ export function ProjectView({
   // answered unavailable states deliberately do not borrow it.
   const resolvedProjectRunWorkspaceContext = runWorkspaceIdentity(
     projectWorkspaceScopeState,
-    workspaceContext,
     project.workspaceId,
   );
   const personalAdoptionContext = runWorkspacePersonalAdoptionWitness(
     projectWorkspaceScopeState,
-    workspaceContext,
     project.workspaceId,
   );
   // Scope revalidation returns a freshly decoded context object even when the
@@ -1930,13 +1883,11 @@ export function ProjectView({
   // authority carried by resource requests, not that object's allocation:
   // replacing an equivalent object must not blank conversations, messages,
   // tabs, or files while the same project remains open.
-  const projectRunAuthorityKey = workspaceIdentityCacheKey(
-    resolvedProjectRunWorkspaceContext,
-  );
+  const projectRunAuthorityKey = 'local';
   const amrAuthRetryPersonalAdoptionWitness:
     AmrAuthRetryPersonalAdoptionWitness | null = personalAdoptionContext
       ? {
-          workspaceIdentityKey: workspaceIdentityCacheKey(personalAdoptionContext),
+          workspaceIdentityKey: 'local',
           workspaceId: personalAdoptionContext.workspaceId,
           workspaceMemberId: personalAdoptionContext.workspaceMemberId,
           workspaceType: 'personal',
@@ -2062,8 +2013,6 @@ export function ProjectView({
   // renders nothing) unless the workspace context marks the viewer an active
   // team member — safe to mount unconditionally.
   const projectCollab = useProjectCollab(project?.id ?? null, {
-    workspaceContext: projectRunWorkspaceContext,
-    workspaceContextLoading: projectWorkspaceScopeState.loading,
     initialMaterializationPending,
     presenceFilePath: project?.metadata?.entryFile ?? null,
   });
@@ -2245,7 +2194,6 @@ export function ProjectView({
         projectId: project.id,
         conversationId: activeConversationId,
         writeBacks,
-        workspaceContext: projectRunWorkspaceContext,
       });
     },
     [project.id, activeConversationId, projectRunWorkspaceContext],
@@ -2253,13 +2201,10 @@ export function ProjectView({
   const collabValue = useMemo<CollabContextValue>(
     () => ({
       ...projectCollab,
-      workspaceContext: projectRunWorkspaceContext,
-      workspaceContextLoading: projectWorkspaceScopeState.loading,
       projectResourceAuthority,
       onLostAnchors: handleLostAnchors,
     }),
     [
-      projectCollab,
       projectRunWorkspaceContext,
       projectWorkspaceScopeState.loading,
       projectResourceAuthority,
@@ -2852,7 +2797,6 @@ export function ProjectView({
                 projectId: project.id,
                 authorityKey: projectRunAuthorityKey,
                 generation,
-                workspaceContext: requestWorkspaceContext,
                 errorMessage: message,
               }
             : null;
@@ -2905,7 +2849,6 @@ export function ProjectView({
       // schedule. A still-early 404 leaves recovery armed for the next signal.
       const list = await listConversations(recovery.projectId, {
         throwOnError: true,
-        workspaceContext: recovery.workspaceContext,
       });
       if (conversationMaterializationRecoveryRef.current !== recovery) return;
       if (!conversationMaterializationGenerationController.isCurrent(recovery.generation)) return;
@@ -2992,7 +2935,6 @@ export function ProjectView({
     (async () => {
       try {
         const fresh = await createConversation(project.id, undefined, {
-          workspaceContext: requestWorkspaceContext,
         });
         if (cancelled) return;
         if (!fresh) {
@@ -3428,7 +3370,6 @@ export function ProjectView({
   const pendingDaemonTabsRef = useRef<{
     projectId: string;
     state: OpenTabsState;
-    workspaceContext: WorkspaceCollabContext | null;
   } | null>(null);
   const flushTabsDaemonSave = useCallback(() => {
     if (tabsDaemonSaveTimerRef.current != null) {
@@ -3441,7 +3382,6 @@ export function ProjectView({
       void persistTabsToDaemonNow(
         pending.projectId,
         pending.state,
-        pending.workspaceContext,
       );
     }
   }, []);
@@ -3467,7 +3407,6 @@ export function ProjectView({
       pendingDaemonTabsRef.current = {
         projectId: project.id,
         state: stamped,
-        workspaceContext: projectRunWorkspaceContext,
       };
       if (tabsDaemonSaveTimerRef.current != null) {
         clearTimeout(tabsDaemonSaveTimerRef.current);
@@ -3480,7 +3419,6 @@ export function ProjectView({
           void persistTabsToDaemonNow(
             pending.projectId,
             pending.state,
-            pending.workspaceContext,
           );
         }
       }, TAB_PERSIST_DEBOUNCE_MS);
@@ -3543,7 +3481,6 @@ export function ProjectView({
     let next: ProjectFile[];
     try {
       next = await fetchProjectFiles(project.id, {
-        workspaceContext: projectRunWorkspaceContextRef.current,
         requireAuthoritative: true,
         ...(options?.fresh ? { fresh: true } : {}),
       });
@@ -3589,7 +3526,6 @@ export function ProjectView({
       if (cached && cached.mtime === mtime) return cached.text;
       try {
         const text = await fetchProjectFileText(project.id, name, {
-          workspaceContext: projectRunWorkspaceContextRef.current,
         });
         htmlContentCacheRef.current.set(name, { mtime, text });
         return text;
@@ -3603,7 +3539,6 @@ export function ProjectView({
 
   const refreshLiveArtifacts = useCallback(async (): Promise<LiveArtifactSummary[]> => {
     const next = await fetchLiveArtifacts(project.id, {
-      workspaceContext: projectRunWorkspaceContextRef.current,
     });
     setLiveArtifacts(next);
     return next;
@@ -4096,7 +4031,6 @@ export function ProjectView({
       void (async () => {
         try {
           const list = await listConversations(capturedProjectId, {
-            workspaceContext: projectRunWorkspaceContext,
           });
           // Bail if the user switched projects while this request was in
           // flight (#1361 review, Codex P1). The captured project id is the
@@ -4283,7 +4217,6 @@ export function ProjectView({
       if (isPhantomDaemonRunMessage(m)) return;
       void saveMessage(project.id, activeConversationId, m, {
         ...options,
-        workspaceContext: projectRunWorkspaceContext,
       });
     },
     [project.id, activeConversationId, projectRunWorkspaceContext],
@@ -4297,7 +4230,6 @@ export function ProjectView({
         if (found && !isPhantomDaemonRunMessage(found)) {
           void saveMessage(project.id, activeConversationId, found, {
             ...options,
-            workspaceContext: projectRunWorkspaceContext,
           });
         }
         return curr;
@@ -4328,7 +4260,6 @@ export function ProjectView({
         if (persist && saved && activeConversationId && !isPhantomDaemonRunMessage(saved)) {
           void saveMessage(project.id, activeConversationId, saved, {
             ...persistOptions,
-            workspaceContext: projectRunWorkspaceContext,
           });
         }
         return next;
@@ -4353,7 +4284,6 @@ export function ProjectView({
       if (persist) {
         void saveMessage(project.id, conversationId, message, {
           ...options,
-          workspaceContext: projectRunWorkspaceContext,
         });
       }
     },
@@ -4365,7 +4295,6 @@ export function ProjectView({
       const manifestText = await fetchProjectFileText(project.id, BROWSER_PAGE_ARCHIVE_INDEX_FILE, {
         cache: 'no-store',
         cacheBustKey: Date.now(),
-        workspaceContext: projectRunWorkspaceContext,
       });
       if (!manifestText) {
         return { status: 'unavailable', message: t('chat.brandBrowserLocalSnapshotMissing') };
@@ -4386,12 +4315,10 @@ export function ProjectView({
         fetchProjectFileText(project.id, parsed.htmlFile, {
           cache: 'no-store',
           cacheBustKey: parsed.capturedAt,
-          workspaceContext: projectRunWorkspaceContext,
         }),
         fetchProjectFileText(project.id, parsed.cssFile, {
           cache: 'no-store',
           cacheBustKey: parsed.capturedAt,
-          workspaceContext: projectRunWorkspaceContext,
         }),
       ]);
       if (!html?.trim()) {
@@ -4628,7 +4555,6 @@ export function ProjectView({
       if (persist) {
         void saveMessage(project.id, conversationId, message, {
           ...options,
-          workspaceContext: projectRunWorkspaceContext,
         });
       }
     },
@@ -5859,7 +5785,6 @@ export function ProjectView({
           runId: reattachRunId,
           projectId: project.id,
           conversationId: reattachConversationId,
-          workspaceContext: projectRunWorkspaceContext,
           signal: controller.signal,
           cancelSignal: cancelController.signal,
           initialLastEventId:
@@ -7223,7 +7148,6 @@ export function ProjectView({
           void Promise.resolve(
             saveMessage(project.id, runConversationId, userMsg, {
               createOnly: true,
-              workspaceContext: projectRunWorkspaceContext,
             }),
           ).then((stored) => {
             if (!stored || stored.content === userMsg.content) return;
@@ -8261,7 +8185,6 @@ export function ProjectView({
           skillIds: Array.isArray(meta?.skillIds) ? meta.skillIds : [],
           context: runContext,
           designSystemId: runtimeDesignSystemId ?? null,
-          workspaceContext: projectRunWorkspaceContext,
           attachments: runAttachments.map((a) => a.path),
           commentAttachments: runCommentAttachments,
           sessionMode: runSessionMode,
@@ -8340,7 +8263,6 @@ export function ProjectView({
             // The view may already be on a different project/conversation;
             // pin the daemon run to the original row so returning can reattach.
             void saveMessage(project.id, runConversationId, pinnedAssistant, {
-              workspaceContext: projectRunWorkspaceContext,
             });
             updateMessageById(assistantId, (prev) => ({
               ...prev,
@@ -8450,7 +8372,6 @@ export function ProjectView({
           projectFiles,
           {
             omitNativeImageAttachments: usesAnthropicProxy(config),
-            workspaceContext: projectRunWorkspaceContext,
           },
         );
         // Session-dimension hints on the BYOK-OpenCode path too, so
@@ -8476,7 +8397,6 @@ export function ProjectView({
           skillIds: Array.isArray(meta?.skillIds) ? meta.skillIds : [],
           context: runContext,
           designSystemId: runtimeDesignSystemId ?? null,
-          workspaceContext: projectRunWorkspaceContext,
           attachments: runAttachments.map((a) => a.path),
           commentAttachments: runCommentAttachments,
           sessionMode: runSessionMode,
@@ -8547,7 +8467,6 @@ export function ProjectView({
             };
             latestAssistantMsg = pinnedAssistant;
             void saveMessage(project.id, runConversationId, pinnedAssistant, {
-              workspaceContext: projectRunWorkspaceContext,
             });
             updateMessageById(assistantId, (prev) => ({
               ...prev,
@@ -9501,7 +9420,6 @@ export function ProjectView({
     setConversationLoadError(null);
     try {
       const fresh = await createConversation(project.id, undefined, {
-        workspaceContext: projectRunWorkspaceContext,
       });
       if (!fresh) throw new Error('Could not create a conversation for this project.');
       // Eagerly clear messages and update ref so rapid clicks don't create
@@ -9593,7 +9511,6 @@ export function ProjectView({
       const myToken = ++conversationsRefreshTokenRef.current;
       try {
         const list = await listConversations(capturedProjectId, {
-          workspaceContext: projectRunWorkspaceContext,
         });
         if (projectIdRef.current !== capturedProjectId) return false;
         if (conversationsRefreshTokenRef.current !== myToken) return false;
@@ -9634,7 +9551,6 @@ export function ProjectView({
           // Re-seed so the project always has at least one conversation
           // to write into.
           void createConversation(project.id, undefined, {
-            workspaceContext: projectRunWorkspaceContext,
           }).then((fresh) => {
             if (fresh) {
               setConversations([fresh]);
@@ -9749,7 +9665,6 @@ export function ProjectView({
           forkFallbackMessage:
             forkFallbackPredecessorMessageId === undefined ? undefined : assistantMessage,
           forkFallbackPredecessorMessageId,
-          workspaceContext: projectRunWorkspaceContext,
           throwOnError: true,
         });
         if (!fresh) {
@@ -9841,7 +9756,7 @@ export function ProjectView({
       if (!trimmed || trimmed === project.name) return;
       const previousName = project.name;
       const renameContext = projectRunWorkspaceContextRef.current;
-      const renameWorkspaceIdentity = workspaceIdentityCacheKey(renameContext);
+      const renameWorkspaceIdentity = 'local';
       const renameKey = JSON.stringify([
         project.id,
         project.workspaceId ?? null,
@@ -9886,7 +9801,7 @@ export function ProjectView({
         onProjectRenameSettled?.(renameFenceToken, settledProject);
         if (
           projectRef.current.id !== project.id
-          || workspaceIdentityCacheKey(projectRunWorkspaceContextRef.current)
+          || 'local'
             !== renameWorkspaceIdentity
           || (
             projectRef.current.name !== previousName
@@ -11400,7 +11315,6 @@ export function ProjectView({
       <CritiqueTheaterMount
         projectId={project.id}
         enabled={critiqueTheaterEnabled}
-        workspaceContext={projectRunWorkspaceContext}
       />
       {/* ProjectActionsToolbar removed per 00efdcba — hide finalize-design
           toolbar from project header. Restore from cf1cd9bb if product
@@ -11715,7 +11629,6 @@ export function ProjectView({
                   variant="icon"
                   designSystems={designSystems}
                   selectedId={projectDesignSystemId ?? null}
-                  workspaceContext={projectRunWorkspaceContext}
                   disabled={projectMutationReadOnly}
                   onChange={handleChangeDesignSystemId}
                 />
@@ -11866,7 +11779,6 @@ export function ProjectView({
       {contextPluginDetails ? (
         <PluginDetailsModal
           record={contextPluginDetails}
-          workspaceContext={projectRunWorkspaceContext}
           onClose={() => setContextPluginDetails(null)}
           onUse={() => setContextPluginDetails(null)}
           onDuplicate={(record) => void handleDuplicateContextPlugin(record)}
@@ -11877,7 +11789,6 @@ export function ProjectView({
       {contextDesignSystemDetails ? (
         <DesignSystemPreviewModal
           system={contextDesignSystemDetails}
-          workspaceContext={projectRunWorkspaceContext}
           initialViewId="kit"
           onClose={() => setContextDesignSystemDetails(null)}
         />
@@ -12227,12 +12138,11 @@ type RunStatusSnapshot = Awaited<ReturnType<typeof fetchChatRunStatus>>;
 async function resolveTerminalEndedAt(
   runId: string,
   candidate: RunStatusSnapshot | null | undefined,
-  workspaceContext?: WorkspaceCollabContext | null,
 ): Promise<number> {
   if (candidate && !isActiveRunStatus(candidate.status)) {
     return candidate.updatedAt;
   }
-  const probed = await fetchChatRunStatus(runId, workspaceContext).catch(() => null);
+  const probed = await fetchChatRunStatus(runId).catch(() => null);
   if (probed && !isActiveRunStatus(probed.status)) {
     return probed.updatedAt;
   }

@@ -196,59 +196,6 @@ describe('same-run retry runtime', () => {
     expect(fatalCloseDiagnostics).toHaveLength(1);
   });
 
-  it('retries AMR when protocol heartbeats arrive forever without first output', async () => {
-    binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-retry-amr-first-output-bin-'));
-    const fakeVela = await writeHeartbeatStallingVela(
-      binDir,
-      'vela-first-output-then-success',
-      1,
-      250,
-    );
-
-    delete process.env.POSTHOG_KEY;
-    delete process.env.POSTHOG_HOST;
-    delete process.env.LANGFUSE_PUBLIC_KEY;
-    delete process.env.LANGFUSE_SECRET_KEY;
-    delete process.env.LANGFUSE_BASE_URL;
-    delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
-    process.env.VELA_RUNTIME_KEY = `fake-runtime-key-${randomUUID()}`;
-    process.env.VELA_LINK_URL = 'https://amr-link.open-design.ai/v1';
-    // The heartbeats keep both legacy inactivity watchdogs alive. Only the
-    // absolute first-output deadline may terminate attempt 0.
-    process.env.OD_CHAT_RUN_FIRST_OUTPUT_TIMEOUT_MS = '100';
-    process.env.OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS = STALL_WATCHDOG_TIMEOUT_MS;
-    process.env.OD_ACP_STAGE_TIMEOUT_MS = STALL_WATCHDOG_TIMEOUT_MS;
-
-    started = await startServer({ port: 0, returnServer: true }) as StartedServer;
-    await putConfig(started.url, {
-      agentId: 'amr',
-      agentCliEnv: { amr: { VELA_BIN: fakeVela } },
-      telemetry: { metrics: true, content: false, artifactManifest: false },
-      privacyDecisionAt: Date.now(),
-    });
-
-    const run = await createAndWaitForRun(started.url, 'amr');
-    expect(run.status).toBe('succeeded');
-    expect(run.terminalTrigger).toBeNull();
-
-    const events = await readRunEvents(run.eventsLogPath);
-    expect(events.filter((event) => event.event === 'start')).toHaveLength(2);
-    expect(events.filter((event) => event.event === 'end')).toHaveLength(1);
-    expect(events.filter((event) =>
-      event.event === 'agent' && event.data.label === 'waiting_for_first_output',
-    )).toHaveLength(2);
-    expect(events.find((event) => event.event === 'run_retry_attempted')?.data).toMatchObject({
-      failure_category: 'timeout',
-      failure_detail: 'inactivity_timeout',
-      failure_stage: 'first_token_wait',
-      terminal_trigger: 'first_output_deadline',
-      retry_reason: 'transient_failure',
-    });
-    expect(events.find((event) => event.event === 'run_retry_finished')?.data).toMatchObject({
-      retry_result: 'success',
-    });
-  });
-
   it('retries when title-only ACP text is followed by heartbeat-only stalling', async () => {
     binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-retry-amr-title-only-bin-'));
     const fakeVela = await writeTitleOnlyVela(binDir, 'vela-title-only-stall', true);
@@ -291,52 +238,6 @@ describe('same-run retry runtime', () => {
     const events = await readRunEvents(run.eventsLogPath);
     expect(events.filter((event) => event.event === 'start')).toHaveLength(1);
     expect(events.filter((event) => event.event === 'run_retry_attempted')).toHaveLength(0);
-  });
-
-  it('fails AMR after both first-output attempts remain heartbeat-only', async () => {
-    binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-retry-amr-first-output-fail-bin-'));
-    const fakeVela = await writeHeartbeatStallingVela(
-      binDir,
-      'vela-first-output-always-stalls',
-      2,
-    );
-
-    delete process.env.POSTHOG_KEY;
-    delete process.env.POSTHOG_HOST;
-    delete process.env.LANGFUSE_PUBLIC_KEY;
-    delete process.env.LANGFUSE_SECRET_KEY;
-    delete process.env.LANGFUSE_BASE_URL;
-    delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
-    process.env.VELA_RUNTIME_KEY = `fake-runtime-key-${randomUUID()}`;
-    process.env.VELA_LINK_URL = 'https://amr-link.open-design.ai/v1';
-    process.env.OD_CHAT_RUN_FIRST_OUTPUT_TIMEOUT_MS = '100';
-    process.env.OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS = STALL_WATCHDOG_TIMEOUT_MS;
-    process.env.OD_ACP_STAGE_TIMEOUT_MS = STALL_WATCHDOG_TIMEOUT_MS;
-
-    started = await startServer({ port: 0, returnServer: true }) as StartedServer;
-    await putConfig(started.url, {
-      agentId: 'amr',
-      agentCliEnv: { amr: { VELA_BIN: fakeVela } },
-      telemetry: { metrics: true, content: false, artifactManifest: false },
-      privacyDecisionAt: Date.now(),
-    });
-
-    const run = await createAndWaitForRun(started.url, 'amr');
-    expect(run.status).toBe('failed');
-    expect(run.error).toContain('without emitting a first output');
-    expect(run.terminalTrigger).toBe('first_output_deadline');
-
-    const events = await readRunEvents(run.eventsLogPath);
-    expect(events.filter((event) => event.event === 'start')).toHaveLength(2);
-    expect(events.filter((event) => event.event === 'run_retry_attempted')).toHaveLength(1);
-    expect(events.filter((event) => event.event === 'run_retry_finished')).toHaveLength(1);
-    expect(events.find((event) => event.event === 'run_retry_finished')?.data).toMatchObject({
-      retry_result: 'failed',
-      failure_category: 'timeout',
-      failure_detail: 'inactivity_timeout',
-      failure_stage: 'first_token_wait',
-    });
-    expect(events.filter((event) => event.event === 'end')).toHaveLength(1);
   });
 
   it('retries a silent first-token stall caught by the inactivity watchdog', async () => {

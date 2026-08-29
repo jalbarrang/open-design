@@ -4,9 +4,8 @@
  */
 import type { TrackingOnboardingFirstLoopStep, TrackingOnboardingProductType, TrackingOnboardingRole, TrackingOnboardingUseCase } from './onboarding.js';
 import type { TrackingRunRecoveryActionType } from './result-events.js';
-import type { TrackingArtifactKind, TrackingCampaignDeliveryMode, TrackingCampaignId, TrackingCampaignUserState, TrackingNewProjectTab, TrackingProjectKind } from './shared-enums.js';
+import type { TrackingArtifactKind, TrackingNewProjectTab, TrackingProjectKind } from './shared-enums.js';
 import type { DesignSystemsPresetBrandPickerSurfaceViewProps } from './ui-click.js';
-import type { WorkspaceSurfaceViewProps } from './workspace.js';
 // ---- surface_view --------------------------------------------------------
 
 export interface HelpPopoverSurfaceViewProps {
@@ -31,45 +30,6 @@ export interface NewProjectModalSurfaceViewProps {
 export interface PluginReplacementModalSurfaceViewProps {
   page_name: 'home';
   area: 'plugin_replacement_modal';
-}
-
-// DeepSeek V4 Flash campaign discovery surfaces. These are separate from the
-// existing amr_entry click because an impression is the denominator while an
-// AMR entry is generated only after the user actively enters the billing path.
-export interface DeepSeekCampaignModalSurfaceViewProps {
-  page_name: 'home';
-  area: 'deepseek_campaign_modal';
-  element: 'modal';
-  campaign_id: TrackingCampaignId;
-  user_state: TrackingCampaignUserState;
-}
-
-export interface GoPlanSunsetModalSurfaceViewProps {
-  page_name: 'home';
-  area: 'go_plan_sunset_modal';
-  element: 'modal';
-  campaign_id: 'go_plan_sunset_202608';
-  announcement_version: '2026_08_25';
-  delivery_mode: TrackingCampaignDeliveryMode;
-  current_plan_id: string;
-  locale: string;
-}
-
-export interface DeepSeekCampaignBadgeSurfaceViewProps {
-  page_name: 'home';
-  area: 'campaign_badge';
-  element: 'deepseek_v4_flash' | 'deepseek_v4_pro';
-  campaign_id: TrackingCampaignId;
-  user_state: TrackingCampaignUserState;
-}
-
-export interface DeepSeekCampaignModelBenefitSurfaceViewProps {
-  page_name: 'home';
-  area: 'execution_settings_popover';
-  element: 'deepseek_v4_flash_benefit' | 'deepseek_v4_pro_benefit';
-  campaign_id: TrackingCampaignId;
-  user_state: TrackingCampaignUserState;
-  model_id: string;
 }
 
 // Impression of the plugin detail modal opened from the home Community
@@ -113,21 +73,6 @@ export interface DesignSystemsTemplatesModalSurfaceViewProps {
   area: 'templates_modal';
   templates_id?: string;
   templates_type?: string;
-}
-
-// Impression of the hosted-AMR nudge under a failed run's error toast. Fires
-// once per render of the toast for a non-AMR agent whose failure is a
-// model/auth/quota error (`error_code` carries the specific class).
-export interface RunFailedToastSurfaceViewProps {
-  page_name: 'chat_panel';
-  area: 'chat_panel';
-  element: 'run_failed_toast';
-  error_code: string;
-  project_id: string;
-  project_kind: TrackingProjectKind | null;
-  conversation_id: string | null;
-  assistant_message_id: string;
-  run_id: string | null;
 }
 
 export interface RunRecoveryActionSurfaceViewProps {
@@ -281,15 +226,9 @@ export interface StudioOnboardingHintSurfaceViewProps {
 }
 
 export type SurfaceViewProps =
-  | WorkspaceSurfaceViewProps
-  | RunFailedToastSurfaceViewProps
   | RunRecoveryActionSurfaceViewProps
   | RunStartBlockedSurfaceViewProps
   | PreviewRunStatusSurfaceViewProps
-  | DeepSeekCampaignModalSurfaceViewProps
-  | GoPlanSunsetModalSurfaceViewProps
-  | DeepSeekCampaignBadgeSurfaceViewProps
-  | DeepSeekCampaignModelBenefitSurfaceViewProps
   | HomeRecommendationSurfaceViewProps
   | StudioOnboardingHintSurfaceViewProps
   | HelpPopoverSurfaceViewProps

@@ -28,7 +28,6 @@ import {
   buildRecoveryTaskAnalytics,
   runAgentProviderId,
 } from '../analytics/run-task';
-import { amrHandoffDeviceId, attributedAmrUrl, recordAmrEntry } from '../analytics/amr-attribution';
 import { useI18n, useT } from '../i18n';
 import { startersForProduct, type ProductType } from '../onboarding/recommendation';
 import { starterCopyFor } from '../onboarding/starter-copy';
@@ -47,8 +46,6 @@ import type { Dict } from '../i18n/types';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
 import { useLiquidGlass } from '../hooks/useLiquidGlass';
 import { projectRawUrl } from '../providers/registry';
-import { appendResourceQuery } from '../collab/workspace-identity';
-import { useProjectCollabContext } from '../collab/collab-context';
 import { takeComposerSeedFor } from '../state/libraryHandoff';
 import { splitOnQuestionForms } from '../artifacts/question-form';
 import { stripArtifact } from '../artifacts/strip';
@@ -91,21 +88,10 @@ import {
   isAmrSessionAuthenticated,
 } from './amrLoginPolling';
 import {
-  amrPlansUrlForProfile,
-  amrRechargeUrlForProfile,
-  formatModelWindowRetryAt,
-  resolveRunFailureUi,
-} from '../runtime/amr-guidance';
-import {
   fetchVelaLoginStatus,
   type VelaLoginStatus,
 } from '../providers/daemon';
 import { RESUME_CONTINUE_PROMPT } from '../runtime/resume';
-import {
-  canConsumeAmrAuthRetryContinuation,
-  type AmrAuthRetryContinuation,
-  type AmrAuthRetryPersonalAdoptionWitness,
-} from '../runtime/amr-auth-retry-continuation';
 import {
   ChatComposer,
   type ChatComposerHandle,
@@ -120,6 +106,7 @@ import { UserActionCard, type UserActionCardTone } from './UserActionCard';
 import { repoConnectCopy } from './design-system-github-evidence';
 import { isRenderableSketchJson, SketchPreview } from './SketchPreview';
 import type { SettingsSection } from './SettingsDialog';
+import { appendResourceQuery } from '../lib/resource-query';
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
@@ -443,13 +430,12 @@ function ChatArtifactPreview({
   projectId: string | null;
   file: ProjectFile;
 }) {
-  const { workspaceContext } = useProjectCollabContext();
   if (!projectId) {
     return <ChatArtifactFallback kind={file.kind} />;
   }
 
   const url = appendResourceQuery(
-    projectRawUrl(projectId, file.name, workspaceContext),
+    projectRawUrl(projectId, file.name),
     `v=${Math.round(file.mtime)}`,
   );
   if (isRenderableSketchJson(file)) {
@@ -457,7 +443,6 @@ function ChatArtifactPreview({
       <SketchPreview
         projectId={projectId}
         file={file}
-        workspaceContext={workspaceContext}
       />
     );
   }
@@ -1072,7 +1057,6 @@ export function ChatPane({
   designSystemPicker,
   config,
 }: Props) {
-  const { workspaceContext } = useProjectCollabContext();
   const { t, locale } = useI18n();
   const analytics = useAnalytics();
   const displayMessages = useMemo(
@@ -4752,7 +4736,6 @@ function UserMessageImpl({
   showSessionModeChip: boolean;
   highlighted?: boolean;
 }) {
-  const { workspaceContext } = useProjectCollabContext();
   const attachments = sortChatAttachmentsForDisplay(message.attachments ?? []);
   const commentAttachments = message.commentAttachments ?? [];
   const workspaceItems = message.runContext?.workspaceItems ?? [];
@@ -4837,7 +4820,7 @@ function UserMessageImpl({
                 </span>
                 {a.kind === 'image' && projectId ? (
                   <img
-                    src={projectRawUrl(projectId, a.path, workspaceContext)}
+                    src={projectRawUrl(projectId, a.path)}
                     alt={a.name}
                   />
                 ) : (

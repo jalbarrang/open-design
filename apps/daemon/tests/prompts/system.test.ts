@@ -380,36 +380,6 @@ describe('composeSystemPrompt', () => {
       expect(prompt).toContain('When NOT to emit `<artifact>`');
     });
 
-    it('pins filesystem artifact handoff for AMR runs', () => {
-      const prompt = composeSystemPrompt({ agentId: 'amr' });
-      expect(prompt).toContain('## Filesystem handoff');
-      expect(prompt).toContain('filesystem execution profile');
-      expect(prompt).toContain("runtime's native tool-call interface");
-      expect(prompt).toContain('Never type a tool invocation into assistant text');
-      expect(prompt).toContain('This tool-call rule does not apply to OpenDesign UI markup');
-      expect(prompt).toContain('emit the complete `<question-form>...</question-form>` block directly');
-      expect(prompt).toContain('Do not output generated source code in a `<artifact type="text/html">...</artifact>` block.');
-    });
-
-    it('uses Vela media defaults only for AMR and forbids direct Vela calls', () => {
-      const amrPrompt = composeSystemPrompt({
-        agentId: 'amr',
-        metadata: { kind: 'image', imageModel: 'vela/gpt-image-2' } as any,
-      });
-      expect(amrPrompt).toContain('Image model: `vela/gpt-image-2`');
-      expect(amrPrompt).toContain(
-        'Video model: `vela/doubao-seedance-2-0-260128`',
-      );
-      expect(amrPrompt).toContain('### OpenDesign Cloud media defaults');
-      expect(amrPrompt).not.toContain('### Run-scoped BYOK media defaults');
-      expect(amrPrompt).toContain('Never invoke the `vela` CLI directly');
-      expect(amrPrompt).toContain('trusted Workspace attribution');
-
-      const claudePrompt = composeSystemPrompt({ agentId: 'claude' });
-      expect(claudePrompt).not.toContain('Image model: `vela/gpt-image-2`');
-      expect(claudePrompt).toContain('`--model flux-pro-ultra`');
-    });
-
     it('keeps image completion copy concrete while retaining internal diagnostics', () => {
       const imagePrompt = composeSystemPrompt({
         agentId: 'amr',

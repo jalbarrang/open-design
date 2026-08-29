@@ -19,7 +19,6 @@ import type {
   InstalledPluginRecord,
   LocalCatalogScope,
   ProjectKind,
-  WorkspaceCollabContext,
   WorkspaceProjectSummary,
   AudioVoiceOption,
   WorkspaceContextItem,
@@ -60,10 +59,6 @@ import { FigmaImportModal } from './FigmaImportModal';
 import { fetchMcpServers } from '../state/mcp';
 import { takeHomeComposerAssetSeed } from '../state/libraryHandoff';
 import { useI18n, useT } from '../i18n';
-import {
-  formatModelWindowRetryAt,
-  modelWindowLimitCopy,
-} from '../runtime/amr-guidance';
 import {
   localizeSkillName,
   localizeSkillPrompt,
@@ -112,14 +107,6 @@ import { navigate } from '../router';
 import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry';
 import { workspaceContextLinkedDirs } from './workspace-context';
 import {
-  currentWorkspaceAccountGeneration,
-  useTeamProjects,
-  useWorkspaceContext,
-  workspaceResourceReadContext,
-} from '../collab/useWorkspaceContext';
-import { useWorkspaceInvalidation } from '../collab/workspace-events';
-import { useWorkspaceSnapshotActivation } from '../collab/workspace-snapshot-activation';
-import {
   buildHomeMediaComposer,
   homeMediaSurfaceForChipId,
   metadataForHomeMediaComposer,
@@ -146,13 +133,11 @@ import { localizePluginTitle } from './plugins-home/localization';
 import type { PluginUseAction } from './plugins-home/useActions';
 import { examplePresetSeedPrompt } from './plugins-home/presetSeedPrompt';
 import { localizePluginDescription } from './plugins-home/localization';
-import type { SharedProjectPredicate } from '../collab/all-projects-list';
 import { RecentProjectsStrip } from './RecentProjectsStrip';
 import type { Recommendation } from '../onboarding/recommendation';
 import type { OnboardingEntry } from '../onboarding/onboarding-entry';
 import { AnimatePresence } from 'motion/react';
 import { DeepSeekV4FlashCampaign } from './DeepSeekV4FlashCampaign';
-import type { DeepSeekV4FlashCampaignAudience } from '../campaigns/deepseek-v4-flash';
 
 export interface ActivePlugin {
   record: InstalledPluginRecord;
@@ -530,7 +515,6 @@ export function HomeView({
 }: Props) {
   const { locale, t } = useI18n();
   const analytics = useAnalytics();
-  const workspaceContextState = useWorkspaceContext();
   const { context: workspaceContext } = workspaceContextState;
   const pluginCatalogWorkspaceContext = workspaceResourceReadContext(workspaceContextState);
   const lastSettledLocalCatalogScopeRef = useRef<LocalCatalogScope | null>(
@@ -542,7 +526,6 @@ export function HomeView({
   }
   const pluginAccountGeneration = currentWorkspaceAccountGeneration();
   const pluginCatalogOptions = {
-    workspaceContext: pluginCatalogWorkspaceContext,
     accountGeneration: pluginAccountGeneration,
   };
   // Keep the provisional local catalogue available for default-template
@@ -826,7 +809,7 @@ export function HomeView({
   const detailsTemplate = useMemo(() => {
     if (!detailsRecord) return null;
     return (
-      buildCommunityTemplates(plugins, locale, t, workspaceContext)
+      buildCommunityTemplates(plugins, locale, t)
         .find((template) => template.id === detailsRecord.id) ?? null
     );
   }, [detailsRecord, plugins, locale, t, workspaceContext]);
@@ -1623,14 +1606,12 @@ export function HomeView({
     const writeWorkspaceContext = workspaceContextState.identityChangePending
       ? null
       : resolvedWorkspaceContextForWrite(
-          workspaceContextState,
           { unavailablePolicy: 'unscoped' },
         );
     const result = await applyPlugin(record.id, {
       locale,
       inputs,
       pluginSource: record.source,
-      workspaceContext: writeWorkspaceContext,
     });
     clearPendingApply();
     return result;
@@ -2064,7 +2045,6 @@ export function HomeView({
         workspaceContext: workspaceContextState.identityChangePending
           ? null
           : resolvedWorkspaceContextForWrite(
-              workspaceContextState,
               { unavailablePolicy: 'unscoped' },
             ),
       });
@@ -3100,7 +3080,6 @@ export function HomeView({
       />
       {isActive ? <AppWashKineticGrid clipBottomTo=".home-hero" /> : null}
       <HomeHero
-        workspaceContext={workspaceContext}
         ref={inputRef}
         active={isActive}
         firstRunGuide={projectsLoading ? undefined : projects.length === 0}
@@ -3303,7 +3282,6 @@ export function HomeView({
         ) : detailsRecord ? (
           <PluginDetailsModal
             record={detailsRecord}
-            workspaceContext={workspaceContext}
             onClose={() => {
               // Covers the close button, Esc and the backdrop — every
               // variant funnels dismissal through this single onClose.
@@ -3354,7 +3332,6 @@ export function HomeView({
         {figmaModalOpen ? (
           <FigmaImportModal
             onClose={() => setFigmaModalOpen(false)}
-            workspaceContext={workspaceContext}
             resolveProjectId={async () => {
               // The homepage has no project yet; create a bare one to decode
               // the Figma file into, then navigate into it.
@@ -3363,7 +3340,6 @@ export function HomeView({
                   name: 'Imported from Figma',
                   skillId: null,
                   designSystemId: null,
-                  workspaceContext: resolvedWorkspaceContextForWrite(workspaceContextState),
                 });
                 return project.id;
               } catch {
@@ -3372,7 +3348,7 @@ export function HomeView({
             }}
             onImported={(result, projectId) => {
               void (async () => {
-                await patchProject(projectId, { pendingPrompt: result.suggestedPrompt }, workspaceContext);
+                await patchProject(projectId, { pendingPrompt: result.suggestedPrompt });
                 setFigmaModalOpen(false);
                 onOpenProject(projectId);
               })();
@@ -3386,7 +3362,6 @@ export function HomeView({
                     skillId: null,
                     designSystemId: null,
                     pendingPrompt: reshapePrompt,
-                    workspaceContext: resolvedWorkspaceContextForWrite(workspaceContextState),
                   });
                   setFigmaModalOpen(false);
                   onOpenProject(project.id);

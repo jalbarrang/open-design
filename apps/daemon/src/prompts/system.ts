@@ -463,10 +463,6 @@ const MEDIA_DISPATCH_HINT = `
 
 If the user asks you to generate an image, video, or audio file — regardless of which provider or model they mention (fal, Replicate, OpenAI, etc.) — use the daemon dispatcher via your **Bash tool**. Do NOT call provider REST APIs directly.
 
-OpenDesign Cloud models use the \`vela/*\` prefix. Never invoke the \`vela\`
-CLI directly for those models: the OD dispatcher owns trusted Workspace
-attribution, polling, downloads, and final project-file placement.
-
 The daemon injects these env vars into your shell (**POSIX bash — not PowerShell**):
 
 - \`OD_NODE_BIN\`   — absolute path to the Node runtime
@@ -562,43 +558,7 @@ function renderMediaDispatchHint(
       'MODEL_SELECTION_GUIDANCE',
       renderMediaDispatchModelGuidance(effectiveDefaults),
     );
-  return `${hint}${renderByokMediaDefaultsHint(defaults)}${renderRuntimeMediaDefaultsHint(runtimeDefaults, defaults)}`;
-}
-
-function mediaDefaultsForRuntime(
-  agentId: string | null | undefined,
-  defaults?: ByokMediaDefaults,
-): ByokMediaDefaults | undefined {
-  if (agentId !== 'amr') return defaults;
-  return {
-    ...defaults,
-    imageModel: defaults?.imageModel?.trim() || 'vela/gpt-image-2',
-    videoModel:
-      defaults?.videoModel?.trim()
-      || 'vela/doubao-seedance-2-0-260128',
-  };
-}
-
-function renderRuntimeMediaDefaultsHint(
-  runtimeDefaults: ByokMediaDefaults | undefined,
-  userDefaults: ByokMediaDefaults | undefined,
-): string {
-  if (!runtimeDefaults) return '';
-  const lines: string[] = [];
-  if (!userDefaults?.imageModel?.trim() && runtimeDefaults.imageModel?.trim()) {
-    lines.push(`- Image model: \`${runtimeDefaults.imageModel.trim()}\``);
-  }
-  if (!userDefaults?.videoModel?.trim() && runtimeDefaults.videoModel?.trim()) {
-    lines.push(`- Video model: \`${runtimeDefaults.videoModel.trim()}\``);
-  }
-  if (lines.length === 0) return '';
-  return `
-
-### OpenDesign Cloud media defaults
-
-This AMR run uses these managed media defaults when the user has not selected
-a different run-scoped model:
-${lines.join('\n')}`;
+  return `${hint}${renderByokMediaDefaultsHint(defaults)}`;
 }
 
 const FILESYSTEM_HANDOFF_OVERRIDE = `
@@ -915,10 +875,7 @@ export function composeSystemPrompt({
   // layered composition until the A/B comparison signs off.
   const isSlimCore = promptCoreVariant === 'slim';
   const isAskModeEarly = sessionMode === 'chat';
-  const runtimeMediaDefaults = mediaDefaultsForRuntime(
-    agentId,
-    byokMediaDefaults,
-  );
+  const runtimeMediaDefaults = byokMediaDefaults;
   // Media surfaces (image / video / audio) must be resolved BEFORE the head
   // is built: their generation contract, rather than the design charter's
   // HTML workflow, is the sole workflow authority on these runs.
@@ -1354,11 +1311,6 @@ export function composeSystemPrompt({
     // mode for anything that actually generates media.
   } else if (isMediaSurface) {
     parts.push(renderMediaGenerationContract(mediaExecution, byokMediaDefaults));
-    const runtimeDefaultsHint = renderRuntimeMediaDefaultsHint(
-      runtimeMediaDefaults,
-      byokMediaDefaults,
-    );
-    if (runtimeDefaultsHint) parts.push(runtimeDefaultsHint);
   } else if (mediaHintSignal ?? true) {
     // Non-media projects (prototype, deck, etc.): inject a lightweight hint
     // so the agent uses `od media generate` if the user asks for an image/video

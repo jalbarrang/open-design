@@ -14,12 +14,10 @@ import { Dialog } from '@open-design/components';
 import {
   PLUGIN_SHARE_ACTION_PLUGIN_IDS,
   resolveLocalizedText,
-  workspaceContextHasTeamIdentity,
   type ApplyResult,
   type InstalledPluginRecord,
   type PluginSourceKind,
   type SkillSummary,
-  type WorkspaceCollabContext,
 } from '@open-design/contracts';
 import {
   fetchSkills,
@@ -62,7 +60,6 @@ import {
   resolvedWorkspaceContextForWrite,
   setPluginMarketplaceTrust,
   uninstallPlugin,
-  workspaceProjectHeaders,
   type PluginInstallOutcome,
   type PluginShareAction,
   type PluginShareProjectOutcome,
@@ -88,16 +85,6 @@ import { copyToClipboard } from '../lib/copy-to-clipboard';
 import type { PluginUseAction } from './plugins-home/useActions';
 import { AnimatePresence } from 'motion/react';
 import { navigate } from '../router';
-import {
-  beginWorkspaceScopedRead,
-  currentWorkspaceAccountGeneration,
-  useWorkspaceContext,
-  workspaceIdentityCacheKey,
-} from '../collab/useWorkspaceContext';
-import {
-  useWorkspaceInvalidation,
-} from '../collab/workspace-events';
-import { useWorkspaceSnapshotActivation } from '../collab/workspace-snapshot-activation';
 
 type PluginsTab = 'installed' | 'available' | 'sources' | 'team';
 
@@ -249,7 +236,6 @@ export function PluginsView({
   // stamp new installs with the acting workspace. `useWorkspaceContext` is a
   // coalesced read shared across the nav shell, so calling it again here does
   // not fan out an extra fetch.
-  const pluginsWorkspaceContextState = useWorkspaceContext();
   const {
     context: pluginsWorkspaceContext,
     loading: pluginsWorkspaceContextLoading,
@@ -269,7 +255,7 @@ export function PluginsView({
         : 'headerless';
   const pluginsIdentity = JSON.stringify([
     pluginsAccountGeneration,
-    workspaceIdentityCacheKey(pluginsWorkspaceContext),
+    'local',
     pluginsReadMode,
   ]);
   const pluginsIdentityRef = useRef(pluginsIdentity);
@@ -406,7 +392,6 @@ export function PluginsView({
     setNotice(null);
     const result = await applyPlugin(record.id, {
       locale,
-      workspaceContext: pluginsContextRef.current,
     });
     setPendingApplyId(null);
     if (!result) {
@@ -603,7 +588,6 @@ export function PluginsView({
         {!visibleLoading && activeTab === 'installed' ? (
           <PluginsHomeSection
             plugins={userPlugins}
-            workspaceContext={pluginsWorkspaceContext}
             loading={false}
             activePluginId={activePlugin?.record.id ?? null}
             pendingApplyId={pendingApplyId}
@@ -768,7 +752,6 @@ export function PluginsView({
           <TeamPanel
             t={t}
             plugins={userPlugins}
-            workspaceContext={pluginsWorkspaceContext}
             workspaceIdentity={pluginsIdentity}
             workspaceReadMode={pluginsReadMode}
           />
@@ -779,7 +762,6 @@ export function PluginsView({
         {detailsRecord ? (
         <PluginDetailsModal
           record={detailsRecord}
-          workspaceContext={pluginsWorkspaceContext}
             onClose={() => setDetailsRecord(null)}
             onUse={(record, action) => void handleUsePlugin(record, action)}
             onDuplicate={(record) => void handleDuplicatePlugin(record)}
@@ -1038,11 +1020,6 @@ export function ExtensionsMarketplace({
   const { locale, t } = useI18n();
   const analytics = useAnalytics();
   // My own member id, to keep the Personal tab to resources I actually own.
-  const {
-    context: workspaceContext,
-    loading: workspaceContextLoading,
-    failure: workspaceContextFailure,
-  } = useWorkspaceContext();
   const workspaceDimensions = workspaceAnalyticsDimensions(workspaceContext);
   // The LATEST context, for `refresh()`'s commit guard. `refresh` is recreated
   // every render, but the mount effect below captures one closure — so the guard
@@ -1244,7 +1221,7 @@ export function ExtensionsMarketplace({
     if (createKind === 'skill') {
       setCreateBusy('import');
       try {
-        const result = await installSkill({ source: url }, workspaceContext);
+        const result = await installSkill({ source: url });
         if ('error' in result) {
           trackResourceResult({
             kind: 'skill', scope: 'personal', action: 'add', result: 'failed',
@@ -1273,7 +1250,7 @@ export function ExtensionsMarketplace({
     }
     setCreateBusy('import');
     try {
-      const outcome = await installPluginSource(url, workspaceContext);
+      const outcome = await installPluginSource(url);
       if (outcome.ok) {
         await refresh();
         setCreateOpen(false);
@@ -1337,7 +1314,7 @@ export function ExtensionsMarketplace({
       // Stamp the imported skill with the acting workspace, same as the
       // plugin upload path just above — see `fetchSkills(workspaceContext)`
       // in `refresh()` below for the read-side counterpart.
-      const result = await importSkill(input, workspaceContext);
+      const result = await importSkill(input);
       if ('error' in result) {
         trackResourceResult({
           kind: 'skill', scope: 'personal', action: 'add', result: 'failed',
@@ -1372,7 +1349,7 @@ export function ExtensionsMarketplace({
     const accountGeneration = currentWorkspaceAccountGeneration();
     const issuedIdentity = JSON.stringify([
       accountGeneration,
-      workspaceIdentityCacheKey(read.context),
+      'local',
       read.context ? 'scoped' : 'headerless',
     ]);
     setLoading(true);
@@ -1415,7 +1392,7 @@ export function ExtensionsMarketplace({
         : 'headerless';
   const marketplaceIdentity = JSON.stringify([
     marketplaceAccountGeneration,
-    workspaceIdentityCacheKey(workspaceContext),
+    'local',
     marketplaceReadMode,
   ]);
   const marketplaceIdentityRef = useRef(marketplaceIdentity);
@@ -1579,7 +1556,6 @@ export function ExtensionsMarketplace({
       },
     },
     {
-      workspaceContext: hasTeamWorkspace ? workspaceContext : null,
       enabled: hasTeamWorkspace,
       onActive: () => {
         if (!isActiveRef.current) {
@@ -1755,8 +1731,8 @@ export function ExtensionsMarketplace({
     try {
       const ok =
         kind === 'plugins'
-          ? await uninstallPlugin(id, workspaceContext)
-          : 'ok' in (await uninstallSkill(id, workspaceContext));
+          ? await uninstallPlugin(id)
+          : 'ok' in (await uninstallSkill(id));
       if (!ok) {
         setToast({ message: t('pluginsView.uninstallFailed', { title }), tone: 'error' });
         return;
@@ -1780,7 +1756,6 @@ export function ExtensionsMarketplace({
     try {
       const outcome = await installPluginSource(
         plugin.installSource ?? plugin.entry.name,
-        workspaceContext,
       );
       if (outcome.ok) {
         await refresh();
@@ -2450,7 +2425,6 @@ export function ExtensionsMarketplace({
         {cardDetail?.kind === 'plugin' ? (
           <PluginDetailsModal
             record={cardDetail.record}
-            workspaceContext={workspaceContext}
             onClose={() => setCardDetail(null)}
             onUse={(record, action) => {
               setCardDetail(null);
@@ -4233,7 +4207,6 @@ function normalizePluginName(name: string): string {
 function TeamPanel({
   t,
   plugins,
-  workspaceContext,
   workspaceIdentity,
   workspaceReadMode,
 }: {
@@ -4242,7 +4215,6 @@ function TeamPanel({
   /** The acting workspace, passed down from `PluginsView` (which already holds
    *  it) rather than read again here, so this panel and the plugin list it sits
    *  beside can never disagree about who is asking. */
-  workspaceContext: WorkspaceCollabContext | null;
   /** Account generation + complete Workspace identity + settlement mode. */
   workspaceIdentity: string;
   workspaceReadMode: PluginWorkspaceReadMode;

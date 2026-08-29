@@ -4,6 +4,13 @@ Design doc (human/reviewer-facing). Implementation runbooks per slice are writte
 
 Status: living doc · Parent: #3408 · This is the **background + plan overview** for reviewers; each fix/optimization has, or will have, its own deeper spec.
 
+> **Historical note.** This spec was written while OpenDesign shipped the
+> OpenDesign Cloud / AMR runtime backed by the `vela` CLI. That capability has
+> since been removed; OpenDesign runs on local coding-agent CLIs and BYOK only.
+> The AMR/vela measurements and cross-repo items below are kept as a record of
+> the investigation, not as current or planned work.
+
+
 ---
 
 # Part 1 · Current state (reviewer background)
@@ -78,15 +85,10 @@ Ordered by `our-fault × user reach × run count × balance/cost impact × engin
 
 ### P2 · Cacheable-prefix stabilization (cheap, helps every agent incl. AMR)
 - **Type** Perf/engine · **Our fault** Yes · **Benefit** Raises the cross-turn first-call cache floor (production: AMR turn-2+ first call hits only ~21%, carried entirely by the static `[system+tools]` prefix) · **Cost** Small
-- **Cross-cutting, with data** This is not an AMR-only problem: only `claude`/`codebuddy`/`pi` resume natively; the other ~21 adapters resend the flattened transcript every turn (`resumesSessionViaCli` enumeration). Production proof — turn-2+ `input_tokens` p50: codex 884k · gemini 326k · hermes 424k · amr 64k (all recompose, balloon with history) vs claude **3.0k** (native resume). Severity splits by upstream: OpenAI/Gemini auto-prefix-cache absorbs most of it so P2 alone helps them with no vela change; DeepSeek (AMR) auto-cache decays with the gap → also needs P3. See `amr-latency-session-reuse-prompt-cache.md` Root cause §"not AMR-specific".
+- **Cross-cutting, with data** This is not an AMR-only problem: only `claude`/`codebuddy`/`pi` resume natively; the other ~21 adapters resend the flattened transcript every turn (`resumesSessionViaCli` enumeration). Production proof — turn-2+ `input_tokens` p50: codex 884k · gemini 326k · hermes 424k · amr 64k (all recompose, balloon with history) vs claude **3.0k** (native resume). Severity splits by upstream: OpenAI/Gemini auto-prefix-cache absorbs most of it so P2 alone helps them with no vela change; DeepSeek (AMR) auto-cache decays with the gap → also needs P3. (The AMR drill-down that carried this analysis was removed with the Cloud runtime.)
 - **Current state** Volatile blocks (file list / MCP / personal memory / run context) are interleaved at the FRONT of the prefix; any change shifts bytes and breaks even the static-prefix hit. #4203 did dedup + on-demand gating but did NOT move the residual volatile blocks after the stable transcript.
 - **Fix** Move volatile blocks after the stable prefix (startup-spec Phase 3a) + add the "prefix-fingerprint invariant" red-line test so future features can't silently re-break it.
 - Drill-down: `agent-startup-latency-profiling.md` (Phase 3a + guardrail)
-
-### P3 (project) · AMR latency: cross-turn cache reuse
-- **Type** Performance project (cross-repo vela) · **Our fault** Yes (architecture) · **Benefit** AMR turn-2+ **first** call (TTFT-critical) is cache-cold — production `link.usage_events`: ~21% hit, ~24.5k uncached, ~12s, while within-turn loop calls hit ~79%; lift first-call toward ~80% → lower TTFT + balance burn; **reach 31% of users** · **Cost** Large (project)
-- **Current state (production-measured, corrects earlier draft)** The old "153k uncached every turn" was wrong — 153k is the context SIZE, mostly cached; real per-turn-first-call uncached is ~24.5k. The history doesn't reuse because we flatten opencode's structured turn into text + feed a fresh session (structured cache no longer byte-matches), and DeepSeek's auto-cache decays with the inter-turn gap (first-call hit 55%@15s → 21%@120s). Step 1 = cheap gateway 1h TTL + the P2 prefix move (hold the static prefix warm); Step 2 = vela session reuse (large) only if first-call uncached remains dominant after Step 1.
-- Drill-down: `amr-latency-session-reuse-prompt-cache.md`
 
 ---
 
@@ -96,4 +98,4 @@ Ordered by `our-fault × user reach × run count × balance/cost impact × engin
 - ❌ Treating opencode 31s as a "performance bug": mostly a metric-definition issue (see P2).
 
 ## Suggested execution order
-**P0-b(fix_config)→ P1(process_exit follow-up + reduce_context)→ P2(switch_model + TTFT definition + cacheable-prefix stabilization)→ P3(AMR cross-turn cache project).** P0-a is complete.
+**P0-b(fix_config)→ P1(process_exit follow-up + reduce_context)→ P2(switch_model + TTFT definition + cacheable-prefix stabilization).** P0-a is complete.

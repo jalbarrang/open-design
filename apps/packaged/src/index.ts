@@ -56,7 +56,7 @@ import {
 } from "./logging.js";
 import { resolvePackagedNamespacePaths } from "./paths.js";
 import { createObsoleteInstalledOuterRetirement } from "./obsolete-installed-outer.js";
-import { findPackagedDeeplinkArg, launchPackagedPayloadDesktop } from "./payload-desktop-launch.js";
+import { launchPackagedPayloadDesktop } from "./payload-desktop-launch.js";
 import { packagedEntryUrl, registerOdProtocol } from "./protocol.js";
 import { startPackagedSidecars } from "./sidecars.js";
 import { reportStartupFailure, resolveStartupDistinctId } from "./startup-telemetry.js";
@@ -151,7 +151,6 @@ async function main(): Promise<void> {
     return;
   }
   const existingDesktop = await inspectExistingDesktopForLauncher(namespace, {
-    deeplinkUrl: findPackagedDeeplinkArg(process.argv),
     incomingVersion: namespaceConfig.appVersion,
     logger: console,
     paths: initialPaths,
@@ -219,8 +218,8 @@ async function main(): Promise<void> {
   });
   applyPackagedElectronPathOverrides(paths);
   applyPackagedUpdaterEnv(activeConfig.updateMetadataUrl);
-  if (!claimPackagedSingleInstanceLock(app, (argv) => {
-    secondInstanceHandoff.handle(findPackagedDeeplinkArg(argv));
+  if (!claimPackagedSingleInstanceLock(app, () => {
+    secondInstanceHandoff.handle();
   })) {
     return;
   }
@@ -246,7 +245,6 @@ async function main(): Promise<void> {
 
   const sidecars = await startPackagedSidecars(runtime, paths, {
     appVersion: activeConfig.appVersion,
-    amrProfile: activeConfig.amrProfile,
     daemonCliEntry: activeConfig.daemonCliEntry,
     daemonSidecarEntry: activeConfig.daemonSidecarEntry,
     electronNodeCommand: launcherRuntime.electronNodeCommand,
@@ -256,8 +254,6 @@ async function main(): Promise<void> {
     telemetryRelayUrl: activeConfig.telemetryRelayUrl,
     posthogKey: activeConfig.posthogKey,
     posthogHost: activeConfig.posthogHost,
-    velaWebUrl: activeConfig.velaWebUrl,
-    velaWebUrls: activeConfig.velaWebUrls,
     // PR #974 round-5 (lefarcen P2): the Electron entry runs desktop
     // main alongside the daemon, so the import-folder gate must be
     // pinned ON from request 0. See `apps/packaged/src/headless-runtime.ts`
@@ -325,8 +321,6 @@ async function main(): Promise<void> {
       return sidecars.daemon.url;
     },
     windowTitle: resolvePackagedWindowTitle(activeConfig),
-    inviteProtocolClientPath:
-      process.platform === "win32" ? launcherRuntime.installedLaunchPath : null,
     async onExternalShow() {
       await retireObsoleteInstalledOuter();
     },
@@ -340,10 +334,7 @@ async function main(): Promise<void> {
       }).catch((error: unknown) => {
         packagedLogger?.warn("failed to sync Windows uninstall registry version", { error });
       });
-      secondInstanceHandoff.attach({
-        dispatchDeeplink: controls.dispatchInviteDeeplink,
-        show: controls.show,
-      });
+      secondInstanceHandoff.attach({ show: controls.show });
     },
     preloadPath: join(app.getAppPath(), "preload.cjs"),
     update: {

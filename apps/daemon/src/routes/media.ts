@@ -13,10 +13,6 @@ import { findMediaModel } from '../media/models.js';
 import type { MediaTaskError } from '../media/tasks.js';
 import type { ImageGenerationRequestSummary } from '../media/image-generation-retry.js';
 import type { RouteDeps } from '../server-context.js';
-import type {
-  AuthorizeProjectRequest,
-  AuthorizeProjectToolRequest,
-} from '../collab/project-request-authority.js';
 import { proxyDispatcherRequestInit } from '../connectionTest.js';
 import {
   aihubmixCatalogUrl,
@@ -31,7 +27,6 @@ import {
   type ToolTokenGrant,
 } from '../tool-tokens.js';
 import { scaffoldHyperFramesComposition } from '../media/hyperframes-scaffold.js';
-import { normalizePersistedAutomationWorkspaceScope } from '../automations/workspace-scope.js';
 
 const LONG_MEDIA_PROXY_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -49,10 +44,7 @@ function mediaProviderId(model: string): string | undefined {
 const AIHUBMIX_CATALOG_TTL_MS = 5 * 60 * 1000;
 const aihubmixCatalogCache = new Map<string, { at: number; models: Array<{ id: string; label: string }> }>();
 
-export interface RegisterMediaRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'ids' | 'auth' | 'media' | 'appConfig' | 'orbit' | 'nativeDialogs' | 'projectStore' | 'projectFiles' | 'conversations' | 'research'> {
-  authorizeProjectRequest: AuthorizeProjectRequest;
-  authorizeProjectToolRequest: AuthorizeProjectToolRequest;
-}
+export interface RegisterMediaRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'ids' | 'auth' | 'media' | 'appConfig' | 'orbit' | 'nativeDialogs' | 'projectStore' | 'projectFiles' | 'conversations' | 'research'> {}
 
 export type LegacyMediaRouteGrantDecision =
   | { ok: true; grant: ToolTokenGrant | null }
@@ -136,7 +128,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
       : null;
   const { orbitService } = ctx.orbit;
   const { openBrowser, openNativeFolderDialog } = ctx.nativeDialogs;
-  const { getWorkspaceProjectByProjectId, getProject } = ctx.projectStore;
+  const { getProject } = ctx.projectStore;
   const { resolveProjectDir } = ctx.projectFiles;
   const { insertConversation, upsertMessage } = ctx.conversations;
   const { searchResearch, ResearchError } = ctx.research;
@@ -256,12 +248,6 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
       });
       task.status = 'running';
       persistMediaTask(task);
-      // Media billing follows the project's Workspace binding, not its sharing
-      // visibility. A private project inside a team Workspace must still spend
-      // that Workspace's balance; `findTeamWorkspaceIdForProject` deliberately
-      // answers the narrower collaboration question and excludes it.
-      const workspaceId =
-        getWorkspaceProjectByProjectId(db, projectId)?.workspaceId?.trim() || undefined;
       generateMedia({
         projectRoot: PROJECT_ROOT,
         projectsRoot: PROJECTS_DIR,
@@ -271,8 +257,6 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
         prompt: req.body?.prompt,
         output: req.body?.output,
         aspect: req.body?.aspect,
-        quality: typeof req.body?.quality === 'string' ? req.body.quality : undefined,
-        resolution: typeof req.body?.resolution === 'string' ? req.body.resolution : undefined,
         length:
           typeof req.body?.length === 'number' ? req.body.length : undefined,
         duration:
@@ -289,7 +273,6 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
         compositionDir: req.body?.compositionDir,
         image: req.body?.image,
         images: Array.isArray(req.body?.images) ? req.body.images : undefined,
-        workspaceId,
         onProgress: (line: any) => appendTaskProgress(task, line),
         requestInit: proxyDispatcher.requestInit,
         onProviderRequestSettled: (summary: ImageGenerationRequestSummary & { providerId: string }) => {
@@ -600,36 +583,6 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
       return res.status(403).json({ error: 'cross-origin request rejected' });
     }
     try {
-      const currentConfig = await readAppConfig(RUNTIME_DATA_DIR);
-      if (
-        req.body?.orbit
-        && typeof req.body.orbit === 'object'
-        && Object.hasOwn(req.body.orbit, 'workspaceScope')
-        && JSON.stringify(req.body.orbit) !== JSON.stringify(currentConfig.orbit)
-      ) {
-        const scope = normalizePersistedAutomationWorkspaceScope(
-          req.body.orbit.workspaceScope,
-        );
-        if (req.body.orbit.workspaceScope !== null && !scope) {
-          return res.status(400).json({
-            error: 'Orbit Workspace scope must contain workspaceId and workspaceMemberId',
-            code: 'WORKSPACE_CONTEXT_INCOMPLETE',
-          });
-        }
-        if (scope) {
-          const claimedWorkspaceId = String(req.get('x-od-workspace-id') ?? '').trim();
-          const claimedMemberId = String(req.get('x-od-workspace-member-id') ?? '').trim();
-          if (
-            claimedWorkspaceId !== scope.workspaceId
-            || claimedMemberId !== scope.workspaceMemberId
-          ) {
-            return res.status(400).json({
-              error: 'Orbit Workspace scope must match the explicit request identity',
-              code: 'WORKSPACE_CONTEXT_INCOMPLETE',
-            });
-          }
-        }
-      }
       const config = await writeAppConfig(RUNTIME_DATA_DIR, req.body);
       orbitService.configure(config.orbit);
       onAppConfigWritten?.(config);
@@ -793,12 +746,6 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
       if (!project) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
-      if (!await ctx.authorizeProjectRequest(
-        req,
-        res,
-        project.id,
-        { mode: 'write', capability: 'writeFiles' },
-      )) return;
       await handleHyperFramesScaffold(req, res, project.id);
     } catch (err: any) {
       const status = typeof err?.status === 'number' ? err.status : 400;
@@ -815,11 +762,6 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
     });
     if (!grant) return;
     try {
-      if (!await ctx.authorizeProjectToolRequest(
-        res,
-        grant.projectId,
-        { mode: 'write', capability: 'writeFiles' },
-      )) return;
       await handleHyperFramesScaffold(req, res, grant.projectId);
     } catch (err: any) {
       const status = typeof err?.status === 'number' ? err.status : 400;
@@ -843,12 +785,6 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
       if (!project) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
-      if (!await ctx.authorizeProjectRequest(
-        req,
-        res,
-        project.id,
-        { mode: 'write', capability: 'writeFiles' },
-      )) return;
       const grant = optionalToolGrantFromRequest(req, { operation: 'media:generate' });
       const grantDecision = resolveLegacyMediaRouteGrant({
         grant,
@@ -879,11 +815,6 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
     const grant = authorizeToolRequest(req, res, 'media:generate');
     if (!grant) return;
     try {
-      if (!await ctx.authorizeProjectToolRequest(
-        res,
-        grant.projectId,
-        { mode: 'write', capability: 'writeFiles' },
-      )) return;
       await handleGenerate(req, res, { projectId: grant.projectId, grant });
     } catch (err: any) {
       const status = typeof err?.status === 'number' ? err.status : 400;
@@ -952,17 +883,9 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
         )
       : null;
     if (typeof authorizationHeader === 'string' && !toolGrant) return;
-    if (
-      toolGrant
-      && !await ctx.authorizeProjectToolRequest(
-        res,
-        toolGrant.projectId,
-        { mode: 'read' },
-      )
-    ) return;
 
     // Token callers must prove their grant targets the persisted local project
-    // before task lookup; cloud availability is irrelevant to this local wait.
+    // before task lookup.
     const taskId = req.params.id;
     const task = getLiveMediaTask(taskId);
     if (!task) return res.status(404).json({ error: 'task not found' });
@@ -975,13 +898,6 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
           'media task belongs to a different project',
         );
       }
-    } else if (!await ctx.authorizeProjectRequest(
-      req,
-      res,
-      task.projectId,
-      { mode: 'read' },
-    )) {
-      return;
     }
 
     const since = Number.isFinite(req.body?.since) ? Number(req.body.since) : 0;
@@ -1025,7 +941,6 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
     if (!getProject(db, projectId)) {
       return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
     }
-    if (!await ctx.authorizeProjectRequest(req, res, projectId, { mode: 'read' })) return;
     const includeDone =
       req.query.includeDone === '1' || req.query.includeDone === 'true';
     const tasks = listMediaTasksByProject(db, projectId, {

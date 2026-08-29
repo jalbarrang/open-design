@@ -5,7 +5,6 @@ import { basename } from 'node:path';
 import { runDaemonCliStartup, startDaemonRuntime } from './daemon-startup.js';
 import { runLiveArtifactsMcpServer } from './mcp-live-artifacts-server.js';
 import { runArtifactsCli } from './artifacts-cli.js';
-import { runResource } from './resource-cli.js';
 import { runProjectHandoff } from './handoff-cli.js';
 import { runConnectorsToolCli } from './tools-connectors-cli.js';
 import { runDesignSystemsToolCli } from './tools-design-systems-cli.js';
@@ -28,7 +27,6 @@ import {
   applyJsonInstall,
   removeJsonInstall,
 } from './mcp-agent-install.js';
-import { resolveMcpWorkspaceContext } from './mcp-workspace-context.js';
 
 const argv = process.argv.slice(2);
 
@@ -63,16 +61,12 @@ const RESUME_CONTINUE_PROMPT =
 // initialization") and crash every `od media …` invocation.
 const MEDIA_GENERATE_STRING_FLAGS = new Set([
   'project',
-  'workspace',
-  'workspace-member',
   'surface',
   'model',
   'prompt',
   'prompt-file',
   'output',
   'aspect',
-  'quality',
-  'resolution',
   'length',
   'duration',
   'prompt-influence',
@@ -90,8 +84,6 @@ const MEDIA_GENERATE_BOOLEAN_FLAGS = new Set([
 ]);
 const MEDIA_SCAFFOLD_STRING_FLAGS = new Set([
   'project',
-  'workspace',
-  'workspace-member',
   'composition-dir',
   'daemon-url',
 ]);
@@ -158,13 +150,9 @@ const PLUGIN_STRING_FLAGS = new Set([
   'catalog',
   'host',
   'name',
-  'workspace',
-  'workspace-member',
 ]);
 const PLUGIN_PROJECT_RESOURCE_STRING_FLAGS = new Set([
   ...PLUGIN_STRING_FLAGS,
-  'workspace',
-  'workspace-member',
 ]);
 const PLUGIN_BOOLEAN_FLAGS = new Set([
   'help',
@@ -179,8 +167,6 @@ const UI_STRING_FLAGS = new Set([
   'daemon-url',
   'run',
   'project',
-  'workspace',
-  'workspace-member',
   'value',
   'value-json',
   'plugin',
@@ -213,35 +199,20 @@ const DAEMON_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json', 'headless', 'serve-web', 'no-open',
 ]);
 const LIBRARY_STRING_FLAGS = new Set([
-  'daemon-url', 'query', 'tag', 'workspace', 'workspace-member',
+  'daemon-url', 'query', 'tag', 
 ]);
 const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // `od library …` (OD Library asset registry). Hoisted so the dispatcher can
 // parse flags without hitting a temporal-dead-zone on these sets.
 const LIBRARY_ASSET_STRING_FLAGS = new Set([
   'daemon-url', 'kind', 'tag', 'source', 'date', 'query', 'project', 'label', 'out', 'dir',
-  'workspace', 'workspace-member',
+  
 ]);
 const LIBRARY_ASSET_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const DIAGNOSTICS_STRING_FLAGS = new Set(['daemon-url', 'output']);
 const DIAGNOSTICS_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const CONFIG_STRING_FLAGS = new Set(['daemon-url', 'value', 'value-json']);
 const CONFIG_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
-const AMR_STRING_FLAGS = new Set(['daemon-url']);
-const AMR_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'refresh']);
-const COLLAB_STRING_FLAGS = new Set([
-  'daemon-url', 'project', 'member', 'name', 'role', 'client-id', 'sequence', 'design-system',
-  'workspace', 'workspace-member',
-]);
-const COLLAB_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
-const MESSAGE_CENTER_STRING_FLAGS = new Set([
-  'daemon-url',
-  'locale',
-  'filter',
-  'limit',
-  'cursor',
-]);
-const MESSAGE_CENTER_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const PROJECT_STRING_FLAGS = new Set([
   'daemon-url', 'name', 'skill', 'design-system', 'plugin', 'metadata-json',
   'pending-prompt', 'project', 'conversation', 'message', 'prompt',
@@ -253,17 +224,8 @@ const PROJECT_STRING_FLAGS = new Set([
 ]);
 const PROJECT_RESOURCE_STRING_FLAGS = new Set([
   ...PROJECT_STRING_FLAGS,
-  'workspace',
-  'workspace-member',
 ]);
 const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow']);
-const WORKSPACE_STRING_FLAGS = new Set([
-  'daemon-url', 'workspace', 'view', 'visibility', 'owner', 'project',
-  'member', 'role', 'email', 'app-user', 'lifecycle-state',
-  'member-status', 'can-share-projects', 'can-write-synced-files',
-  'workspace-type',
-]);
-const WORKSPACE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // `od templates …` mirrors NewProjectPanel / ExamplesTab. Same surface,
 // same /api/templates store. The CLI form is the embeddability contract:
 // external agents (hermes-agent, openclaw, ...) can snapshot, list, or
@@ -278,8 +240,8 @@ const TEMPLATES_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const DEPLOY_STRING_FLAGS = new Set([
   'daemon-url', 'file', 'provider', 'target',
   'cf-zone-id', 'cf-zone-name', 'cf-domain-prefix',
-  'workspace', 'workspace-member',
 ]);
+const DEPLOY_PROVIDER_IDS = ['vercel-self', 'cloudflare-pages', 's3-compatible'];
 const DEPLOY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // `od automation …` mirrors the Automations tab. Same surface, same
 // /api/routines store. The CLI form is the embeddability contract:
@@ -327,8 +289,6 @@ const FIGMA_STRING_FLAGS = new Set([
 ]);
 const FIGMA_PROJECT_RESOURCE_STRING_FLAGS = new Set([
   ...FIGMA_STRING_FLAGS,
-  'workspace',
-  'workspace-member',
 ]);
 const FIGMA_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json', 'build',
@@ -389,9 +349,6 @@ const SUBCOMMAND_MAP = {
   artifacts: runArtifacts,
   media: runMedia,
   mcp: runMcp,
-  amr: runAmr,
-  collab: runCollab,
-  'message-center': runMessageCenter,
   research: runResearch,
   plugin: runPlugin,
   ui: runUi,
@@ -401,7 +358,6 @@ const SUBCOMMAND_MAP = {
   brands: runBrand,
   project: runProject,
   strategy: runStrategy,
-  workspace: runWorkspace,
   automation: runAutomation,
   automations: runAutomation,
   memory: runMemory,
@@ -416,7 +372,6 @@ const SUBCOMMAND_MAP = {
   skill: runSkills,
   skills: runSkills,
   'design-systems': runDesignSystems,
-  resource: runResource,
   craft: runCraft,
   diagnostics: runDiagnostics,
   export: runExport,
@@ -585,7 +540,7 @@ const EXPORT_STRING_FLAGS = new Set([
   'daemon-url', 'project', 'format', 'out', 'output', 'image-format', 'title', 'file',
   // Backwards-compatible no-ops. Older scripts may still pass these, but
   // export authority is derived from the project id by the daemon.
-  'workspace', 'workspace-member',
+  
 ]);
 const EXPORT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'deck', 'page', 'no-deck']);
 // EXPORT_FORMATS / EXPORT_IMAGE_FORMATS are the shared contract DTO (single
@@ -1000,14 +955,6 @@ function printRootHelp() {
       schedule, trigger, or harvest results from a routine without
       opening the web UI.
 
-  od message-center <list|read|read-all> [args]
-      Read and acknowledge message-center inbox items through the same
-      daemon endpoints the bell UI uses.
-
-  od amr <login|status> [args]
-      Start Vela browser sign-in or inspect the current Vela account through
-      the local OpenDesign daemon.
-
   od memory tree <list|view|edit|move> [args]
       Inspect and edit the memory tree that is injected into agent prompts.
 
@@ -1073,587 +1020,6 @@ What the daemon does:
 }
 
 // ---------------------------------------------------------------------------
-// Subcommand: od amr …
-// ---------------------------------------------------------------------------
-
-async function runAmr(args) {
-  const sub = args[0];
-  if (!sub || sub === 'help' || args.includes('--help') || args.includes('-h')) {
-    console.log(`Usage:
-  od amr login [--json]
-  od amr logout [--json]
-  od amr status [--refresh] [--json]
-
-Options:
-  --daemon-url <url>   OpenDesign daemon HTTP base.
-  --refresh            Bypass the daemon's short wallet display cache.
-  --json               Emit raw JSON.`);
-    process.exit(sub === 'help' || args.includes('--help') || args.includes('-h') ? 0 : 2);
-  }
-  const rest = args.slice(1);
-  const flags = parseFlags(rest, { string: AMR_STRING_FLAGS, boolean: AMR_BOOLEAN_FLAGS });
-  const base = await cliDaemonBaseUrl(flags);
-  switch (sub) {
-    case 'logout': {
-      const logoutResp = await fetch(`${base}/api/integrations/vela/logout`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{}',
-      });
-      if (!logoutResp.ok) return structuredHttpFailure(logoutResp);
-      const result = await logoutResp.json();
-      if (flags.json) {
-        return process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-      }
-      console.log('AMR account\tsigned out');
-      return;
-    }
-    case 'login': {
-      const loginResp = await fetch(`${base}/api/integrations/vela/login`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{}',
-      });
-      if (!loginResp.ok) return structuredHttpFailure(loginResp);
-      const started = await loginResp.json();
-      const statusResp = await fetch(`${base}/api/integrations/vela/status`);
-      if (!statusResp.ok) return structuredHttpFailure(statusResp);
-      const status = await statusResp.json();
-      if (flags.json) {
-        return process.stdout.write(JSON.stringify({ started, status }, null, 2) + '\n');
-      }
-      console.log(`Vela login\tstarted`);
-      console.log(`Profile\t${status?.profile ?? started?.profile ?? '-'}`);
-      if (status?.loggedIn) {
-        console.log(`Status\tlogged in`);
-        return;
-      }
-      console.log(`Status\t${status?.loginInFlight ? 'waiting for browser authorization' : 'sign-in pending'}`);
-      if (status?.activationUrl) console.log(`Open\t${status.activationUrl}`);
-      if (status?.userCode) console.log(`Code\t${status.userCode}`);
-      if (status?.browserOpenFailed) {
-        console.log(`Note\tbrowser could not be opened automatically; use the link above`);
-      }
-      return;
-    }
-    case 'status': {
-      const query = flags.refresh ? '?refresh=1' : '';
-      const statusResp = await fetch(`${base}/api/integrations/vela/status`);
-      if (!statusResp.ok) return structuredHttpFailure(statusResp);
-      const status = await statusResp.json();
-      let wallet = null;
-      if (status?.loggedIn && (!status?.account?.balanceUsd || flags.refresh)) {
-        const walletResp = await fetch(`${base}/api/integrations/vela/wallet${query}`);
-        if (walletResp.ok) wallet = await walletResp.json();
-        else if (flags.refresh && !status?.account?.balanceUsd) return structuredHttpFailure(walletResp);
-      }
-      const merged = {
-        ...status,
-        user: status?.user ?? wallet?.user ?? null,
-        account:
-          status?.loggedIn && wallet?.status === 'available'
-            ? {
-                ...(status?.account ?? {}),
-                balanceUsd: status?.account?.balanceUsd ?? wallet.balanceUsd,
-              }
-            : status?.account,
-        wallet,
-      };
-      if (flags.json) return process.stdout.write(JSON.stringify(merged, null, 2) + '\n');
-      const account = merged?.user?.email ?? merged?.user?.id ?? '-';
-      console.log(`AMR account\t${account}`);
-      console.log(`Profile\t${merged?.profile ?? '-'}`);
-      // Only present when this build was given a vela web console origin
-      // (OD_VELA_WEB_URL); printing it makes "which backend is this app
-      // pointed at" answerable without reading the packaged config.
-      if (merged?.consoleOrigin) console.log(`Console\t${merged.consoleOrigin}`);
-      if (merged?.account?.plan) console.log(`Plan\t${merged.account.plan}`);
-      if (merged?.account?.balanceUsd) {
-        console.log(`Wallet balance\t$${merged.account.balanceUsd}`);
-        if (wallet?.updatedAt || wallet?.fetchedAt) {
-          console.log(`Updated\t${wallet.updatedAt ?? wallet.fetchedAt}`);
-        }
-        console.log(`Source\t${wallet?.source ?? 'status_account'}`);
-        return;
-      }
-      console.log(`Wallet balance\tunavailable`);
-      console.log(`Status\t${wallet?.status ?? (merged?.loggedIn ? 'logged_in' : 'signed_out')}`);
-      if (wallet?.error?.message) console.log(`Reason\t${wallet.error.message}`);
-      return;
-    }
-    default:
-      console.error(`unknown subcommand: od amr ${sub}`);
-      process.exit(2);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Subcommand: od collab …  (team-edition collaboration)
-// ---------------------------------------------------------------------------
-
-function workspaceHeadersFromExplicitFlags(flags, required = false) {
-  const workspaceId =
-    typeof flags?.workspace === 'string' ? flags.workspace.trim() : '';
-  const workspaceMemberId =
-    typeof flags?.['workspace-member'] === 'string'
-      ? flags['workspace-member'].trim()
-      : typeof flags?.member === 'string'
-        ? flags.member.trim()
-        : '';
-  if (workspaceId && workspaceMemberId) {
-    return {
-      'x-od-workspace-id': workspaceId,
-      'x-od-workspace-member-id': workspaceMemberId,
-    };
-  }
-  if (required || workspaceId || workspaceMemberId) {
-    exitWithStructuredError({
-      code: 'workspace-context-required',
-      message: 'pass --workspace <id> and --workspace-member <id>',
-    });
-  }
-  return null;
-}
-
-function printCollabHelp() {
-  console.log(`Usage:
-  od collab status <projectId> --workspace <id> --workspace-member <id> [--json]
-  od collab presence <projectId> --workspace <id> --workspace-member <id> [--json]
-  od collab heartbeat <projectId> --workspace <id> --workspace-member <id> --member <id> [--client-id <id> --sequence <n>] [--name <name>] [--role owner|admin|member] [--json]
-  od collab leave <projectId> --workspace <id> --workspace-member <id> --member <id> [--client-id <id> --sequence <n>] [--json]
-  od collab changed <projectId> --workspace <id> --workspace-member <id> [--json]
-  od collab publish <projectId> --workspace <id> --workspace-member <id> [--json]
-  od collab share <projectId> --workspace <id> --workspace-member <id> [--json]
-  od collab pull <projectId> --workspace <id> --workspace-member <id> [--json]
-  od collab share-resource <design-systems|plugins|skills> <id> --workspace <id> --workspace-member <id> [--json]
-  od collab team-resources <design-systems|plugins|skills> --workspace <id> --workspace-member <id> [--json]
-  od collab share-design-system <designSystemId> --workspace <id> --workspace-member <id> [--json]
-  od collab team-design-systems --workspace <id> --workspace-member <id> [--json]
-
-Team-edition collaboration: presence overlay + sync trigger. The
-client is authoritative about whether it is in a shared context, so it drives
-the trigger; the daemon coalesces author edits and flushes at a run boundary,
-advancing the published head version members poll to learn when to pull.
-\`share\` is the team-share intent: it requests the project be published so
-members can pull it, and reports the sync state (local_only / pending_upload /
-synced / sync_failed). \`share-resource <kind> <id>\` promotes a personal design
-system, plugin, or skill into the team scope through the resource hub, and
-\`team-resources <kind>\` lists the ones already shared (the \`*-design-system\`
-forms are kept as aliases).
-
-Options:
-  --project <id>          Project id (alternative to the positional argument).
-  --design-system <id>    Design system id for share-design-system.
-  --workspace <id>        Explicit workspace id for request authorization.
-  --workspace-member <id> Explicit workspace member id for request authorization.
-  --member <id>           Member id for the presence heartbeat / leave.
-  --client-id <id>        Stable id for one presence session.
-  --sequence <n>          Positive monotonic operation number for --client-id.
-  --name <name>           Display name attached to a heartbeat.
-  --role <role>           owner | admin | member.
-  --json                  Emit raw JSON.
-  --daemon-url <url>      Override daemon URL.
-
-Examples:
-  od collab presence p1 --workspace team-1 --workspace-member m-42 --json
-  od collab heartbeat p1 --workspace team-1 --workspace-member m-42 --member m-42 --name "Ma Shu" --role member
-  od collab publish p1 --workspace team-1 --workspace-member m-42
-  od collab share-resource plugins my-plugin --workspace team-1 --workspace-member m-42 --json
-  od collab team-resources skills --workspace team-1 --workspace-member m-42 --json
-  od collab share-design-system user:palette-x --workspace team-1 --workspace-member m-42 --json
-  od collab status p1 --workspace team-1 --workspace-member m-42 --json`);
-}
-
-async function runCollab(args) {
-  const sub = args[0];
-  if (!sub || sub === 'help' || args.includes('--help') || args.includes('-h')) {
-    printCollabHelp();
-    process.exit(!sub ? 2 : 0);
-  }
-  const rest = args.slice(1);
-  let flags;
-  try {
-    flags = parseFlags(rest, { string: COLLAB_STRING_FLAGS, boolean: COLLAB_BOOLEAN_FLAGS });
-  } catch (err) {
-    console.error(err.message);
-    process.exit(2);
-  }
-  // Team resource sharing (design systems / plugins / skills) is workspace-scoped
-  // — it takes a resource id, not a project id — so it runs before the project-id
-  // requirement below. `share-resource <kind> <id>` / `team-resources <kind>` are
-  // the generic forms; the design-system aliases are kept for compatibility.
-  const RESOURCE_BASE_PATHS = new Set(['design-systems', 'plugins', 'skills']);
-  if (
-    sub === 'share-resource' ||
-    sub === 'team-resources' ||
-    sub === 'share-design-system' ||
-    sub === 'team-design-systems'
-  ) {
-    const base = await cliDaemonBaseUrl(flags);
-    const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags, true);
-    const emit = (payload, plain) =>
-      flags.json ? process.stdout.write(JSON.stringify(payload, null, 2) + '\n') : plain();
-    const wsRequest = async (method, path, body) => {
-      let resp;
-      try {
-        resp = await fetch(`${base}${path}`, {
-          method,
-          headers: {
-            ...workspaceHeaders,
-            ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-          },
-          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-        });
-      } catch (err) {
-        surfaceFetchError(err, base);
-        process.exit(3);
-      }
-      if (!resp.ok) return structuredHttpFailure(resp);
-      return resp.json();
-    };
-
-    // Resolve the resource kind (URL base path), whether this lists or shares,
-    // and the target id — from either the aliases or the generic <kind> <id>.
-    const positionals = positionalArgs(rest, COLLAB_STRING_FLAGS);
-    let basePath;
-    let isList;
-    let resourceId;
-    if (sub === 'team-design-systems') {
-      basePath = 'design-systems';
-      isList = true;
-    } else if (sub === 'share-design-system') {
-      basePath = 'design-systems';
-      isList = false;
-      resourceId = flags['design-system'] || positionals[0];
-    } else {
-      basePath = positionals[0];
-      if (!RESOURCE_BASE_PATHS.has(basePath)) {
-        console.error('kind must be one of: design-systems | plugins | skills');
-        process.exit(2);
-      }
-      isList = sub === 'team-resources';
-      resourceId = positionals[1];
-    }
-
-    if (isList) {
-      const body = await wsRequest('GET', `/api/workspace/${basePath}/team`);
-      return emit(body, () => {
-        const ids = Array.isArray(body?.ids) ? body.ids : [];
-        if (ids.length === 0) return console.log(`no shared ${basePath}`);
-        for (const id of ids) console.log(id);
-      });
-    }
-    if (!resourceId) {
-      console.error('missing <id>');
-      process.exit(2);
-    }
-    const body = await wsRequest(
-      'POST',
-      `/api/workspace/${basePath}/${encodeURIComponent(resourceId)}/share`,
-    );
-    return emit(body, () =>
-      console.log(`shared=${body?.shared ?? false}\tversion=${body?.version ?? '-'}`),
-    );
-  }
-
-  const projectId =
-    flags.project || positionalArgs(rest, COLLAB_STRING_FLAGS)[0] || process.env.OD_PROJECT_ID;
-  if (!projectId) {
-    console.error('missing <projectId> (positional, --project, or OD_PROJECT_ID)');
-    process.exit(2);
-  }
-  const base = await cliDaemonBaseUrl(flags);
-  const encoded = encodeURIComponent(projectId);
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags, true);
-
-  const request = async (method, path, body) => {
-    let resp;
-    try {
-      resp = await fetch(`${base}/api/projects/${encoded}${path}`, {
-        method,
-        headers: {
-          ...workspaceHeaders,
-          ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-        },
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-      });
-    } catch (err) {
-      surfaceFetchError(err, base);
-      process.exit(3);
-    }
-    if (!resp.ok) return structuredHttpFailure(resp);
-    return resp.json();
-  };
-
-  const emit = (payload, plain) => {
-    if (flags.json) return process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
-    return plain();
-  };
-
-  switch (sub) {
-    case 'status': {
-      const body = await request('GET', '/collab/status');
-      return emit(body, () => {
-        console.log(`publishedVersion\t${body?.publishedVersion ?? '-'}`);
-        console.log(`materializedVersion\t${body?.materializedVersion ?? '-'}`);
-        // Whether this daemon's local files are the project's content at all:
-        // true means it holds only an unmaterialized shared-project
-        // placeholder, so an `od files list` here would report an empty
-        // project that is really still downloading.
-        console.log(`awaitingFirstMaterialization\t${body?.awaitingFirstMaterialization === true}`);
-        console.log(`syncState\t${body?.syncState ?? '-'}`);
-      });
-    }
-    case 'share': {
-      // Team-share intent: request the project be published so members can pull.
-      const body = await request('POST', '/collab/sync-intent', {
-        event: 'project_team_share_requested',
-        projectId,
-      });
-      return emit(body, () => console.log(`ok\tsyncState=${body?.syncState ?? '-'}`));
-    }
-    case 'pull': {
-      // Member pull: fetch the published head (E extracts the bytes behind C's trigger).
-      const body = await request('POST', '/collab/pull');
-      return emit(body, () => console.log(`pulled\tversion=${body?.version ?? '-'}`));
-    }
-    case 'presence': {
-      const body = await request('GET', '/presence');
-      return emit(body, () => {
-        const present = Array.isArray(body?.present) ? body.present : [];
-        if (present.length === 0) return console.log('no members present');
-        for (const m of present) console.log(`${m.memberId}\t${m.name ?? '-'}\t${m.role ?? '-'}`);
-      });
-    }
-    case 'heartbeat': {
-      if (!flags.member) {
-        console.error('missing --member <id>');
-        process.exit(2);
-      }
-      const presenceSession = readCollabPresenceSessionFlags(flags);
-      const memberBody = {
-        memberId: flags.member,
-        ...presenceSession,
-        ...(flags.name ? { name: flags.name } : {}),
-        ...(flags.role ? { role: flags.role } : {}),
-      };
-      const body = await request('POST', '/presence/heartbeat', memberBody);
-      return emit(body, () => {
-        const present = Array.isArray(body?.present) ? body.present : [];
-        console.log(`ok\t${present.length} present`);
-      });
-    }
-    case 'leave': {
-      if (!flags.member) {
-        console.error('missing --member <id>');
-        process.exit(2);
-      }
-      const body = await request('POST', '/presence/leave', {
-        memberId: flags.member,
-        ...readCollabPresenceSessionFlags(flags),
-      });
-      return emit(body, () => console.log('left'));
-    }
-    case 'changed': {
-      const body = await request('POST', '/collab/changed');
-      return emit(body, () => console.log('change queued'));
-    }
-    case 'publish': {
-      const body = await request('POST', '/collab/publish');
-      return emit(body, () => console.log('publish requested'));
-    }
-    default:
-      console.error(`unknown subcommand: od collab ${sub}`);
-      process.exit(2);
-  }
-}
-
-function readCollabPresenceSessionFlags(flags) {
-  const clientId = typeof flags['client-id'] === 'string'
-    ? flags['client-id'].trim()
-    : '';
-  const rawSequence = typeof flags.sequence === 'string'
-    ? flags.sequence.trim()
-    : '';
-  if (!rawSequence) return clientId ? { clientId } : {};
-  if (!clientId) {
-    console.error('--sequence requires --client-id <id>');
-    process.exit(2);
-  }
-  const sequence = Number(rawSequence);
-  if (!Number.isSafeInteger(sequence) || sequence <= 0) {
-    console.error('--sequence must be a positive safe integer');
-    process.exit(2);
-  }
-  return { clientId, sequence };
-}
-// Subcommand: od message-center …
-// ---------------------------------------------------------------------------
-
-async function runMessageCenter(args) {
-  const sub = args[0];
-  if (!sub || sub === 'help' || args.includes('--help') || args.includes('-h')) {
-    printMessageCenterHelp();
-    process.exit(sub === 'help' || args.includes('--help') || args.includes('-h') ? 0 : 2);
-  }
-  const rest = args.slice(1);
-  let flags;
-  try {
-    flags = parseFlags(rest, {
-      string: MESSAGE_CENTER_STRING_FLAGS,
-      boolean: MESSAGE_CENTER_BOOLEAN_FLAGS,
-    });
-  } catch (err) {
-    console.error(err.message);
-    printMessageCenterHelp();
-    process.exit(2);
-  }
-  const base = await cliDaemonBaseUrl(flags);
-  switch (sub) {
-    case 'list':
-      return runMessageCenterList(rest, flags, base);
-    case 'read':
-      return runMessageCenterRead(rest, flags, base);
-    case 'read-all':
-      return runMessageCenterReadAll(flags, base);
-    default:
-      console.error(`unknown subcommand: od message-center ${sub}`);
-      printMessageCenterHelp();
-      process.exit(2);
-  }
-}
-
-async function runMessageCenterList(rawArgs, flags, base) {
-  const limit = flags.limit == null ? 100 : Number(flags.limit);
-  if (!Number.isInteger(limit) || limit <= 0) {
-    console.error('--limit must be a positive integer');
-    process.exit(2);
-  }
-  const filter = flags.filter == null ? 'all' : String(flags.filter);
-  if (filter !== 'all' && filter !== 'unread' && filter !== 'read') {
-    console.error('--filter must be one of: all | unread | read');
-    process.exit(2);
-  }
-  const query = new URLSearchParams({
-    locale: messageCenterApiLocale(flags.locale == null ? 'en' : String(flags.locale)),
-    filter,
-    limit: String(limit),
-  });
-  if (typeof flags.cursor === 'string' && flags.cursor.length > 0) query.set('cursor', flags.cursor);
-  let resp;
-  try {
-    resp = await fetch(`${base}/api/integrations/vela/message-center/messages?${query}`);
-  } catch (err) {
-    surfaceFetchError(err, base);
-    process.exit(3);
-  }
-  if (!resp.ok) return structuredHttpFailure(resp);
-  const payload = await resp.json();
-  if (flags.json) {
-    process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
-    return;
-  }
-  const messages = Array.isArray(payload?.messages) ? payload.messages : [];
-  if (messages.length === 0) {
-    console.log('No message-center messages.');
-    return;
-  }
-  for (const message of messages) {
-    const status = message?.readAt ? 'read' : 'unread';
-    const id = typeof message?.id === 'string' ? message.id : '(missing-id)';
-    const typeName = typeof message?.typeName === 'string' ? message.typeName : '-';
-    const publishedAt = typeof message?.publishedAt === 'string' ? message.publishedAt : '-';
-    const title = typeof message?.title === 'string' ? message.title : '';
-    console.log(`${id}\t${status}\t${typeName}\t${publishedAt}\t${title}`);
-  }
-  if (payload?.nextCursor) console.log(`nextCursor\t${payload.nextCursor}`);
-  if (typeof payload?.unreadCount === 'number') console.log(`unreadCount\t${payload.unreadCount}`);
-}
-
-async function runMessageCenterRead(rawArgs, flags, base) {
-  const id = positionalArgs(rawArgs, MESSAGE_CENTER_STRING_FLAGS)[0];
-  if (!id) {
-    console.error('Usage: od message-center read <id> [--json] [--daemon-url <url>]');
-    process.exit(2);
-  }
-  let resp;
-  try {
-    resp = await fetch(`${base}/api/integrations/vela/message-center/messages/${encodeURIComponent(id)}/read`, {
-      method: 'POST',
-    });
-  } catch (err) {
-    surfaceFetchError(err, base);
-    process.exit(3);
-  }
-  if (!resp.ok) return structuredHttpFailure(resp);
-  const bodyText = await resp.text();
-  const payload = bodyText ? safeJsonParse(bodyText) : null;
-  if (flags.json) {
-    process.stdout.write(
-      JSON.stringify(payload ?? { ok: true, id }, null, 2) + '\n',
-    );
-    return;
-  }
-  console.log(`Marked message as read\t${id}`);
-}
-
-async function runMessageCenterReadAll(flags, base) {
-  let resp;
-  try {
-    resp = await fetch(`${base}/api/integrations/vela/message-center/read-all`, {
-      method: 'POST',
-    });
-  } catch (err) {
-    surfaceFetchError(err, base);
-    process.exit(3);
-  }
-  if (!resp.ok) return structuredHttpFailure(resp);
-  const bodyText = await resp.text();
-  const payload = bodyText ? safeJsonParse(bodyText) : null;
-  if (flags.json) {
-    process.stdout.write(
-      JSON.stringify(payload ?? { ok: true }, null, 2) + '\n',
-    );
-    return;
-  }
-  console.log('Marked all message-center messages as read');
-}
-
-function printMessageCenterHelp() {
-  console.log(`Usage:
-  od message-center list [--locale <locale>] [--filter <all|unread|read>] [--limit <n>] [--cursor <token>] [--json] [--daemon-url <url>]
-  od message-center read <id> [--json] [--daemon-url <url>]
-  od message-center read-all [--json] [--daemon-url <url>]
-
-Mirrors the message-center inbox surface exposed in the web UI through the
-same /api/integrations/vela/message-center daemon routes.
-
-Options:
-  --locale <locale>     Defaults to en. Mapped to the daemon API locale shape.
-  --filter <value>      all | unread | read (default: all).
-  --limit <n>           Positive integer page size (default: 100).
-  --cursor <token>      Forward a server pagination cursor for list.
-  --json                Emit raw JSON for scripts and external agents.
-  --daemon-url <url>    OpenDesign daemon HTTP base.`);
-}
-
-function messageCenterApiLocale(locale) {
-  const mapping = { en: 'en-US', 'es-ES': 'es', 'pt-BR': 'pt' };
-  return mapping[locale] ?? locale;
-}
-
-function safeJsonParse(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Subcommand: od research …
-// ---------------------------------------------------------------------------
-
 async function runResearch(args) {
   const { sub, subArgs } = splitResearchSubcommand(args);
   if (!sub || sub === 'help' || args.includes('--help') || args.includes('-h')) {
@@ -1793,7 +1159,7 @@ async function runMediaScaffold(rawArgs) {
       headers: {
         'content-type': 'application/json',
         ...(token ? { authorization: `Bearer ${token}` } : {}),
-        ...(token ? {} : workspaceHeadersFromExplicitFlags(flags) ?? {}),
+        ...(token ? {} : {}),
       },
       body: JSON.stringify({ compositionDir }),
     });
@@ -1825,9 +1191,7 @@ async function runMediaGenerate(rawArgs) {
   const daemonUrl = await cliDaemonUrl(flags);
   const projectId = flags.project || process.env.OD_PROJECT_ID;
   const token = process.env.OD_TOOL_TOKEN;
-  const workspaceHeaders = token
-    ? {}
-    : workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   if (!projectId && !token) {
     console.error(
       'project id required. Pass --project <id> or set OD_PROJECT_ID. The daemon injects this when it spawns the code agent.',
@@ -1845,10 +1209,6 @@ async function runMediaGenerate(rawArgs) {
     process.exit(2);
   }
   const images = repeatableFlagValues(rawArgs, 'image');
-  if (flags.model.startsWith('vela/') && images.length > 5) {
-    console.error(`Vela media accepts at most 5 --image values; received ${images.length}`);
-    process.exit(2);
-  }
 
   // Long-form media prompts (detailed image/video descriptions, program-
   // generated prompts) arrive via --prompt-file <path|-> (stdin) per the CLI
@@ -1862,8 +1222,6 @@ async function runMediaGenerate(rawArgs) {
     prompt,
     output: flags.output,
     aspect: flags.aspect,
-    quality: flags.quality,
-    resolution: flags.resolution,
     voice: flags.voice,
     audioKind: flags['audio-kind'],
     compositionDir: flags['composition-dir'],
@@ -1886,7 +1244,7 @@ async function runMediaGenerate(rawArgs) {
       headers: {
         'content-type': 'application/json',
         ...(token ? { authorization: `Bearer ${token}` } : {}),
-        ...workspaceHeaders,
+        ...requestHeaders,
       },
       body: JSON.stringify(body),
     });
@@ -1910,7 +1268,7 @@ async function runMediaGenerate(rawArgs) {
     stillRunningExitCode: 0,
     requestHeaders: token
       ? { authorization: `Bearer ${token}` }
-      : workspaceHeaders,
+      : requestHeaders,
   });
 }
 
@@ -1952,8 +1310,6 @@ async function runMediaWait(rawArgs) {
   const stringFlags = new Set([
     'since',
     'daemon-url',
-    'workspace',
-    'workspace-member',
   ]);
   let flags;
   try {
@@ -1968,9 +1324,7 @@ async function runMediaWait(rawArgs) {
   }
   const taskId = positionalArgs(rawArgs, stringFlags)[0];
   if (!taskId) {
-    console.error(
-      'usage: od media wait <taskId> [--since <n>] [--workspace <id> --workspace-member <id>] [--daemon-url <url>]',
-    );
+    console.error('usage: od media wait <taskId> [--since <n>] [--daemon-url <url>]');
     process.exit(2);
   }
   const daemonUrl = await cliDaemonUrl(flags);
@@ -1982,7 +1336,7 @@ async function runMediaWait(rawArgs) {
     totalBudgetMs: 120_000,
     requestHeaders: token
       ? { authorization: `Bearer ${token}` }
-      : workspaceHeadersFromExplicitFlags(flags) ?? {},
+      : {},
   });
 }
 
@@ -2248,21 +1602,12 @@ Generate required:
   --surface  image | video | audio
   --model    Model id from /api/media/models (e.g. gpt-image-2, seedance-2, suno-v5).
   --project  Project id. Auto-resolved from OD_PROJECT_ID when invoked by the daemon.
-  --workspace <id>         Explicit Workspace id for a bound project.
-  --workspace-member <id>  Explicit Workspace member id for a bound project.
 
 Common options:
   --prompt "<text>"         Generation prompt. ElevenLabs SFX prompts must stay under 450 characters.
   --prompt-file <path|->     Read the prompt from a file, or - for stdin (for long-form prompts).
   --output <filename>       File to write under the project. Auto-named if omitted.
   --aspect 1:1|16:9|9:16|4:3|3:4
-  --quality <tier>          OpenDesign Cloud images only: published quality tier
-                            (gpt-image-2 accepts low|medium|high). Omit to let the
-                            model's own default tier decide — tiers are priced
-                            differently, so this is a billing choice.
-  --resolution <res>        OpenDesign Cloud images only: published output resolution
-                            (e.g. 1K, 2K). Must name a resolution the model publishes
-                            for --aspect. Omit to use the model's default profile.
   --length <seconds>        Video length.
   --duration <seconds>      Audio duration.
   --prompt-influence <0-1>  ElevenLabs SFX prompt adherence. Higher values follow the prompt more closely.
@@ -2275,11 +1620,9 @@ Common options:
                             meta.json / index.html. Use \`media scaffold\` to
                             create it; the daemon renders it with its pinned
                             HyperFrames runtime.
-  --image <path>            Project-relative reference image; repeat up to 5
-                            times for Vela image editing or video references.
-                            The first video image is the first frame; the rest
-                            are references. Existing providers still receive
-                            the first image through the legacy single-image field.
+  --image <path>            Project-relative reference image. Repeat for providers
+                            that accept multiple references. The first video image
+                            is the first frame.
   --daemon-url <url>
 
 Output: a single line of JSON: {"file": { name, size, kind, mime, ... }}
@@ -2287,8 +1630,7 @@ Output: a single line of JSON: {"file": { name, size, kind, mime, ... }}
   a successful queued handoff, not a failure. Poll with \`media wait\`:
   exit 0 = done ({"file": ...} on stdout), exit 2 = still running (re-run
   the wait command stderr prints, carrying forward nextSince), 5 = failed.
-  Standalone wait calls accept the same Workspace pair. Tool-token calls retain
-  their injected authorization proof automatically through every poll.
+  Tool-token calls retain their injected authorization proof through every poll.
 
 Worked generate→wait loop (POSIX bash — do NOT translate to PowerShell;
 parse JSON with python3, not jq):
@@ -2795,7 +2137,7 @@ async function runPluginScaffold(rest) {
   if (rest.length === 0 || flags.help || flags.h) {
     console.log(`Usage:
   od plugin scaffold --id <id> [--title "<title>"] [--description "<text>"]
-                     [--task-kind new-generation|code-migration|figma-migration|tune-collab]
+                     [--task-kind new-generation|code-migration|figma-migration]
                      [--mode <mode>] [--scenario <scenario>]
                      [--out <dir>] [--with-claude-plugin]
 
@@ -2874,13 +2216,13 @@ Exit codes:
   if (!flags['no-daemon']) {
     const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
     try {
-      const designSystemWorkspaceHeaders =
-        workspaceHeadersFromExplicitFlags(flags);
+      const requestHeaders =
+        {};
       const [skillsResp, dsResp, atomsResp] = await Promise.all([
         fetch(`${base}/api/skills`).catch(() => null),
         fetch(`${base}/api/design-systems`, {
-          ...(designSystemWorkspaceHeaders
-            ? { headers: designSystemWorkspaceHeaders }
+          ...(requestHeaders
+            ? { headers: requestHeaders }
             : {}),
         }).catch(() => null),
         fetch(`${base}/api/atoms`).catch(() => null),
@@ -3169,8 +2511,6 @@ async function runPluginExport(rest) {
       'out',
       'snapshot-id',
       'project',
-      'workspace',
-      'workspace-member',
     ]),
     boolean: new Set(['help', 'h', 'json']),
   });
@@ -3458,7 +2798,6 @@ async function runPluginSnapshots(args) {
   const sub = args[0];
   if (!sub || sub === 'help' || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage:
-  od plugin snapshots list  [--project <id>] [--workspace <id> --workspace-member <id>]
                                                                List applied plugin snapshots.
   od plugin snapshots show  <snapshotId> [--json]          Print one snapshot's full contents.
   od plugin snapshots diff  <id-a> <id-b> [--json]         Compare two snapshots field-by-field.
@@ -3472,7 +2811,7 @@ async function runPluginSnapshots(args) {
     boolean: PLUGIN_BOOLEAN_FLAGS,
   });
   const base = (await pluginDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   if (sub === 'show') {
     const positional = args.slice(1).filter((a) => !a.startsWith('-'));
     const id = positional[0];
@@ -3547,7 +2886,7 @@ async function runPluginSnapshots(args) {
     const url = flags.project
       ? `${base}/api/projects/${encodeURIComponent(flags.project)}/applied-plugins`
       : `${base}/api/applied-plugins`;
-    const resp = await fetch(url, { headers: workspaceHeaders });
+    const resp = await fetch(url, { headers: requestHeaders });
     if (!resp.ok) {
       console.error(`GET ${url} failed: ${resp.status} ${await resp.text()}`);
       process.exit(1);
@@ -3602,11 +2941,11 @@ async function runPluginRun(rest) {
     ? flags['grant-caps'].split(',').map((c) => c.trim()).filter(Boolean)
     : [];
   const base = (await pluginDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   // 1. Apply (returns ApplyResult + manifestSourceDigest).
   const applyResp = await fetch(`${base}/api/plugins/${encodeURIComponent(id)}/apply`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...workspaceHeaders },
+    headers: { 'content-type': 'application/json', ...requestHeaders },
     body: JSON.stringify({ inputs, grantCaps, projectId: flags.project }),
   });
   const applyData = await applyResp.json().catch(() => ({}));
@@ -3618,7 +2957,7 @@ async function runPluginRun(rest) {
   //    snapshot to the run object.
   const runResp = await fetch(`${base}/api/runs`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...workspaceHeaders },
+    headers: { 'content-type': 'application/json', ...requestHeaders },
     body: JSON.stringify({
       projectId:        flags.project,
       pluginId:         id,
@@ -3644,12 +2983,12 @@ async function runPluginRun(rest) {
   }
   if (flags.json) {
     process.stdout.write(JSON.stringify({ apply: applyData, run: runData }, null, 2) + '\n');
-    if (flags.follow) await streamRunEvents(base, runData.runId, workspaceHeaders);
+    if (flags.follow) await streamRunEvents(base, runData.runId, requestHeaders);
     return;
   }
   console.log(`[run] started run ${runData.runId} (snapshot ${runData.appliedPluginSnapshotId ?? applyData?.appliedPlugin?.snapshotId ?? 'n/a'})`);
   if (flags.follow) {
-    await streamRunEvents(base, runData.runId, workspaceHeaders);
+    await streamRunEvents(base, runData.runId, requestHeaders);
   }
 }
 
@@ -3658,7 +2997,7 @@ async function pluginDaemonUrl(flags) {
 }
 
 function pluginFetch(flags, input, init = {}) {
-  const scoped = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const scoped = {};
   const headers = {
     ...scoped,
     ...(init.headers ?? {}),
@@ -3683,7 +3022,7 @@ Lists installed plugins. Filters AND together: --task-kind=code-migration
 + --tag=phase-7 returns only code-migration plugins tagged 'phase-7'.
 
   --task-kind   Match od.taskKind (new-generation / figma-migration /
-                code-migration / tune-collab).
+                code-migration).
   --mode        Match od.mode.
   --tag         Match an entry in tags[].
   --trust       Match trust tier (trusted / restricted / bundled).
@@ -4923,8 +4262,6 @@ async function runPluginCandidates(rest) {
     'daemon-url',
     'project',
     'action',
-    'workspace',
-    'workspace-member',
   ]);
   const flags = parseFlags(args, {
     string: candidateStringFlags,
@@ -4933,11 +4270,8 @@ async function runPluginCandidates(rest) {
   if (!sub || sub === 'help' || flags.help || flags.h) {
     console.log(`Usage:
   od plugin candidates list --project <projectId> [--json] [--include-dismissed]
-       --workspace <id> --workspace-member <id>
   od plugin candidates draft <candidateId> --project <projectId> [--json]
-       --workspace <id> --workspace-member <id>
   od plugin candidates dismiss <candidateId> --project <projectId> [--json]
-       --workspace <id> --workspace-member <id>
 
 Lists and formalizes persisted skill-to-plugin candidates.`);
     process.exit(!sub ? 2 : 0);
@@ -4948,12 +4282,12 @@ Lists and formalizes persisted skill-to-plugin candidates.`);
     process.exit(2);
   }
   const base = (await pluginDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   if (sub === 'list') {
     const qs = flags['include-dismissed'] ? '?includeDismissed=true' : '';
     const resp = await fetch(
       `${base}/api/projects/${encodeURIComponent(projectId)}/plugin-candidates${qs}`,
-      { headers: workspaceHeaders },
+      { headers: requestHeaders },
     );
     const data = await resp.json().catch(() => null);
     if (!resp.ok) {
@@ -4979,7 +4313,7 @@ Lists and formalizes persisted skill-to-plugin candidates.`);
   if (sub === 'draft') {
     const resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/plugin-candidates/${encodeURIComponent(candidateId)}/draft`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...workspaceHeaders },
+      headers: { 'Content-Type': 'application/json', ...requestHeaders },
       body: '{}',
     });
     const data = await resp.json().catch(() => null);
@@ -4996,7 +4330,7 @@ Lists and formalizes persisted skill-to-plugin candidates.`);
   if (sub === 'dismiss') {
     const resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/plugin-candidates/${encodeURIComponent(candidateId)}/dismiss`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...workspaceHeaders },
+      headers: { 'Content-Type': 'application/json', ...requestHeaders },
       body: '{}',
     });
     const data = await resp.json().catch(() => null);
@@ -5025,8 +4359,6 @@ async function runPluginPublish(rest) {
       'snapshot-id',
       'repo',
       'catalog',
-      'workspace',
-      'workspace-member',
     ]),
     boolean: new Set(['help', 'h', 'json', 'open']),
   });
@@ -5906,7 +5238,7 @@ async function uiDaemonUrl(flags) {
 function uiRequestHeaders(flags, json = false) {
   return {
     ...(json ? { 'content-type': 'application/json' } : {}),
-    ...(workspaceHeadersFromExplicitFlags(flags) ?? {}),
+    ...({}),
   };
 }
 
@@ -5946,8 +5278,6 @@ async function runUiShow(rest) {
     && a !== flags['daemon-url']
     && a !== flags.run
     && a !== flags.project
-    && a !== flags.workspace
-    && a !== flags['workspace-member']
     && a !== flags.value
     && a !== flags['value-json']
     && a !== flags.plugin
@@ -5984,8 +5314,6 @@ async function runUiRespond(rest) {
     && a !== flags['daemon-url']
     && a !== flags.run
     && a !== flags.project
-    && a !== flags.workspace
-    && a !== flags['workspace-member']
     && a !== flags.value
     && a !== flags['value-json']
     && a !== flags.plugin
@@ -6036,8 +5364,6 @@ async function runUiRevoke(rest) {
     && a !== flags['daemon-url']
     && a !== flags.run
     && a !== flags.project
-    && a !== flags.workspace
-    && a !== flags['workspace-member']
     && a !== flags.value
     && a !== flags['value-json']
     && a !== flags.plugin
@@ -6073,8 +5399,6 @@ async function runUiPrefill(rest) {
     && a !== flags['daemon-url']
     && a !== flags.run
     && a !== flags.project
-    && a !== flags.workspace
-    && a !== flags['workspace-member']
     && a !== flags.value
     && a !== flags['value-json']
     && a !== flags.plugin
@@ -6135,9 +5459,6 @@ function printUiHelp() {
 
 Common options:
   --daemon-url <url>   OpenDesign daemon HTTP base (default OD_DAEMON_URL, OD_SIDECAR_IPC_PATH discovery, or http://127.0.0.1:7456).
-  --workspace <id>     Explicit Workspace id for a bound project or run.
-  --workspace-member <id>
-                       Explicit Workspace member id for a bound project or run.
   --json               Emit raw JSON (suitable for scripts) instead of human-readable output.`);
 }
 
@@ -6170,9 +5491,7 @@ function printPluginHelp() {
   od plugin diff <a> <b> [--json]         Compare two installed plugins by id.
   od plugin replay <runId> --snapshot-id <id>
                                           Re-emit the immutable snapshot a run launched against.
-  od plugin run <id> --project <id> [--workspace <id> --workspace-member <id>]
                                           Apply a plugin and start a project run.
-  od plugin snapshots list --project <id> [--workspace <id> --workspace-member <id>]
                                           List snapshots applied to a project.
   od plugin trust <id> --capabilities a,b
                                           Stage a capability grant (full mutation lands Phase 3).
@@ -6180,7 +5499,6 @@ function printPluginHelp() {
                                           (manifest parse + atom + ref checks).
   od plugin pack <folder> [--out <path>]  Build a .tgz archive of a plugin
                                           folder for distribution.
-  od plugin candidates list --project <id> [--workspace <id> --workspace-member <id>]
                                           List persisted skill-to-plugin candidates.
   od plugin publish-repo <folder>         Create/update the author's public
                                           GitHub repo for a plugin folder.
@@ -6322,9 +5640,6 @@ Flags:
   --build              After import, start a run that builds the webpage.
   --prompt / --prompt-file   Override the build prompt (file or - for stdin).
   --daemon-url <url>   OpenDesign daemon HTTP base.
-  --workspace <id>     Explicit Workspace id for the bound project.
-  --workspace-member <id>
-                       Explicit Workspace member id for the bound project.
   --json               Emit raw JSON.`);
 }
 
@@ -6346,7 +5661,7 @@ async function runFigma(args) {
     boolean: FIGMA_BOOLEAN_FLAGS,
   });
   const base = (await cliDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
 
   if (!flags.project) {
     console.error('--project <id> is required');
@@ -6369,7 +5684,7 @@ async function runFigma(args) {
     };
     const runResp = await fetch(`${base}/api/runs`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...workspaceHeaders },
+      headers: { 'content-type': 'application/json', ...requestHeaders },
       body: JSON.stringify(runBody),
     });
     const runData = await runResp.json().catch(() => ({}));
@@ -6395,7 +5710,7 @@ async function runFigma(args) {
   if (flags.notes) form.append('notes', String(flags.notes));
   const resp = await fetch(`${base}/api/projects/${encodeURIComponent(flags.project)}/figma/import`, {
     method: 'POST',
-    headers: workspaceHeaders,
+    headers: requestHeaders,
     body: form,
   });
   if (!resp.ok) return structuredHttpFailure(resp);
@@ -6417,7 +5732,7 @@ async function runFigma(args) {
     const message = override || data.suggestedPrompt;
     const runResp = await fetch(`${base}/api/runs`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...workspaceHeaders },
+      headers: { 'content-type': 'application/json', ...requestHeaders },
       body: JSON.stringify({ projectId: flags.project, message }),
     });
     const runData = await runResp.json().catch(() => ({}));
@@ -6972,8 +6287,8 @@ async function postJsonToDaemon(base, route, body, headers = {}) {
   return data;
 }
 
-async function postImportFolderToDaemon(base, body, baseDir, workspaceHeaders = {}) {
-  const headers = { ...workspaceHeaders };
+async function postImportFolderToDaemon(base, body, baseDir, requestHeaders = {}) {
+  const headers = { ...requestHeaders };
   const importToken = await mintCliImportToken(baseDir);
   if (importToken != null) {
     headers['x-od-desktop-import-token'] = importToken;
@@ -7016,9 +6331,6 @@ async function runProject(args) {
 
 Common options:
   --daemon-url <url>   OpenDesign daemon HTTP base.
-  --workspace <id>     Exact Workspace for bound project requests.
-  --workspace-member <id>
-                       Exact caller membership for bound project requests.
   --json               Emit raw JSON.`);
     process.exit(args.length === 0 ? 2 : 0);
   }
@@ -7039,46 +6351,10 @@ Common options:
     boolean: PROJECT_BOOLEAN_FLAGS,
   });
   const base = (await projectDaemonUrl(flags)).replace(/\/$/, '');
-  const explicitWorkspaceHeaders = workspaceHeadersFromExplicitFlags(flags);
-  const workspaceHeaders = explicitWorkspaceHeaders ?? {};
+  const requestHeaders = {};
   switch (sub) {
     case 'list': {
-      // After 0.18.0's workspace isolation, GET /api/projects is the NO-SCOPE
-      // catalog: it only returns projects that were never adopted into a
-      // workspace. Every project `od project import-folder` creates is
-      // immediately workspace-bound, so a headerless `od project list` shows
-      // an empty list while the UI keeps listing them (#6679). #6595 fixed
-      // this for the MCP bridge by resolving the signed-in workspace once
-      // and routing to GET /api/workspaces/:id/projects; mirror that here.
-      // BOTH the implicit signed-in path AND an explicit
-      // --workspace/--workspace-member pair route to the workspace-scoped
-      // catalog. The signed-out / non-vela / no-directory cases fall back to
-      // the original headerless catalog so `od project list` still returns
-      // unbound projects there. Passing --workspace to /api/projects does
-      // NOT scope it (#6679 repro), so the explicit path needs the same
-      // workspace-scoped endpoint as the implicit path.
-      let listResp: any = null;
-      let scopeHeaders: Record<string, string> = {};
-      if (explicitWorkspaceHeaders) {
-        const workspaceId = String(flags.workspace).trim();
-        scopeHeaders = explicitWorkspaceHeaders;
-        listResp = await fetch(
-          `${base}/api/workspaces/${encodeURIComponent(workspaceId)}/projects`,
-          { headers: scopeHeaders },
-        );
-      } else {
-        const ctx = await resolveMcpWorkspaceContext(base);
-        if (ctx) {
-          scopeHeaders = ctx.headers;
-          listResp = await fetch(
-            `${base}/api/workspaces/${encodeURIComponent(ctx.workspaceId)}/projects`,
-            { headers: scopeHeaders },
-          );
-        }
-      }
-      if (!listResp) {
-        listResp = await fetch(`${base}/api/projects`, { headers: workspaceHeaders });
-      }
+      const listResp = await fetch(`${base}/api/projects`);
       if (!listResp.ok) return structuredHttpFailure(listResp);
       const data = await listResp.json();
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
@@ -7097,7 +6373,7 @@ Common options:
         process.exit(2);
       }
       const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}`, {
-        headers: workspaceHeaders,
+        headers: requestHeaders,
       });
       if (!resp.ok) return structuredHttpFailure(resp, 'project-not-found');
       const data = await resp.json();
@@ -7111,7 +6387,7 @@ Common options:
         process.exit(2);
       }
       const infoResponse = await fetch(`${base}/api/projects/${encodeURIComponent(id)}`, {
-        headers: workspaceHeaders,
+        headers: requestHeaders,
       });
       if (!infoResponse.ok) return structuredHttpFailure(infoResponse, 'project-not-found');
       const info = await infoResponse.json();
@@ -7119,7 +6395,7 @@ Common options:
         base,
         `/api/projects/${encodeURIComponent(id)}/scenario/restore-automatic`,
         { expectedCurrentSnapshotId: info.project?.appliedPluginSnapshotId ?? null },
-        workspaceHeaders,
+        requestHeaders,
       );
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       console.log(
@@ -7152,7 +6428,7 @@ Common options:
         `${base}/api/projects/${encodeURIComponent(id)}/files/${encodeURIComponent(filePath)}/publish-public`,
         {
           method: 'DELETE',
-          headers: { 'content-type': 'application/json', ...workspaceHeaders },
+          headers: { 'content-type': 'application/json', ...requestHeaders },
           body: JSON.stringify({ slug }),
         },
       );
@@ -7194,7 +6470,7 @@ Common options:
       }
       const resp = await fetch(`${base}/api/projects`, {
         method:  'POST',
-        headers: { 'content-type': 'application/json', ...workspaceHeaders },
+        headers: { 'content-type': 'application/json', ...requestHeaders },
         body:    JSON.stringify(body),
       });
       const data = await resp.json().catch(() => ({}));
@@ -7227,7 +6503,7 @@ Common options:
         base,
         `/api/projects/${encodeURIComponent(sourceProjectId)}/design-system-copy`,
         body,
-        workspaceHeaders,
+        requestHeaders,
       );
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       console.log(
@@ -7248,7 +6524,7 @@ Common options:
         base,
         `/api/projects/${encodeURIComponent(sourceProjectId)}/duplicate`,
         body,
-        workspaceHeaders,
+        requestHeaders,
       );
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       console.log(
@@ -7270,7 +6546,7 @@ Common options:
       if (typeof flags['design-system'] === 'string' && flags['design-system'].length > 0) {
         body.designSystemId = flags['design-system'];
       }
-      const headers = { 'content-type': 'application/json', ...workspaceHeaders };
+      const headers = { 'content-type': 'application/json', ...requestHeaders };
       const importToken = await mintCliImportToken(importBaseDir);
       if (importToken != null) {
         headers['x-od-desktop-import-token'] = importToken;
@@ -7306,7 +6582,7 @@ Common options:
         base,
         body,
         folderPath,
-        workspaceHeaders,
+        requestHeaders,
       );
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       console.log(`[project] imported ${data.project?.id ?? '-'} from ${folderPath} (conversation ${data.conversationId ?? '-'})`);
@@ -7320,7 +6596,7 @@ Common options:
       }
       const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}`, {
         method: 'DELETE',
-        headers: workspaceHeaders,
+        headers: requestHeaders,
       });
       if (!resp.ok) return structuredHttpFailure(resp, 'project-not-found');
       console.log(`[project] deleted ${id}`);
@@ -7351,7 +6627,7 @@ Common options:
       }
       const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/open-in`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...workspaceHeaders },
+        headers: { 'content-type': 'application/json', ...requestHeaders },
         body: JSON.stringify({ editorId: editor }),
       });
       const data = await resp.json().catch(() => ({}));
@@ -7370,287 +6646,6 @@ Common options:
   }
 }
 
-async function runWorkspace(args) {
-  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
-    console.log(`Usage:
-  od workspace invite --workspace <id> --member <id> --email <addr> [--role admin|member] [--json]
-  od workspace projects team --workspace <id> --member <id> [--json]
-  od workspace projects list --workspace <id> --member <id> [--view recent|drafts|team|all] [--json]
-  od workspace projects move <projectId> --workspace <id> --member <id> --visibility personal|team [--json]
-  od workspace projects batch-delete --workspace <id> --member <id> --project <id> [--project <id> ...] [--json]
-  od workspace projects batch-move --workspace <id> --member <id> --visibility personal|team --project <id> [--project <id> ...] [--json]
-  od workspace members list --workspace <id> --member <id> [--json]
-  od workspace billing [--workspace-type personal|team --workspace <id>] [--json]
-
-Common options:
-  --daemon-url <url>   OpenDesign daemon HTTP base.
-  --member <id>        Workspace member id for route-level authorization.
-  --role <role>        Workspace role: owner, admin, or member.
-  --workspace-type <t> personal or team. A team share is refused in a personal
-                       workspace, which has no team plane to share into.
-  --json               Emit raw JSON.`);
-    process.exit(args.length === 0 ? 2 : 0);
-  }
-  const area = args[0];
-  if (!['invite', 'projects', 'members', 'billing'].includes(area)) {
-    console.error(`unknown subcommand: od workspace ${area}`);
-    process.exit(2);
-  }
-  const sub = args[1] ?? 'list';
-  const rest = area === 'invite' || area === 'billing' ? args.slice(1) : args.slice(2);
-  const flags = parseFlags(rest, { string: WORKSPACE_STRING_FLAGS, boolean: WORKSPACE_BOOLEAN_FLAGS });
-  const base = (await projectDaemonUrl(flags)).replace(/\/$/, '');
-
-  async function workspaceContextRequest(path, init) {
-    const needsExplicitWorkspace =
-      path === '/api/workspace/invite'
-      || path === '/api/workspace/members'
-      || path === '/api/workspace/projects/team';
-    const workspaceHeaders = needsExplicitWorkspace
-      ? workspaceHeadersFromExplicitFlags(flags, true)
-      : {};
-    const resp = await fetch(`${base}${path}`, {
-      ...init,
-      headers: {
-        ...workspaceHeaders,
-        ...(init?.headers ?? {}),
-      },
-    });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) {
-      console.error(`${init?.method ?? 'GET'} ${path} failed: ${resp.status} ${JSON.stringify(data)}`);
-      process.exit(1);
-    }
-    return data;
-  }
-
-  if (area === 'invite') {
-    const emails = repeatableFlagValues(rest, 'email');
-    const role = String(flags.role ?? 'member');
-    if (emails.length === 0 || !['admin', 'member'].includes(role)) {
-      console.error('Usage: od workspace invite --email <addr> [--role admin|member] [--json]');
-      process.exit(2);
-    }
-    const body = emails.length === 1
-      ? { email: emails[0], role }
-      : { invites: emails.map((email) => ({ email, role })) };
-    const data = await workspaceContextRequest('/api/workspace/invite', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-    const results = Array.isArray(data?.results) ? data.results : [];
-    for (const result of results) {
-      console.log(`${result.email}\t${result.ok ? 'invited' : `failed:${result.error ?? 'unknown'}`}`);
-    }
-    return;
-  }
-
-  // Dual-track parity for the account menu's credits card. Billing scope is an
-  // explicit CLI argument, never daemon active-workspace state: account is the
-  // compatibility default; team requires both type + workspace id.
-  if (area === 'billing') {
-    const workspaceType =
-      typeof flags['workspace-type'] === 'string'
-        ? flags['workspace-type'].trim().toLowerCase()
-        : '';
-    const workspaceId =
-      typeof flags.workspace === 'string' ? flags.workspace.trim() : '';
-    if (
-      (workspaceType && workspaceType !== 'personal' && workspaceType !== 'team') ||
-      (workspaceType && !workspaceId) ||
-      (!workspaceType && workspaceId)
-    ) {
-      console.error(
-        'Usage: od workspace billing [--workspace-type personal|team --workspace <id>] [--json]',
-      );
-      process.exit(2);
-    }
-    const billingPath =
-      workspaceType
-        ? `/api/workspace/billing?scope=workspace&workspaceId=${encodeURIComponent(workspaceId)}`
-        : '/api/workspace/billing?scope=account';
-    const data = await workspaceContextRequest(billingPath);
-    if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-    const summary = data?.summary ?? null;
-    const workspaceBalance = data?.workspaceBalance ?? null;
-    if (!summary && !workspaceBalance) {
-      console.log('No billing summary (no vela session or CLI unavailable).');
-      return;
-    }
-    if (workspaceBalance) {
-      console.log(`Workspace:\t${workspaceBalance.workspaceId}`);
-    }
-    if (summary) {
-      console.log(`Account plan:\t${summary.membershipTier || 'free'}`);
-      console.log(`Subscription:\t${summary.subscriptionStatus || 'none'}`);
-      console.log(`Account credits:\t${summary.totalAvailableCredits}`);
-      console.log(`  Account plan credits:\t${summary.subscriptionCredits}`);
-      console.log(`  Account top-up credits:\t${summary.rechargeCredits}`);
-    }
-    const balanceUsd = workspaceBalance?.balanceUsd ?? summary?.balanceUsd;
-    if (balanceUsd != null) {
-      console.log(`${workspaceBalance ? 'Workspace' : 'Account'} balance (USD):\t${balanceUsd}`);
-    }
-    return;
-  }
-
-  if (area === 'members') {
-    if (sub !== 'list') {
-      console.error(`unknown subcommand: od workspace members ${sub}`);
-      process.exit(2);
-    }
-    const data = await workspaceContextRequest('/api/workspace/members');
-    if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-    const members = Array.isArray(data?.members) ? data.members : [];
-    if (members.length === 0) {
-      console.log('No workspace members.');
-      return;
-    }
-    for (const member of members) {
-      console.log(`${member.memberId}\t${member.displayName ?? '-'}\t${member.role ?? '-'}`);
-    }
-    return;
-  }
-
-  if (sub === 'team') {
-    const data = await workspaceContextRequest('/api/workspace/projects/team');
-    if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-    const projects = Array.isArray(data?.projects) ? data.projects : [];
-    if (projects.length === 0) {
-      console.log('No shared team projects.');
-      return;
-    }
-    for (const project of projects) {
-      console.log(`${project.projectId ?? project.id}\t${project.displayName ?? project.name ?? '-'}`);
-    }
-    return;
-  }
-
-  const workspaceId = typeof flags.workspace === 'string' && flags.workspace.trim() ? flags.workspace.trim() : '';
-  if (!workspaceId) {
-    console.error('--workspace <id> is required');
-    process.exit(2);
-  }
-  const projectIds = repeatableFlagValues(rest, 'project');
-  const workspaceMemberId = typeof flags.member === 'string' && flags.member.trim() ? flags.member.trim() : '';
-  if (!workspaceMemberId) {
-    console.error('--member <id> is required');
-    process.exit(2);
-  }
-  const workspaceHeaders = {
-    'x-od-workspace-id': workspaceId,
-    // Only sent when the caller actually says which kind of workspace this is.
-    // The daemon reads an explicit `personal` as the caller ASSERTING there is
-    // no team plane here and refuses a team share on the strength of it (see
-    // collab/team-share-scope.ts), so defaulting the header to 'personal' would
-    // have made `--visibility team` impossible from the CLI. Absent still reads
-    // as personal everywhere it only affects view filtering.
-    ...(typeof flags['workspace-type'] === 'string' && flags['workspace-type'].trim()
-      ? { 'x-od-workspace-type': flags['workspace-type'].trim() }
-      : {}),
-    'x-od-workspace-member-id': workspaceMemberId,
-    ...(typeof flags.role === 'string' && flags.role.trim() ? { 'x-od-workspace-role': flags.role.trim() } : {}),
-    ...(typeof flags['app-user'] === 'string' && flags['app-user'].trim() ? { 'x-od-app-user-id': flags['app-user'].trim() } : {}),
-    ...(typeof flags['lifecycle-state'] === 'string' && flags['lifecycle-state'].trim()
-      ? { 'x-od-workspace-lifecycle-state': flags['lifecycle-state'].trim() }
-      : {}),
-    ...(typeof flags['member-status'] === 'string' && flags['member-status'].trim()
-      ? { 'x-od-workspace-member-status': flags['member-status'].trim() }
-      : {}),
-    ...(typeof flags['can-share-projects'] === 'string' && flags['can-share-projects'].trim()
-      ? { 'x-od-workspace-can-share-projects': flags['can-share-projects'].trim() }
-      : {}),
-    ...(typeof flags['can-write-synced-files'] === 'string' && flags['can-write-synced-files'].trim()
-      ? { 'x-od-workspace-can-write-synced-files': flags['can-write-synced-files'].trim() }
-      : {}),
-  };
-  async function request(path, init) {
-    const resp = await fetch(`${base}${path}`, {
-      ...init,
-      headers: {
-        ...workspaceHeaders,
-        ...(init?.headers ?? {}),
-      },
-    });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) {
-      console.error(`${init?.method ?? 'GET'} ${path} failed: ${resp.status} ${JSON.stringify(data)}`);
-      process.exit(1);
-    }
-    return data;
-  }
-  switch (sub) {
-    case 'list': {
-      const params = new URLSearchParams();
-      if (flags.view) params.set('view', String(flags.view));
-      if (flags.visibility) params.set('visibility', String(flags.visibility));
-      if (flags.owner) params.set('owner', String(flags.owner));
-      const suffix = params.toString() ? `?${params}` : '';
-      const data = await request(`/api/workspaces/${encodeURIComponent(workspaceId)}/projects${suffix}`);
-      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-      const projects = data?.projects ?? [];
-      if (projects.length === 0) {
-        console.log('No workspace projects.');
-        return;
-      }
-      for (const p of projects) {
-        console.log(`${p.id}\t${p.visibility}\t${p.resourceState}\t${p.name}`);
-      }
-      return;
-    }
-    case 'move': {
-      const projectId = positionalArgs(rest, WORKSPACE_STRING_FLAGS)[0];
-      const visibility = String(flags.visibility ?? '');
-      if (!projectId || !['personal', 'team'].includes(visibility)) {
-        console.error('Usage: od workspace projects move <projectId> --workspace <id> --visibility personal|team [--json]');
-        process.exit(2);
-      }
-      const data = await request(`/api/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/move`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ visibility }),
-      });
-      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-      console.log(`[workspace] moved ${projectId} to ${visibility}`);
-      return;
-    }
-    case 'batch-delete': {
-      if (projectIds.length === 0) {
-        console.error('Usage: od workspace projects batch-delete --workspace <id> --project <id> [--project <id> ...] [--json]');
-        process.exit(2);
-      }
-      const data = await request(`/api/workspaces/${encodeURIComponent(workspaceId)}/projects/batch-delete`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ projectIds }),
-      });
-      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-      console.log(`[workspace] deleted ${projectIds.length} project(s)`);
-      return;
-    }
-    case 'batch-move': {
-      const visibility = String(flags.visibility ?? '');
-      if (projectIds.length === 0 || !['personal', 'team'].includes(visibility)) {
-        console.error('Usage: od workspace projects batch-move --workspace <id> --visibility personal|team --project <id> [--project <id> ...] [--json]');
-        process.exit(2);
-      }
-      const data = await request(`/api/workspaces/${encodeURIComponent(workspaceId)}/projects/batch-move`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ projectIds, visibility }),
-      });
-      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-      console.log(`[workspace] moved ${projectIds.length} project(s) to ${visibility}`);
-      return;
-    }
-    default:
-      console.error(`unknown subcommand: od workspace projects ${sub}`);
-      process.exit(2);
-  }
-}
-
 async function runRun(args) {
   if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage:
@@ -7659,7 +6654,6 @@ async function runRun(args) {
                [--client-request-id <id>]
                [--skill <id>[,<id>]] [--plugin <id>] [--inputs <json>] [--grant-caps a,b]
                [--agent claude|codex|opencode] [--model <id>] [--service-tier <id>]
-               [--workspace <id> --workspace-member <id>] [--follow] [--json]
   od run redesign [--path <folder>] [--message "<text>" | --prompt-file <path|->]
                [--agent claude] [--model <id>] [--service-tier <id>] [--follow] [--json]
   od run watch  <runId>                     ND-JSON event stream on stdout.
@@ -7672,8 +6666,6 @@ async function runRun(args) {
 
 Common options:
   --daemon-url <url>         OpenDesign daemon HTTP base.
-  --workspace <id>           Explicit Workspace id for a bound project.
-  --workspace-member <id>    Explicit Workspace member id for a bound project.
   --json                     Emit raw JSON.`);
     process.exit(args.length === 0 ? 2 : 0);
   }
@@ -7684,13 +6676,13 @@ Common options:
     boolean: PROJECT_BOOLEAN_FLAGS,
   });
   const base = (await projectDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   switch (sub) {
     case 'list': {
       const url = flags.project
         ? `${base}/api/runs?projectId=${encodeURIComponent(flags.project)}`
         : `${base}/api/runs`;
-      const resp = await fetch(url, { headers: workspaceHeaders });
+      const resp = await fetch(url, { headers: requestHeaders });
       if (!resp.ok) return structuredHttpFailure(resp);
       const data = await resp.json();
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
@@ -7708,7 +6700,7 @@ Common options:
         process.exit(2);
       }
       const resp = await fetch(`${base}/api/runs/${encodeURIComponent(id)}`, {
-        headers: workspaceHeaders,
+        headers: requestHeaders,
       });
       if (!resp.ok) return structuredHttpFailure(resp, 'run-not-found');
       const data = await resp.json();
@@ -7722,7 +6714,7 @@ Common options:
         process.exit(2);
       }
       const resp = await fetch(`${base}/api/runs/${encodeURIComponent(id)}/result-package`, {
-        headers: workspaceHeaders,
+        headers: requestHeaders,
       });
       if (!resp.ok) return structuredHttpFailure(resp, 'run-not-found');
       const data = await resp.json();
@@ -7752,7 +6744,7 @@ Common options:
       }
       const resp = await fetch(`${base}/api/runs/${encodeURIComponent(id)}/cancel`, {
         method: 'POST',
-        headers: workspaceHeaders,
+        headers: requestHeaders,
       });
       if (!resp.ok) return structuredHttpFailure(resp, 'run-not-found');
       const data = await resp.json();
@@ -7771,7 +6763,7 @@ Common options:
         process.exit(2);
       }
       const statusResp = await fetch(`${base}/api/runs/${encodeURIComponent(id)}`, {
-        headers: workspaceHeaders,
+        headers: requestHeaders,
       });
       if (!statusResp.ok) return structuredHttpFailure(statusResp, 'run-not-found');
       const status = await statusResp.json();
@@ -7805,7 +6797,7 @@ Common options:
         analyticsHints: { entryFrom: 'resume_continue' },
         ...(status.agentId ? { agentId: status.agentId } : {}),
       };
-      const data = await postJsonToDaemon(base, '/api/runs', body, workspaceHeaders);
+      const data = await postJsonToDaemon(base, '/api/runs', body, requestHeaders);
       if (flags.json && !flags.follow) {
         return process.stdout.write(JSON.stringify({
           ...data,
@@ -7813,7 +6805,7 @@ Common options:
         }, null, 2) + '\n');
       }
       console.log(`[run] continued ${id} as ${data.runId}`);
-      if (flags.follow) await streamRunEvents(base, data.runId, workspaceHeaders);
+      if (flags.follow) await streamRunEvents(base, data.runId, requestHeaders);
       return;
     }
     case 'watch': {
@@ -7822,7 +6814,7 @@ Common options:
         console.error('Usage: od run watch <runId>');
         process.exit(2);
       }
-      await streamRunEvents(base, id, workspaceHeaders);
+      await streamRunEvents(base, id, requestHeaders);
       return;
     }
     case 'redesign': {
@@ -7849,7 +6841,7 @@ Common options:
             : await basenameForCli(folderPath),
           skillId,
           designSystemId,
-        }, folderPath, workspaceHeaders);
+        }, folderPath, requestHeaders);
         projectId = imported.project?.id;
         conversationId = conversationId ?? imported.conversationId;
         if (!projectId) {
@@ -7871,7 +6863,7 @@ Common options:
         ...(flags.model ? { model: flags.model } : {}),
         ...(flags['service-tier'] ? { serviceTier: flags['service-tier'] } : {}),
       };
-      const data = await postJsonToDaemon(base, '/api/runs', body, workspaceHeaders);
+      const data = await postJsonToDaemon(base, '/api/runs', body, requestHeaders);
       if (flags.json && !flags.follow) {
         return process.stdout.write(JSON.stringify({
           ...data,
@@ -7880,7 +6872,7 @@ Common options:
         }, null, 2) + '\n');
       }
       console.log(`[run] started ${data.runId}`);
-      if (flags.follow) await streamRunEvents(base, data.runId, workspaceHeaders);
+      if (flags.follow) await streamRunEvents(base, data.runId, requestHeaders);
       return;
     }
     case 'start': {
@@ -7919,7 +6911,7 @@ Common options:
       if (flags['client-request-id']) body.clientRequestId = flags['client-request-id'];
       const resp = await fetch(`${base}/api/runs`, {
         method:  'POST',
-        headers: { 'content-type': 'application/json', ...workspaceHeaders },
+        headers: { 'content-type': 'application/json', ...requestHeaders },
         body:    JSON.stringify(body),
       });
       const data = await resp.json().catch(() => ({}));
@@ -7945,7 +6937,7 @@ Common options:
         return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       }
       console.log(`[run] started ${data.runId}`);
-      if (flags.follow) await streamRunEvents(base, data.runId, workspaceHeaders);
+      if (flags.follow) await streamRunEvents(base, data.runId, requestHeaders);
       return;
     }
     default:
@@ -7957,7 +6949,7 @@ Common options:
 // Stream the SSE events at /api/runs/:id/events as ND-JSON on stdout.
 // Each line is one event: { event, data } so a code agent can parse it
 // without needing an SSE library.
-async function streamRunEvents(base, initialRunId, workspaceHeaders = {}) {
+async function streamRunEvents(base, initialRunId, requestHeaders = {}) {
   let runId = initialRunId;
   const visited = new Set();
   while (true) {
@@ -7967,7 +6959,7 @@ async function streamRunEvents(base, initialRunId, workspaceHeaders = {}) {
     }
     visited.add(runId);
     const resp = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}/events`, {
-      headers: { accept: 'text/event-stream', ...workspaceHeaders },
+      headers: { accept: 'text/event-stream', ...requestHeaders },
     });
     if (!resp.ok || !resp.body) {
       console.error(`run watch failed: ${resp.status}`);
@@ -8042,7 +7034,7 @@ Common options:
     process.exit(2);
   }
   const base = (await projectDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   const body = {};
   if (flags.shell) body.shell = flags.shell;
   if (process.stdout.columns) body.cols = process.stdout.columns;
@@ -8051,7 +7043,7 @@ Common options:
     `${base}/api/projects/${encodeURIComponent(flags.project)}/terminals`,
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...workspaceHeaders },
+      headers: { 'content-type': 'application/json', ...requestHeaders },
       body: JSON.stringify(body),
     },
   );
@@ -8065,13 +7057,13 @@ Common options:
     console.error('terminal create returned no id');
     process.exit(1);
   }
-  await attachTerminal(base, flags.project, terminalId, workspaceHeaders);
+  await attachTerminal(base, flags.project, terminalId, requestHeaders);
 }
 
 // Bridge a local TTY to a remote PTY session: SSE `data` events → stdout,
 // local stdin bytes → POST /stdin, terminal resize → POST /resize. Resolves
 // when the remote shell emits its `exit` event.
-async function attachTerminal(base, projectId, terminalId, workspaceHeaders = {}) {
+async function attachTerminal(base, projectId, terminalId, requestHeaders = {}) {
   const termPath = `${base}/api/projects/${encodeURIComponent(projectId)}/terminals/${encodeURIComponent(terminalId)}`;
   const isRawTty = Boolean(process.stdin.isTTY && process.stdin.setRawMode);
   if (isRawTty) process.stdin.setRawMode(true);
@@ -8080,7 +7072,7 @@ async function attachTerminal(base, projectId, terminalId, workspaceHeaders = {}
   const onInput = (chunk) => {
     fetch(`${termPath}/stdin`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...workspaceHeaders },
+      headers: { 'content-type': 'application/json', ...requestHeaders },
       body: JSON.stringify({ data: chunk.toString('utf8') }),
     }).catch(() => {});
   };
@@ -8089,7 +7081,7 @@ async function attachTerminal(base, projectId, terminalId, workspaceHeaders = {}
   const onResize = () => {
     fetch(`${termPath}/resize`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...workspaceHeaders },
+      headers: { 'content-type': 'application/json', ...requestHeaders },
       body: JSON.stringify({ cols: process.stdout.columns, rows: process.stdout.rows }),
     }).catch(() => {});
   };
@@ -8106,7 +7098,7 @@ async function attachTerminal(base, projectId, terminalId, workspaceHeaders = {}
 
   try {
     const resp = await fetch(`${termPath}/stream`, {
-      headers: { accept: 'text/event-stream', ...workspaceHeaders },
+      headers: { accept: 'text/event-stream', ...requestHeaders },
     });
     if (!resp.ok || !resp.body) {
       console.error(`shell attach failed: ${resp.status}`);
@@ -8171,9 +7163,6 @@ async function runFiles(args) {
 
 Common options:
   --daemon-url <url>   OpenDesign daemon HTTP base.
-  --workspace <id>     Exact Workspace for bound project requests.
-  --workspace-member <id>
-                       Exact caller membership for bound project requests.
   --prompt-file <path|->  Read a version prompt from file/stdin where supported.
   --source <ai|manual|restore>
                        Version provenance where supported.
@@ -8187,8 +7176,8 @@ Common options:
     boolean: PROJECT_BOOLEAN_FLAGS,
   });
   const base = (await projectDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders =
-    workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders =
+    {};
   switch (sub) {
     case 'list': {
       const id = positionalArgs(rest, PROJECT_RESOURCE_STRING_FLAGS)[0];
@@ -8197,7 +7186,7 @@ Common options:
         process.exit(2);
       }
       const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/files`, {
-        headers: workspaceHeaders,
+        headers: requestHeaders,
       });
       if (!resp.ok) return structuredHttpFailure(resp, 'project-not-found');
       const data = await resp.json();
@@ -8215,7 +7204,7 @@ Common options:
       }
       const resp = await fetch(
         `${base}/api/projects/${encodeURIComponent(id)}/files/${rel.split('/').map(encodeURIComponent).join('/')}`,
-        { headers: workspaceHeaders },
+        { headers: requestHeaders },
       );
       if (!resp.ok) return structuredHttpFailure(resp, 'project-not-found');
       const buf = Buffer.from(await resp.arrayBuffer());
@@ -8235,7 +7224,7 @@ Common options:
         : basename(localPath);
       const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/files`, {
         method:  'POST',
-        headers: { 'content-type': 'application/json', ...workspaceHeaders },
+        headers: { 'content-type': 'application/json', ...requestHeaders },
         body:    JSON.stringify({
           name: desiredName,
           content: buf.toString('base64'),
@@ -8268,7 +7257,7 @@ Common options:
       const body = Buffer.concat(chunks);
       const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/files`, {
         method:  'POST',
-        headers: { 'content-type': 'application/json', ...workspaceHeaders },
+        headers: { 'content-type': 'application/json', ...requestHeaders },
         body:    JSON.stringify({
           name: rel,
           content: body.toString('utf8'),
@@ -8291,7 +7280,7 @@ Common options:
       }
       const resp = await fetch(
         `${base}/api/projects/${encodeURIComponent(id)}/files/${encodeURIComponent(name)}`,
-        { method: 'DELETE', headers: workspaceHeaders },
+        { method: 'DELETE', headers: requestHeaders },
       );
       if (!resp.ok) return structuredHttpFailure(resp);
       console.log(`[files] deleted ${name}`);
@@ -8305,11 +7294,11 @@ Common options:
         console.error('Usage: od files diff <projectId> <relpathA> [<relpathB> | --against -]');
         process.exit(2);
       }
-      const left = await fetchProjectFileText(base, id, relA, workspaceHeaders);
+      const left = await fetchProjectFileText(base, id, relA, requestHeaders);
       const rightLabel = against ?? relB;
       const right = against === '-'
         ? await readStdinUtf8()
-        : await fetchProjectFileText(base, id, rightLabel, workspaceHeaders);
+        : await fetchProjectFileText(base, id, rightLabel, requestHeaders);
       const diff = createUnifiedDiff(`a/${relA}`, `b/${rightLabel}`, left, right);
       if (flags.json) return process.stdout.write(JSON.stringify({ diff }, null, 2) + '\n');
       process.stdout.write(diff);
@@ -8324,7 +7313,7 @@ Common options:
       }
       const resp = await fetch(
         `${base}/api/projects/${encodeURIComponent(id)}/files/${encodeProjectRelpath(rel)}/versions`,
-        { headers: workspaceHeaders },
+        { headers: requestHeaders },
       );
       if (!resp.ok) return structuredHttpFailure(resp, 'project-not-found');
       const data = await resp.json();
@@ -8351,7 +7340,7 @@ Common options:
       }
       const resp = await fetch(
         `${base}/api/projects/${encodeURIComponent(id)}/files/${encodeProjectRelpath(rel)}/versions/${encodeURIComponent(versionId)}`,
-        { headers: workspaceHeaders },
+        { headers: requestHeaders },
       );
       if (!resp.ok) return structuredHttpFailure(resp, 'project-not-found');
       const data = await resp.json();
@@ -8376,7 +7365,7 @@ Common options:
         `${base}/api/projects/${encodeURIComponent(id)}/files/${encodeProjectRelpath(rel)}/versions`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json', ...workspaceHeaders },
+          headers: { 'content-type': 'application/json', ...requestHeaders },
           body: JSON.stringify(body),
         },
       );
@@ -8400,7 +7389,7 @@ Common options:
         `${base}/api/projects/${encodeURIComponent(id)}/files/${encodeProjectRelpath(rel)}/versions/${encodeURIComponent(versionId)}/restore`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json', ...workspaceHeaders },
+          headers: { 'content-type': 'application/json', ...requestHeaders },
           body: JSON.stringify(body),
         },
       );
@@ -8736,8 +7725,6 @@ async function runConversation(args) {
 
 Common options:
   --daemon-url <url>         OpenDesign daemon HTTP base.
-  --workspace <id>           Explicit Workspace id for a bound project.
-  --workspace-member <id>    Explicit Workspace member id for a bound project.
   --json                     Emit raw JSON.`);
     process.exit(args.length === 0 ? 2 : 0);
   }
@@ -8752,9 +7739,9 @@ Common options:
     boolean: PROJECT_BOOLEAN_FLAGS,
   });
   const base = (await projectDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders =
+  const requestHeaders =
     sub === 'new' || sub === 'list'
-      ? workspaceHeadersFromExplicitFlags(flags) ?? {}
+      ? {}
       : {};
   switch (sub) {
     case 'new': {
@@ -8779,7 +7766,7 @@ Common options:
       }
       const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/conversations`, {
         method:  'POST',
-        headers: { 'content-type': 'application/json', ...workspaceHeaders },
+        headers: { 'content-type': 'application/json', ...requestHeaders },
         body:    JSON.stringify(body),
       });
       if (!resp.ok) return structuredHttpFailure(resp, 'project-not-found');
@@ -8796,7 +7783,7 @@ Common options:
         process.exit(2);
       }
       const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/conversations`, {
-        headers: workspaceHeaders,
+        headers: requestHeaders,
       });
       if (!resp.ok) return structuredHttpFailure(resp);
       const data = await resp.json();
@@ -8844,8 +7831,6 @@ async function runChat(args) {
 
 Common options:
   --daemon-url <url>         OpenDesign daemon HTTP base.
-  --workspace <id>           Explicit Workspace id for the bound project.
-  --workspace-member <id>    Explicit Workspace member id for the bound project.
   --json                     Emit raw JSON.`);
     process.exit(args.length === 0 ? 2 : 0);
   }
@@ -8856,7 +7841,7 @@ Common options:
     boolean: PROJECT_BOOLEAN_FLAGS,
   });
   const base = (await projectDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   switch (sub) {
     case 'new': {
       // Accept --project for parity with the rest of the project-scoped CLI,
@@ -8884,7 +7869,7 @@ Common options:
       }
       const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/conversations`, {
         method:  'POST',
-        headers: { 'content-type': 'application/json', ...workspaceHeaders },
+        headers: { 'content-type': 'application/json', ...requestHeaders },
         body:    JSON.stringify(body),
       });
       if (!resp.ok) return structuredHttpFailure(resp, 'project-not-found');
@@ -9244,8 +8229,6 @@ Options:
   --date <YYYY-MM-DD>       Filter by archive date.
   --project <id>            Target project for apply.
   --dir <subdir>            Subdirectory inside the project for apply (default: library).
-  --workspace <id>          Explicit Workspace id for a bound target project.
-  --workspace-member <id>   Explicit Workspace member id for a bound target project.
   --out <file>              Write the figma export to a file (default: stdout).`);
 }
 
@@ -9386,10 +8369,10 @@ async function runLibrary(args) {
         }
         const body = { projectId: flags.project };
         if (flags.dir) body.dir = flags.dir;
-        const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+        const requestHeaders = {};
         const resp = await fetch(`${base}/api/library/assets/${encodeURIComponent(id)}/apply`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', ...workspaceHeaders },
+          headers: { 'content-type': 'application/json', ...requestHeaders },
           body: JSON.stringify(body),
         });
         if (!resp.ok) return structuredHttpFailure(resp);
@@ -9480,14 +8463,14 @@ async function runLibraryList(name, args) {
   const flags = parseFlags(rest, { string: LIBRARY_STRING_FLAGS, boolean: LIBRARY_BOOLEAN_FLAGS });
   const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
   const apiPath = name === 'design-systems' ? '/api/design-systems' : `/api/${name}`;
-  const designSystemWorkspaceHeaders = name === 'design-systems'
-    ? workspaceHeadersFromExplicitFlags(flags) ?? {}
+  const requestHeaders = name === 'design-systems'
+    ? {}
     : undefined;
   switch (sub) {
     case 'list': {
       const resp = await fetch(`${base}${apiPath}`, {
-        ...(designSystemWorkspaceHeaders
-          ? { headers: designSystemWorkspaceHeaders }
+        ...(requestHeaders
+          ? { headers: requestHeaders }
           : {}),
       });
       if (!resp.ok) return structuredHttpFailure(resp);
@@ -9507,8 +8490,8 @@ async function runLibraryList(name, args) {
         process.exit(2);
       }
       const resp = await fetch(`${base}${apiPath}/${encodeURIComponent(id)}`, {
-        ...(designSystemWorkspaceHeaders
-          ? { headers: designSystemWorkspaceHeaders }
+        ...(requestHeaders
+          ? { headers: requestHeaders }
           : {}),
       });
       if (!resp.ok) return structuredHttpFailure(resp);
@@ -9556,11 +8539,11 @@ async function runSkillInstall(rest) {
     process.exit(2);
   }
   const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   try {
     const resp = await fetch(`${base}/api/skills/install`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...workspaceHeaders },
+      headers: { 'content-type': 'application/json', ...requestHeaders },
       body: JSON.stringify({ source }),
     });
     const body = await resp.json().catch(() => ({}));
@@ -9594,10 +8577,10 @@ async function runSkillUninstall(rest) {
     process.exit(2);
   }
   const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   const resp = await fetch(`${base}/api/skills/${encodeURIComponent(id)}`, {
     method: 'DELETE',
-    headers: workspaceHeaders,
+    headers: requestHeaders,
   });
   const body = await resp.json().catch(() => ({}));
   if (!resp.ok) {
@@ -9647,7 +8630,7 @@ generated SKILLS.md usage guide).
   }
   const stringFlags = new Set([...LIBRARY_STRING_FLAGS, 'out']);
   const flags = parseFlags(args, { string: stringFlags, boolean: LIBRARY_BOOLEAN_FLAGS });
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   const id = positionalArgs(args, stringFlags)[0];
   if (!id) {
     console.error('Usage: od design-systems download <id> [--out <path>]');
@@ -9657,7 +8640,7 @@ generated SKILLS.md usage guide).
   let resp;
   try {
     resp = await fetch(`${base}/api/design-systems/${encodeURIComponent(id)}/archive`, {
-      headers: workspaceHeaders,
+      headers: requestHeaders,
     });
   } catch (err) {
     surfaceFetchError(err, base);
@@ -9773,10 +8756,10 @@ function designSystemImportRequestBody(flags, baseBody) {
 
 async function postDesignSystemImport(flags, endpoint, body) {
   const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   const resp = await fetch(`${base}${endpoint}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...workspaceHeaders },
+    headers: { 'Content-Type': 'application/json', ...requestHeaders },
     body: JSON.stringify(body),
   });
   if (!resp.ok) return structuredHttpFailure(resp);
@@ -9817,10 +8800,10 @@ Starts a review-gated TOKEN_SCHEMA token contract rebuild for an editable import
     process.exit(2);
   }
   const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   const resp = await fetch(`${base}/api/design-systems/${encodeURIComponent(id)}/token-contract/rebuild-jobs`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...workspaceHeaders },
+    headers: { 'Content-Type': 'application/json', ...requestHeaders },
     body: JSON.stringify({ force: flags.force === true }),
   });
   if (!resp.ok) return structuredHttpFailure(resp);
@@ -9891,10 +8874,10 @@ Renames an editable (user-created) design system. Built-in systems are read-only
     boolean: LIBRARY_BOOLEAN_FLAGS,
   });
   const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   const resp = await fetch(`${base}/api/design-systems/${encodeURIComponent(parsed.id)}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...workspaceHeaders },
+    headers: { 'Content-Type': 'application/json', ...requestHeaders },
     body: JSON.stringify({ title: parsed.title }),
   });
   if (!resp.ok) return structuredHttpFailure(resp);
@@ -10093,12 +9076,12 @@ or the daemon cannot be reached.`);
 
   // Library inventory
   try {
-    const designSystemWorkspaceHeaders = null;
+    const requestHeaders = null;
     const [skillsResp, dsResp, atomsResp] = await Promise.all([
       fetch(`${base}/api/skills`),
       fetch(`${base}/api/design-systems`, {
-        ...(designSystemWorkspaceHeaders
-          ? { headers: designSystemWorkspaceHeaders }
+        ...(requestHeaders
+          ? { headers: requestHeaders }
           : {}),
       }),
       fetch(`${base}/api/atoms`),
@@ -11886,15 +10869,19 @@ Required:
   --file <fileName>        File name within the project to deploy.
 
 Options:
-  --provider vercel-self|cloudflare-pages   Deploy provider (default: vercel-self).
+  --provider <id>                           vercel-self | cloudflare-pages | s3-compatible
+                                            (default: vercel-self).
   --target preview|production               Deployment target (default: server decides).
   --cf-zone-id <id>                         Cloudflare Pages: zone id.
   --cf-zone-name <name>                     Cloudflare Pages: zone name.
   --cf-domain-prefix <prefix>               Cloudflare Pages: domain prefix.
-  --workspace <id>                          Explicit Workspace id for a bound project.
-  --workspace-member <id>                   Explicit Workspace member id for a bound project.
   --json                                    Emit raw JSON response.
-  --daemon-url <url>                        OpenDesign daemon HTTP base.`);
+  --daemon-url <url>                        OpenDesign daemon HTTP base.
+
+The s3-compatible provider publishes to any S3 API bucket — Amazon S3,
+Cloudflare R2, MinIO, Backblaze B2, DigitalOcean Spaces. Configure its
+endpoint, bucket, and credentials once through PUT /api/deploy/config or
+the Publish panel; this command only selects it.`);
     return;
   }
 
@@ -11920,6 +10907,12 @@ Options:
   }
 
   const providerId = typeof flags.provider === 'string' ? flags.provider : 'vercel-self';
+  // Fail locally on a typo rather than spending a round-trip to learn the name
+  // was wrong, matching how --target is validated above.
+  if (!DEPLOY_PROVIDER_IDS.includes(providerId)) {
+    console.error(`invalid --provider value: "${providerId}" (expected ${DEPLOY_PROVIDER_IDS.join(', ')})`);
+    process.exit(2);
+  }
 
   const body: Record<string, unknown> = { fileName, providerId };
 
@@ -11937,12 +10930,12 @@ Options:
   }
 
   const base = await cliDaemonBaseUrl(flags);
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const requestHeaders = {};
   let resp;
   try {
     resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/deploy`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...workspaceHeaders },
+      headers: { 'content-type': 'application/json', ...requestHeaders },
       body: JSON.stringify(body),
     });
   } catch (err) {

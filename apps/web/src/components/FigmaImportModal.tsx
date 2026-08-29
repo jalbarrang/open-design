@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import type { FigmaImportResult, WorkspaceCollabContext } from '@open-design/contracts';
+import type { FigmaImportResult } from '@open-design/contracts';
 import { Button } from '@open-design/components';
 import { Icon } from './Icon';
 import { modalOverlay, modalContent } from '../motion';
@@ -27,7 +27,6 @@ interface Props {
   resolveProjectId: () => Promise<string | null>;
   /** Exact authority of the project being imported into. Project surfaces pass
    * the persisted project scope; Home passes the context captured by create. */
-  workspaceContext?: WorkspaceCollabContext | null;
   /** Fired after a successful `.fig` import with the snapshot + project id. */
   onImported: (result: FigmaImportResult, projectId: string) => void;
   /** Fired when the user submits a Figma URL instead of a file; omit to hide
@@ -91,7 +90,6 @@ export function FigmaImportModal({
       projectId,
       file,
       notes ? { notes } : undefined,
-      workspaceContext,
     );
     if (!outcome.ok) {
       setStatus('error');

@@ -91,15 +91,6 @@ async function latestLogFilesIn(
 export interface AgentCliLogOptions {
   /** User home directory; CLI configs/logs live under here. */
   homeDir: string;
-  /** OpenDesign data dir (OD_DATA_DIR); fallback location of the AMR OpenCode home. */
-  dataDir?: string | null;
-  /**
-   * Effective AMR OpenCode home (the resolved `OPENCODE_TEST_HOME`). Callers
-   * should pass the value a real AMR run would use so this honors a user
-   * `agentCliEnv.amr.OPENCODE_TEST_HOME` override; when omitted we fall back to
-   * the default `<dataDir>/amr/opencode-home`.
-   */
-  amrOpenCodeHome?: string | null;
   /**
    * Effective Claude config home (`CLAUDE_CONFIG_DIR`). Honors a user
    * `agentCliEnv.claude.CLAUDE_CONFIG_DIR` override; falls back to `~/.claude`.
@@ -119,16 +110,12 @@ export interface AgentCliLogOptions {
 }
 
 /**
- * Collect the native on-disk logs of the coding-agent CLIs OpenDesign drives:
- * Claude Code, Codex, OpenCode, and AMR (vela's OpenCode runtime). These
- * complement the per-run `events.jsonl` capture with the CLI's own internal
- * diagnostics (provider errors, retries, auth state) that never reach the
+ * Collect native logs from supported coding-agent CLIs. These complement the
+ * per-run `events.jsonl` capture with internal diagnostics that never reach the
  * daemon's stream.
  *
- * Deliberately excluded: secret-bearing files. We only sweep known *log*
- * directories (`*.log` files) — never `~/.amr/config.json`, `~/.codex/auth.json`,
- * or session transcripts — and the collected text still passes through the
- * bundle's redaction pass.
+ * Secret-bearing files are excluded. Only known `*.log` directories are swept,
+ * and collected text still passes through the bundle's redaction pass.
  */
 export async function buildAgentCliLogSources(options: AgentCliLogOptions): Promise<LogSource[]> {
   const home = options.homeDir?.trim();
@@ -141,9 +128,7 @@ export async function buildAgentCliLogSources(options: AgentCliLogOptions): Prom
     ? join(xdg, "opencode", "log")
     : join(home, ".local", "share", "opencode", "log");
 
-  // Effective CLI homes honor the user's app-config overrides
-  // (`CLAUDE_CONFIG_DIR` / `CODEX_HOME`), falling back to the defaults — the
-  // same fix as AMR's `OPENCODE_TEST_HOME` so relocated homes are not missed.
+  // Effective CLI homes honor app-config overrides and fall back to defaults.
   const claudeDir = options.claudeConfigDir?.trim() || join(home, ".claude");
   const codexHome = options.codexHome?.trim() || join(home, ".codex");
 
@@ -157,22 +142,6 @@ export async function buildAgentCliLogSources(options: AgentCliLogOptions): Prom
     // OpenCode session logs (provider errors live here in headless mode).
     { agent: "opencode", dir: openCodeUserLogDir },
   ];
-
-  // AMR drives a private OpenCode under OPENCODE_TEST_HOME; its session logs
-  // land under that home's XDG data dir, where AMR run provider failures are
-  // recorded. Prefer the effective home a real run resolves (honoring a user
-  // `agentCliEnv.amr.OPENCODE_TEST_HOME` override) and fall back to the default
-  // `<dataDir>/amr/opencode-home` so the bundle does not silently drop the very
-  // AMR logs this is meant to surface.
-  const amrHome = options.amrOpenCodeHome?.trim();
-  const dataDir = options.dataDir?.trim();
-  const amrOpenCodeHome = amrHome || (dataDir ? join(dataDir, "amr", "opencode-home") : "");
-  if (amrOpenCodeHome) {
-    agentDirs.push({
-      agent: "amr",
-      dir: join(amrOpenCodeHome, ".local", "share", "opencode", "log"),
-    });
-  }
 
   const sources: LogSource[] = [];
   for (const { agent, dir } of agentDirs) {

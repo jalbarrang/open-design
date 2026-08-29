@@ -14,7 +14,6 @@
 import { useMemo } from 'react';
 import type {
   InstalledPluginRecord,
-  WorkspaceCollabContext,
 } from '@open-design/contracts';
 import { useT } from '../i18n';
 import { PreviewSurface } from './plugins-home/cards/PreviewSurface';
@@ -73,11 +72,10 @@ export function ComposerPluginPreview({
 }: {
   record: InstalledPluginRecord;
   locale: string;
-  workspaceContext?: WorkspaceCollabContext | null;
 }) {
   const t = useT();
   const preview = useMemo(
-    () => inferPluginPreview(record, { workspaceContext }),
+    () => inferPluginPreview(record),
     [record, workspaceContext],
   );
   const title = localizePluginTitle(locale, record);

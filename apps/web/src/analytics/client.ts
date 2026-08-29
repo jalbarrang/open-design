@@ -42,7 +42,6 @@ let configureGlobals: AnalyticsConfigureGlobals = {
   runtime_type: 'none',
   cli_runnable: false,
   byok_runnable: false,
-  amr_runnable: false,
 };
 // Snapshot of the super-property payload sent on the most recent `loaded()`
 // init. `reset()` clears posthog-js's persisted super-properties as well as

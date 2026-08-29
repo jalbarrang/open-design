@@ -14,7 +14,6 @@ function createHarness(initial: {
   creation?: 'created' | 'reused' | 'conflict';
   claimOk?: boolean;
   claimThrows?: boolean;
-  restartOk?: boolean;
 } = {}) {
   const run: TestRun = {
     id: 'run-1',
@@ -34,11 +33,6 @@ function createHarness(initial: {
       | { kind: 'created'; run: TestRun }
       | { kind: 'reused'; run: TestRun }
       | { kind: 'conflict'; run: TestRun })),
-    prepareRestart: vi.fn(() => {
-      if (initial.restartOk === false) return null;
-      run.status = 'queued';
-      return run;
-    }),
     get: vi.fn(() => null),
     drop,
     start,
@@ -180,33 +174,4 @@ describe('internal run creation service', () => {
     expect(harness.start).not.toHaveBeenCalled();
   });
 
-  it('reclaims and rearms an eligible resumed run before it can start', () => {
-    const harness = createHarness({ creation: 'reused' });
-
-    expect(harness.service.prepare({
-      meta: {},
-      resume: { requested: true, canResume: () => true },
-    })).toEqual({
-      kind: 'ready',
-      run: harness.run,
-      creationKind: 'reused',
-      resumed: true,
-    });
-    expect(harness.claimAssistantMessage).toHaveBeenCalledWith(
-      harness.run,
-      expect.objectContaining({ status: 'queued' }),
-    );
-    expect(harness.registry.prepareRestart).toHaveBeenCalledWith(harness.run);
-  });
-
-  it('preserves a reused terminal run when resume eligibility fails', () => {
-    const harness = createHarness({ creation: 'reused' });
-
-    expect(harness.service.prepare({
-      meta: {},
-      resume: { requested: true, canResume: () => false },
-    })).toEqual({ kind: 'resume_not_allowed', run: harness.run });
-    expect(harness.drop).not.toHaveBeenCalled();
-    expect(harness.claimAssistantMessage).not.toHaveBeenCalled();
-  });
 });

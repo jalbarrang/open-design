@@ -951,39 +951,6 @@ describe('task observation OTLP exporter', () => {
     });
   });
 
-  it('selects a Task-capable sink independently from Vela and exposes a versioned schema capability', () => {
-    const env = {
-      LANGFUSE_PUBLIC_KEY: 'pk-fixture',
-      LANGFUSE_SECRET_KEY: 'sk-fixture',
-      LANGFUSE_BASE_URL: 'https://self-host.example.test',
-    };
-    const configuredVela = {
-      VELA_CONTROL_KEY: 'ck-fixture',
-      VELA_API_URL: 'https://vela.example.test',
-    };
-
-    expect(readTaskTelemetrySinkConfig({
-      ...env,
-      OPEN_DESIGN_TELEMETRY_RELAY_URL: 'https://relay.example.test',
-    })).toMatchObject({ kind: 'relay', relayUrl: 'https://relay.example.test' });
-    const direct = readTaskTelemetrySinkConfig(env);
-    expect(direct).toMatchObject({ kind: 'langfuse', baseUrl: 'https://self-host.example.test' });
-    expect(readTaskObservationExporterConfig(direct, {
-      ...env,
-      ...configuredVela,
-      LANGFUSE_EXPORTER_MODE: 'otlp',
-    })).toMatchObject({ mode: 'otlp', baseUrl: 'https://self-host.example.test' });
-    expect(readTaskTelemetrySinkConfig({})).toBeNull();
-    expect(TASK_OBSERVATION_SCHEMA_CAPABILITY_V1).toMatchObject({
-      schema: 'open-design.task-observation-schema-capability/v1',
-      aggregateSchema: 'open-design.strategy-task-observation/v1',
-      normalizedObservationSchema: 'open-design.normalized-agent-observation/v1',
-    });
-    expect(TASK_OBSERVATION_SCHEMA_CAPABILITY_V1.safeQualityFields).toEqual(
-      expect.arrayContaining(['assistant_output', 'tool_io', 'manifests', 'error']),
-    );
-  });
-
   it('sends OTLP/JSON with Basic Auth, ingestion v4, and the durable idempotency identity', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {

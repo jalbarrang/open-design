@@ -1,7 +1,6 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog, DialogDescription, DialogFooter, DialogTitle } from "@open-design/components";
-import type { WorkspaceCollabContext } from "@open-design/contracts";
 import { projectKindFromMetadataToTracking } from "@open-design/contracts/analytics";
 import { useAnalytics } from "../analytics/provider";
 import {
@@ -11,37 +10,35 @@ import {
   trackProjectsMorePopoverClick,
 } from "../analytics/events";
 import { useT } from "../i18n";
-import { useWorkspaceContext } from "../collab/useWorkspaceContext";
-import { workspaceIdentityCacheKey } from "../collab/workspace-identity";
 import {
-	getProjectCoverSnapshot,
-	projectCoverSnapshotKey,
-	setProjectCoverSnapshot,
+  getProjectCoverSnapshot,
+  projectCoverSnapshotKey,
+  setProjectCoverSnapshot,
 } from "../lib/project-cover-cache";
 import { deleteLiveArtifact, fetchLiveArtifacts, fetchProjectFiles, liveArtifactPreviewUrl } from "../providers/registry";
 import type {
-	DesignSystemSummary,
-	LiveArtifactSummary,
-	Project,
-	ProjectDisplayStatus,
-	ProjectFile,
-	SkillSummary,
+  DesignSystemSummary,
+  LiveArtifactSummary,
+  Project,
+  ProjectDisplayStatus,
+  ProjectFile,
+  SkillSummary,
 } from "../types";
 import { AnimatePresence } from "motion/react";
 import { Icon } from "./Icon";
 import {
-	isDesignSystemProject,
-	isPublishedDesignSystemProject,
-	resolveProjectDesignSystemId,
+  isDesignSystemProject,
+  isPublishedDesignSystemProject,
+  resolveProjectDesignSystemId,
 } from "./design-system-project";
 import { LiveArtifactBadges } from "./LiveArtifactBadges";
 import { Toast } from "./Toast";
 import {
-	HtmlProjectCoverFrame,
-	coverFromProjectFile,
-	projectCoverUrl,
-	selectProjectFileCover,
-	type ProjectCoverOverride,
+  HtmlProjectCoverFrame,
+  coverFromProjectFile,
+  projectCoverUrl,
+  selectProjectFileCover,
+  type ProjectCoverOverride,
 } from "./project-cover";
 
 type SubTab = "recent" | "yours";
@@ -140,7 +137,6 @@ export function DesignsTab({
 	const confirmTitleId = useId();
 	const t = useT();
 	const analytics = useAnalytics();
-	const { context: workspaceContext, loading: workspaceContextLoading } = useWorkspaceContext();
 	// P0 page_view page_name=projects — fire once when the tab mounts so
 	// `/projects` landings register even before the user clicks anything.
 	// ref-keyed to survive re-renders that flip parent state without
@@ -197,9 +193,9 @@ export function DesignsTab({
 	});
 
 	useEffect(() => {
-		if (!isActive || workspaceContextLoading) return;
+		if (!isActive) return;
 		const controller = new AbortController();
-		const workspaceIdentity = workspaceIdentityCacheKey(workspaceContext);
+		const workspaceIdentity = 'local';
 		if (liveWorkspaceIdentityRef.current !== workspaceIdentity) {
 			liveWorkspaceIdentityRef.current = workspaceIdentity;
 			setLiveArtifactsByProject({});
@@ -218,7 +214,6 @@ export function DesignsTab({
 						projectId,
 						await fetchLiveArtifacts(projectId, {
 							signal: controller.signal,
-							workspaceContext,
 						}),
 					] as const,
 		).then((entries) => {
@@ -227,16 +222,16 @@ export function DesignsTab({
 		});
 
 		return () => controller.abort();
-	}, [isActive, projects, workspaceContext, workspaceContextLoading]);
+	}, [isActive, projects, workspaceContextLoading]);
 
 	useEffect(() => {
-		if (!isActive || workspaceContextLoading) return;
+		if (!isActive) return;
 		const controller = new AbortController();
 		if (projects.length === 0) {
 			setCoverByProject({});
 			return;
 		}
-		const workspaceIdentity = workspaceIdentityCacheKey(workspaceContext);
+		const workspaceIdentity = 'local';
 		const workspaceIdentityChanged = coverWorkspaceIdentityRef.current !== workspaceIdentity;
 		coverWorkspaceIdentityRef.current = workspaceIdentity;
 		const immediateEntries: Array<readonly [string, ProjectCoverOverride | null]> = [];
@@ -276,7 +271,6 @@ export function DesignsTab({
 					try {
 						files = await fetchProjectFiles(project.id, {
 							signal: controller.signal,
-							workspaceContext,
 						});
 					} catch {
 						return [project.id, undefined] as const;
@@ -306,7 +300,7 @@ export function DesignsTab({
 			}));
 		});
 		return () => controller.abort();
-	}, [isActive, projects, workspaceContext, workspaceContextLoading]);
+	}, [isActive, projects, workspaceContextLoading]);
 
 	useEffect(() => {
 		if (!menuOpenId) return;
@@ -559,7 +553,7 @@ export function DesignsTab({
 			message: `${t("common.delete")} "${artifact.title}"?`,
 			confirmLabel: t("designs.menuDelete"),
 			onConfirm: async () => {
-				const ok = await deleteLiveArtifact(projectId, artifact.id, workspaceContext);
+				const ok = await deleteLiveArtifact(projectId, artifact.id);
 				if (!ok) return false;
 				setLiveArtifactsByProject((current) => ({
 					...current,
@@ -855,7 +849,6 @@ export function DesignsTab({
 												p.id,
 												artifact.id,
 												"rendered",
-												workspaceContext,
 											)}
 											title=""
 											loading="lazy"
@@ -894,7 +887,6 @@ export function DesignsTab({
 						const cover = projectCover(
 							p,
 							coverByProject[p.id] ?? null,
-							workspaceContext,
 						);
 						const isSelected = selected.has(p.id);
 						const designSystemProject = isDesignSystemProject(p);
@@ -1351,7 +1343,6 @@ function isOrbitProject(project: Project): boolean {
 function projectCover(
 	project: Project,
 	override: ProjectCoverOverride | null,
-	workspaceContext?: WorkspaceCollabContext | null,
 ): {
 	kind: "image" | "video" | "html" | "logo" | "brand" | "fallback";
 	src?: string;
@@ -1393,7 +1384,6 @@ function projectCover(
 				project.id,
 				override.name,
 				override.mtime,
-				workspaceContext,
 			),
 			style,
 			initial,
@@ -1406,7 +1396,6 @@ function projectCover(
 			project.id,
 			entry,
 			project.updatedAt,
-			workspaceContext,
 		);
 		if (meta?.kind === "image") return { kind: "image", src, style, initial };
 		if (meta?.kind === "video") return { kind: "video", src, style, initial };

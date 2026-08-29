@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { BrowserWindow, Menu, app, dialog, globalShortcut, shell, type MenuItemConstructorOptions } from "electron";
+import { BrowserWindow, Menu, app, shell, type MenuItemConstructorOptions } from "electron";
 
 import {
   APP_KEYS,
@@ -40,8 +40,6 @@ import {
 import { readProcessStamp } from "@open-design/platform";
 
 import { createDesktopRuntime, type DesktopRuntime } from "./runtime.js";
-import { dispatchInviteDeeplink, registerInviteDeeplink } from "./invite-deeplink.js";
-import { focusDesktopForDeeplink } from "./deeplink-focus.js";
 import { setUpDesktopCrashReporter, writeDesktopGpuInfo } from "./crash-diagnostics.js";
 import { beginDesktopSession, clearReportedCrash, endDesktopSessionCleanly, markDesktopSessionRunning } from "./session-lifecycle.js";
 import {
@@ -105,14 +103,7 @@ export {
 } from "./runtime.js";
 
 const TOOLS_DEV_PARENT_PID_ENV = SIDECAR_ENV.TOOLS_DEV_PARENT_PID;
-const AMR_PROFILE_ENV_KEY = "OPEN_DESIGN_AMR_PROFILE";
-const AMR_PROFILE_AGENT_ID = "amr";
-const AMR_ENVIRONMENT_PROFILES = ["prod", "test", "feature-test", "local"] as const;
-const APP_CONFIG_CHANGED_IPC_CHANNEL = "od:app-config-changed";
-type AmrEnvironmentProfile = (typeof AMR_ENVIRONMENT_PROFILES)[number];
 type DesktopAppConfigPrefs = {
-  agentModels?: Record<string, { model?: string; reasoning?: string }>;
-  agentCliEnv?: Record<string, Record<string, string>>;
   allowSilentUpdates?: boolean;
   [key: string]: unknown;
 };
@@ -178,12 +169,9 @@ export type DesktopMainOptions = {
    * Node fetch can hit.
    */
   discoverDaemonUrl?: () => Promise<string | null>;
-  /** Stable installed launcher used for Windows opendesign:// registration. */
-  inviteProtocolClientPath?: string | null;
   preloadPath?: string;
   windowTitle?: string;
   onDesktopReady?: (controls: {
-    dispatchInviteDeeplink(url: string | null): void;
     show(): void;
   }) => void;
   /**
@@ -299,67 +287,6 @@ function resolveDaemonBaseUrl(
   ]);
 }
 
-export function normalizeAmrEnvironmentProfile(profile: unknown): AmrEnvironmentProfile {
-  if (typeof profile !== "string") return "prod";
-  const trimmed = profile.trim();
-  return AMR_ENVIRONMENT_PROFILES.includes(trimmed as AmrEnvironmentProfile)
-    ? (trimmed as AmrEnvironmentProfile)
-    : "prod";
-}
-
-export function mergeAmrEnvironmentProfileConfig(
-  config: DesktopAppConfigPrefs,
-  profile: AmrEnvironmentProfile,
-): DesktopAppConfigPrefs {
-  if (!AMR_ENVIRONMENT_PROFILES.includes(profile)) {
-    throw new Error(
-      `AMR Environment Profile must be prod, test, feature-test, or local: ${String(profile)}`,
-    );
-  }
-  const currentProfile = normalizeAmrEnvironmentProfile(
-    config.agentCliEnv?.[AMR_PROFILE_AGENT_ID]?.[AMR_PROFILE_ENV_KEY],
-  );
-  const shouldClearAmrModel = currentProfile !== profile;
-  const hadAmrModel =
-    shouldClearAmrModel && Object.prototype.hasOwnProperty.call(config.agentModels ?? {}, AMR_PROFILE_AGENT_ID);
-  const nextAgentModels = { ...(config.agentModels ?? {}) };
-  if (shouldClearAmrModel) {
-    delete nextAgentModels[AMR_PROFILE_AGENT_ID];
-  }
-  return {
-    ...config,
-    ...(Object.keys(nextAgentModels).length > 0
-      ? { agentModels: nextAgentModels }
-      : hadAmrModel
-        ? { agentModels: {} }
-        : {}),
-    agentCliEnv: {
-      ...(config.agentCliEnv ?? {}),
-      [AMR_PROFILE_AGENT_ID]: {
-        ...(config.agentCliEnv?.[AMR_PROFILE_AGENT_ID] ?? {}),
-        [AMR_PROFILE_ENV_KEY]: profile,
-      },
-    },
-  };
-}
-
-export function createAmrEnvironmentProfileMenuItems(
-  selectedProfile: AmrEnvironmentProfile,
-  onSelect: (profile: AmrEnvironmentProfile) => void,
-): MenuItemConstructorOptions[] {
-  return [
-    {
-      label: "AMR Profile",
-      submenu: AMR_ENVIRONMENT_PROFILES.map((profile) => ({
-        label: profile,
-        type: "radio" as const,
-        checked: selectedProfile === profile,
-        click: () => onSelect(profile),
-      })),
-    },
-  ];
-}
-
 export function resolveAboutPanelVersion(options: DesktopMainOptions): string | null {
   const version = options.update?.currentVersion?.trim();
   return version == null || version.length === 0 ? null : version;
@@ -387,25 +314,6 @@ async function readAppConfigFromDaemon(baseUrl: string): Promise<DesktopAppConfi
   return payload.config;
 }
 
-async function writeAppConfigToDaemon(
-  baseUrl: string,
-  config: DesktopAppConfigPrefs,
-): Promise<DesktopAppConfigPrefs> {
-  const response = await fetch(appConfigUrl(baseUrl), {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(config),
-  });
-  if (!response.ok) {
-    throw new Error(`PUT /api/app-config failed with HTTP ${response.status}`);
-  }
-  const payload = await response.json() as { config?: DesktopAppConfigPrefs };
-  if (payload.config == null || typeof payload.config !== "object") {
-    throw new Error("PUT /api/app-config returned an invalid config payload");
-  }
-  return payload.config;
-}
-
 type DesktopMenuController = {
   dispose(): void;
   setUpdateLabels(labels: DesktopUpdateMenuLabels): void;
@@ -418,65 +326,9 @@ function installDesktopMenu(
     updater: DesktopUpdater;
   },
 ): DesktopMenuController {
-  let developMenuVisible = false;
-  let lastKnownAmrProfile: AmrEnvironmentProfile = "prod";
   let updateMenuLabels = DEFAULT_DESKTOP_UPDATE_MENU_LABELS;
   let updateStatus = options.updater.snapshot();
-  const developMenuAccelerator = process.platform === "darwin" ? "Command+Option+Shift+D" : "Control+Alt+Shift+D";
-
-  const showDevelopMenuError = (message: string, error: unknown): void => {
-    const detail = error instanceof Error ? error.message : String(error);
-    dialog.showErrorBox(message, detail);
-  };
-
   const discoverAppConfigBaseUrl = resolveDaemonBaseUrl(runtime, options);
-
-  const readCurrentAmrProfile = async (): Promise<AmrEnvironmentProfile> => {
-    const baseUrl = await discoverAppConfigBaseUrl();
-    const config = await readAppConfigFromDaemon(baseUrl);
-    return normalizeAmrEnvironmentProfile(config.agentCliEnv?.[AMR_PROFILE_AGENT_ID]?.[AMR_PROFILE_ENV_KEY]);
-  };
-
-  const writeCurrentAmrProfile = async (profile: AmrEnvironmentProfile): Promise<AmrEnvironmentProfile> => {
-    const baseUrl = await discoverAppConfigBaseUrl();
-    const config = await readAppConfigFromDaemon(baseUrl);
-    const nextConfig = mergeAmrEnvironmentProfileConfig(config, profile);
-    const writtenConfig = await writeAppConfigToDaemon(baseUrl, nextConfig);
-    return normalizeAmrEnvironmentProfile(
-      writtenConfig.agentCliEnv?.[AMR_PROFILE_AGENT_ID]?.[AMR_PROFILE_ENV_KEY],
-    );
-  };
-
-  const selectAmrProfile = (profile: AmrEnvironmentProfile): void => {
-    void writeCurrentAmrProfile(profile)
-      .then((writtenProfile) => {
-        lastKnownAmrProfile = writtenProfile;
-        for (const window of BrowserWindow.getAllWindows()) {
-          window.webContents.send(APP_CONFIG_CHANGED_IPC_CHANNEL);
-        }
-        rebuild();
-      })
-      .catch((error: unknown) => {
-        showDevelopMenuError("AMR Environment Profile switch failed", error);
-      });
-  };
-
-  const toggleDevelopMenu = (): void => {
-    if (developMenuVisible) {
-      developMenuVisible = false;
-      rebuild();
-      return;
-    }
-    void readCurrentAmrProfile()
-      .then((profile) => {
-        lastKnownAmrProfile = profile;
-        developMenuVisible = true;
-        rebuild();
-      })
-      .catch((error: unknown) => {
-        showDevelopMenuError("Develop menu unavailable", error);
-      });
-  };
 
   const exportDiagnostics = () => {
     const focused = BrowserWindow.getFocusedWindow();
@@ -548,12 +400,6 @@ function installDesktopMenu(
           { role: "forceReload" },
           { role: "toggleDevTools" },
           { type: "separator" },
-          {
-            accelerator: developMenuAccelerator,
-            label: developMenuVisible ? "Hide Develop Menu" : "Show Develop Menu",
-            click: toggleDevelopMenu,
-          },
-          { type: "separator" },
           { role: "resetZoom" },
           { role: "zoomIn" },
           { role: "zoomOut" },
@@ -561,14 +407,6 @@ function installDesktopMenu(
           { role: "togglefullscreen" },
         ],
       },
-      ...(developMenuVisible
-        ? [
-            {
-              label: "Develop",
-              submenu: createAmrEnvironmentProfileMenuItems(lastKnownAmrProfile, selectAmrProfile),
-            },
-          ]
-        : []),
       {
         label: "Window",
         submenu: [
@@ -630,16 +468,9 @@ function installDesktopMenu(
     if (nextKey === lastUpdateMenuItemKey) return;
     rebuild();
   });
-  const registered = globalShortcut.register(developMenuAccelerator, toggleDevelopMenu);
-  if (!registered) {
-    console.warn("[open-design desktop] develop menu shortcut unavailable", { accelerator: developMenuAccelerator });
-  }
   return {
     dispose() {
       unsubscribeUpdater();
-      if (registered) {
-        globalShortcut.unregister(developMenuAccelerator);
-      }
     },
     setUpdateLabels(labels) {
       updateMenuLabels = labels;
@@ -929,7 +760,6 @@ export async function runDesktopMain(
             return activeDesktop.console();
           case SIDECAR_MESSAGES.SHOW:
             activeDesktop.show();
-            dispatchInviteDeeplink(request.input?.deeplinkUrl ?? null);
             notifyDesktopExternalShow(options.onExternalShow);
             return { accepted: true };
           case SIDECAR_MESSAGES.CLICK:
@@ -1006,7 +836,6 @@ export async function runDesktopMain(
   }
   console.info("[open-design desktop] desktop runtime created");
   options.onDesktopReady?.({
-    dispatchInviteDeeplink,
     show: () => {
       void Promise.resolve(options.onExternalShow?.()).finally(() => desktop?.show());
     },
@@ -1037,15 +866,6 @@ export async function runDesktopMain(
   );
   removeDiagnosticsIpc = registerDesktopDiagnosticsIpc({
     discoverDaemonBaseUrl: resolveDaemonBaseUrl(runtime, options),
-  });
-  // Route opendesign:// team-invite deeplinks to the daemon (desktop wake-up).
-  registerInviteDeeplink({
-    resolveDaemonBaseUrl: resolveDaemonBaseUrl(runtime, options),
-    focus: () => focusDesktopForDeeplink(desktop),
-    onCompleted: (outcome) => {
-      console.info("[open-design desktop] invite deeplink continuation completed", outcome);
-    },
-    protocolClientPath: options.inviteProtocolClientPath,
   });
   const discoverUpdaterAppConfigBaseUrl = resolveDaemonBaseUrl(runtime, options);
   updateScheduler = createDesktopUpdaterScheduler(updater, {

@@ -44,7 +44,7 @@ never own the atom implementations; they only reference them by id.
 | `patch-edit` | Small-step file patches. | `code-migration`, `tune-collab` |
 | `build-test` | Run build/typecheck/tests and produce build/test convergence signals. | `code-migration` |
 | `diff-review` | Render rewrite as a reviewable diff. | `code-migration`, `tune-collab` |
-| `handoff` | Push artifact to downstream surfaces (cli / cloud / desktop). | `tune-collab` |
+| `handoff` | Push artifact to downstream surfaces (cli / desktop / web / docker / github / figma / code-agent). | `tune-collab` |
 
 ## How the daemon resolves an atom
 

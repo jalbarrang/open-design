@@ -20,7 +20,7 @@ export interface ScaffoldInput {
   id: string;
   title?: string;
   description?: string;
-  taskKind?: 'new-generation' | 'code-migration' | 'figma-migration' | 'tune-collab';
+  taskKind?: 'new-generation' | 'code-migration' | 'figma-migration';
   mode?: string;
   scenario?: string;
   // When true, also drop a Claude Code-compatible plugin.json so the

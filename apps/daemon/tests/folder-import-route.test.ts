@@ -487,56 +487,6 @@ describe('POST /api/import/folder', () => {
     expect(body.error?.message).toMatch(/unsupported field: source_reference/i);
   });
 
-  it('requires the exact explicit Workspace member before replacing a bound project working directory', async () => {
-    const originalFolder = makeFolder();
-    await writeFile(path.join(originalFolder, 'index.html'), '<!doctype html><title>original</title>');
-    const ownerHeaders = workspaceHeaders('workspace-working-dir', 'member-working-dir-owner');
-    const importResp = await importFolder({ baseDir: originalFolder }, ownerHeaders);
-    expect(importResp.status).toBe(200);
-    const { project } = (await importResp.json()) as {
-      project: { id: string; metadata?: { baseDir?: string } };
-    };
-
-    const unauthorizedFolder = makeFolder();
-    await writeFile(path.join(unauthorizedFolder, 'index.html'), '<!doctype html><title>denied</title>');
-    const deniedResp = await fetch(`${baseUrl}/api/projects/${project.id}/working-dir`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...workspaceHeaders('workspace-working-dir', 'member-working-dir-teammate'),
-      },
-      body: JSON.stringify({ baseDir: unauthorizedFolder }),
-    });
-    expect(deniedResp.status).toBe(403);
-    await expect(deniedResp.json()).resolves.toMatchObject({
-      error: { code: 'WORKSPACE_PROJECT_PERMISSION_DENIED' },
-    });
-
-    const afterDenied = await fetch(
-      `${baseUrl}/api/projects/${project.id}`,
-      { headers: ownerHeaders },
-    );
-    expect(afterDenied.status).toBe(200);
-    await expect(afterDenied.json()).resolves.toMatchObject({
-      project: {
-        id: project.id,
-        metadata: { baseDir: project.metadata?.baseDir },
-      },
-    });
-
-    const ownerFolder = makeFolder();
-    await writeFile(path.join(ownerFolder, 'index.html'), '<!doctype html><title>owner</title>');
-    const allowedResp = await fetch(`${baseUrl}/api/projects/${project.id}/working-dir`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...ownerHeaders },
-      body: JSON.stringify({ baseDir: ownerFolder }),
-    });
-    expect(allowedResp.status).toBe(200);
-    await expect(allowedResp.json()).resolves.toMatchObject({
-      project: { id: project.id, metadata: { baseDir: await realpath(ownerFolder) } },
-    });
-  });
-
   it('clears scratch provenance when replacing a working directory without new provenance', async () => {
     const scratchFolder = makeFolder();
     await writeFile(path.join(scratchFolder, 'index.html'), '<!doctype html>');

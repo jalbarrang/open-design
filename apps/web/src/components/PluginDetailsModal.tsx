@@ -20,7 +20,6 @@
 
 import type {
   InstalledPluginRecord,
-  WorkspaceCollabContext,
 } from '@open-design/contracts';
 import { createPortal } from 'react-dom';
 import { inferPluginPreview } from './plugins-home/preview';
@@ -39,7 +38,6 @@ interface Props {
   isApplying?: boolean;
   hideUseAction?: boolean;
   /** Exact authority for the resource bytes shown by this modal. */
-  workspaceContext?: WorkspaceCollabContext | null;
   // Analytics — fires when the user picks an item inside the PreviewModal
   // share popover (media / html / design variants only; the scenario
   // fallback has no share popover).
@@ -56,7 +54,7 @@ export function PluginDetailsModal({
   workspaceContext = null,
   onSharePopoverItemClick,
 }: Props) {
-  const preview = inferPluginPreview(record, { workspaceContext });
+  const preview = inferPluginPreview(record);
   let detail: JSX.Element;
 
   if (preview.kind === 'media') {
@@ -83,7 +81,6 @@ export function PluginDetailsModal({
         onDuplicate={onDuplicate}
         isApplying={isApplying}
         hideUseAction={hideUseAction}
-        workspaceContext={workspaceContext}
         onSharePopoverItemClick={onSharePopoverItemClick}
       />
     );
@@ -96,7 +93,6 @@ export function PluginDetailsModal({
         onDuplicate={onDuplicate}
         isApplying={isApplying}
         hideUseAction={hideUseAction}
-        workspaceContext={workspaceContext}
         onSharePopoverItemClick={onSharePopoverItemClick}
       />
     );
@@ -109,7 +105,6 @@ export function PluginDetailsModal({
         onDuplicate={onDuplicate}
         isApplying={isApplying}
         hideUseAction={hideUseAction}
-        workspaceContext={workspaceContext}
       />
     );
   }

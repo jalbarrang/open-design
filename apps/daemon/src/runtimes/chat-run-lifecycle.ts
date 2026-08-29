@@ -152,7 +152,7 @@ export function applyClaudeStreamJsonRunBookkeeping(
  * up — so `last_progress_age_ms` reads near zero on exactly the stalled runs
  * whose contract says it must read "near the inactivity ceiling" (see
  * TrackingRunFinished in packages/contracts). That is what made the 2026-07-28
- * AMR design-system stall (run 14b04dd3, ~30 minutes of silence, reported age
+ * A prior design-system stall (~30 minutes of silence, reported age
  * 664ms) look like a run that was still working when it was killed.
  *
  * Two kinds of emission are ours, not the agent's:

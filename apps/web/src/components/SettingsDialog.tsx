@@ -3,7 +3,6 @@ import type { CSSProperties, Dispatch, SetStateAction } from 'react';
 import { Button, VisuallyHidden } from '@open-design/components';
 import type {
   AmrWalletSnapshot,
-  WorkspaceCollabContext,
 } from '@open-design/contracts';
 import { validateBaseUrl } from '@open-design/contracts/api/connectionTest';
 import {
@@ -14,12 +13,6 @@ import {
 } from '@open-design/contracts/analytics';
 import { useAnalytics } from '../analytics/provider';
 import { byokErrorCode } from '../analytics/byok-error-code';
-import {
-  amrHandoffDeviceId,
-  attributedAmrUrl,
-  recordAmrEntry,
-  type TrackingAmrEntrySource,
-} from '../analytics/amr-attribution';
 import { getResolvedDeviceId } from '../analytics/client';
 import {
   trackByokPreflightBlocked,
@@ -59,7 +52,6 @@ import {
   type VelaLoginStatus,
 } from '../providers/daemon';
 import { installDeepSeekHarnessCompanion } from '../providers/agent-companion';
-import { amrProfileBadgeLabel } from '../runtime/amr-guidance';
 import {
   availableVisibleAgentCount,
   deepSeekHarnessNeedsSetup,
@@ -168,16 +160,8 @@ import { PrivacySection } from './PrivacySection';
 import { ProjectLocationsSection } from './ProjectLocationsSection';
 import { RoutinesSection } from './RoutinesSection';
 import { SettingsWorkspaceSection } from './SettingsWorkspaceSection';
-import {
-  useWorkspaceBillingResponse,
-  useWorkspaceContext,
-  workspaceBillingBalanceUsd,
-  workspaceBillingSummaryForContext,
-} from '../collab/useWorkspaceContext';
-import { canUpgradeFromPlanTier, resolvePlanTier } from '../collab/team-plan';
 import { planBadgeTierForWorkspace } from './PlanWordmark';
 import { workspaceUpgradeUrl } from './EntryNavRail';
-import { canShowWorkspaceSettings } from '../collab/settings-access';
 import { ConnectorsBrowser } from './ConnectorsBrowser';
 import { MemoryModelInline } from './MemoryModelInline';
 import { MemorySection } from './MemorySection';
@@ -201,11 +185,6 @@ import {
   setCritiqueTheaterEnabled,
   useCritiqueTheaterEnabled,
 } from './Theater';
-import {
-  projectWorkspaceContext,
-  projectWorkspaceScopeReady,
-  useProjectWorkspaceScope,
-} from '../collab/useProjectWorkspaceScope';
 import {
   applyAppearanceToDocument,
   resolveAccentColor,
@@ -1643,10 +1622,6 @@ export function SettingsDialog({
   // gate now guards the deep-link (`initialSection='workspace'`) path — it must
   // stay, otherwise a deep link would hand workspace settings to a viewer the
   // permission bits exclude.
-  const {
-    context: workspaceContext,
-    loading: workspaceContextLoading,
-  } = useWorkspaceContext();
   // Workspace billing drives both the plan and the money shown beside it. The
   // CLI identity remains account-scoped, but a Team badge must never be paired
   // with that account's personal wallet: the entry chrome and Settings must
@@ -1657,7 +1632,6 @@ export function SettingsDialog({
   // onto the selected workspace. See `workspaceBillingSummaryForContext`.
   const workspaceBilling = workspaceBillingSummaryForContext(
     workspaceBillingResponse,
-    workspaceContext,
   );
   const showWorkspaceSettings = canShowWorkspaceSettings(workspaceContext);
   // All generic AMR upgrade buttons route through public Pricing. While the
@@ -1666,7 +1640,7 @@ export function SettingsDialog({
   const amrUpgradeUrl = (profile: string | null | undefined): string | null =>
     workspaceContextLoading
       ? null
-      : workspaceUpgradeUrl(workspaceContext, workspaceBilling, { fallbackProfile: profile });
+      : workspaceUpgradeUrl(workspaceBilling, { fallbackProfile: profile });
   const [settingsSidebarCollapsed, setSettingsSidebarCollapsed] = useState(false);
   const [settingsFullscreen, setSettingsFullscreen] = useState(true);
   // Scroll the right-hand content pane back to the top whenever the user
@@ -4734,7 +4708,6 @@ export function SettingsDialog({
                           // balance was under $39.
                           const workspaceBalanceUsd = workspaceBillingBalanceUsd(
                             workspaceBillingResponse,
-                            workspaceContext,
                           );
                           const amrWorkspaceBalance =
                             amrWalletVisible && workspaceBalanceUsd
@@ -5915,7 +5888,6 @@ export function SettingsDialog({
               composioApiKeyConfigured={Boolean(cfg.composio?.apiKeyConfigured)}
               daemonMediaProviders={daemonMediaProviders}
               daemonMediaProvidersFetchState={daemonMediaProvidersFetchState}
-              workspaceContext={workspaceContext}
               onOpenComposioSection={() => setActiveSection('composio')}
               onLeaveForOrbitProject={(runConfig) => {
                 // Persist any in-flight Orbit edits (toggle / time) before
@@ -6792,9 +6764,8 @@ interface OrbitRunStartResponse {
 export function orbitLiveArtifactHref(
   projectId: string,
   artifactId: string,
-  workspaceContext: WorkspaceCollabContext | null,
 ): string {
-  return liveArtifactPreviewUrl(projectId, artifactId, 'rendered', workspaceContext);
+  return liveArtifactPreviewUrl(projectId, artifactId, 'rendered');
 }
 
 export async function persistConfigAndRunOrbit(
@@ -6822,7 +6793,6 @@ export async function persistConfigAndRunOrbit(
 
 export function configForManualOrbitRun(
   config: AppConfig,
-  workspaceContext: WorkspaceCollabContext | null = null,
 ): AppConfig {
   const effectiveTemplateSkillId = config.orbit?.templateSkillId || DEFAULT_ORBIT.templateSkillId || '';
   return {
@@ -6871,7 +6841,6 @@ function OrbitSection({
   composioApiKeyConfigured,
   daemonMediaProviders,
   daemonMediaProvidersFetchState,
-  workspaceContext,
   onOpenComposioSection,
   onLeaveForOrbitProject,
 }: {
@@ -6884,7 +6853,6 @@ function OrbitSection({
   composioApiKeyConfigured: boolean;
   daemonMediaProviders?: AppConfig['mediaProviders'] | null;
   daemonMediaProvidersFetchState?: 'idle' | 'ok' | 'error';
-  workspaceContext: WorkspaceCollabContext | null;
   /** Switch the parent settings dialog to the Connectors (Composio) tab.
    *  Used by the Orbit gate's primary CTA so the user can fix the
    *  prerequisite without leaving the dialog. */
@@ -7057,7 +7025,7 @@ function OrbitSection({
 
     void (async () => {
       try {
-        const runConfig = configForManualOrbitRun(cfg, workspaceContext);
+        const runConfig = configForManualOrbitRun(cfg);
         const payload = await persistConfigAndRunOrbit(runConfig, {
           daemonProviders: daemonMediaProviders,
           syncMediaProviders: daemonMediaProvidersFetchState === 'ok',
@@ -7105,7 +7073,6 @@ function OrbitSection({
     ? orbitLiveArtifactHref(
         lastRun.artifactProjectId,
         lastRun.artifactId,
-        workspaceContext,
       )
     : null;
   const isBusy = running || Boolean(status?.running);
@@ -8878,7 +8845,6 @@ function CritiqueTheaterSection({
       <CritiqueTheaterSectionContent
         activeProjectId={null}
         projectScopeReady
-        workspaceContext={null}
       />
     );
 }
@@ -8901,7 +8867,6 @@ function ProjectScopedCritiqueTheaterSection({
     <CritiqueTheaterSectionContent
       activeProjectId={projectId}
       projectScopeReady={projectWorkspaceScopeReady(projectScope.scope)}
-      workspaceContext={projectWorkspaceContext(projectScope.scope)}
     />
   );
 }
@@ -8909,11 +8874,9 @@ function ProjectScopedCritiqueTheaterSection({
 function CritiqueTheaterSectionContent({
   activeProjectId,
   projectScopeReady,
-  workspaceContext,
 }: {
   activeProjectId: string | null;
   projectScopeReady: boolean;
-  workspaceContext: WorkspaceCollabContext | null;
 }) {
   const { t } = useI18n();
   const analytics = useAnalytics();
@@ -8932,7 +8895,6 @@ function CritiqueTheaterSectionContent({
     if (activeProjectId !== null && projectScopeReady) {
       void setCritiqueTheaterEnabled(next, {
         projectId: activeProjectId,
-        workspaceContext,
       });
     } else {
       void setCritiqueTheaterEnabled(next);

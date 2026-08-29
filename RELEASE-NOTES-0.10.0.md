@@ -1,5 +1,10 @@
 🎨 **`141 PRs` · `50 contributors` · `2 days`** — **The all-in-one Agentic design workspace.** 0.9.0 put the AI engine in everyone's hands; 0.10.0 makes OpenDesign the only window a designer needs open. The whole craft now lives in one place — go from a vague idea to discovering references, gathering raw material, editing interactively, queuing notes, polishing motion and animation, and handing the result off to an editor or a Code Agent for production — **without leaving the app.** And because you can fire comments into a queue, run several sessions at once, and gather assets in parallel, it stops feeling like one assistant and starts feeling like **a whole local design team working for you.** 🚀
 
+> **Historical note.** This release record mentions OpenDesign Cloud / AMR (the
+> hosted account, wallet, and bundled `vela` CLI). That capability has since been
+> removed; OpenDesign runs on local coding-agent CLIs and your own provider keys
+> only. Kept as a record of what shipped at the time.
+
 ## 🔥 Highlights
 
 - 🎨 **The design workspace — one window for the whole craft.** The centerpiece of 0.10.0: a single, sprawling consolidation (211 files, +36k lines) that turns the project view into a real all-in-one studio. A **Lexical-powered composer** makes `@mentions` atomic pills with caret-anchored mention/slash popovers; **interactive terminals** run a session right beside the chat; **comments carry drag-and-drop image and note attachments**; a **browser-style reference board** with page capture pulls external references straight into a project; and you can **fork a conversation** from any message. Discover, gather, edit, and review without ever switching tools. (#3516) Thanks `@pftom`.

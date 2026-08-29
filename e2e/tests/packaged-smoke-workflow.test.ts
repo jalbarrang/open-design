@@ -1695,17 +1695,16 @@ process.stdin.on("end", () => {
     expect(preflight).toContain("fromJSON(needs.runners.outputs.runs_on).general_medium");
     expect(preflight).toContain("toJSON(fromJSON(needs.runners.outputs.runs_on).general_medium)");
     expect(uiP0).toContain("fromJSON(needs.runners.outputs.runs_on).ui_p0");
-    expect(uiP0).toContain("fromJSON(needs.runners.outputs.runs_on).ui_p0_heavy");
-    expect(uiP0).toContain("matrix.shard == 'project-collab'");
-    expect(uiP0).toContain(
-      "toJSON(matrix.shard == 'project-collab' && fromJSON(needs.runners.outputs.runs_on).ui_p0_heavy || fromJSON(needs.runners.outputs.runs_on).ui_p0)",
-    );
+    // The Cloud purge deleted the multi-client collab spec that owned this
+    // shard. `ui_p0_matrix` still comes from `.github/config/scopes.json`, so a
+    // stale `project-collab` there would schedule a job whose group no longer
+    // exists — keep the workflow and the topology below naming the same shards.
+    expect(uiP0).not.toContain("project-collab");
     expect(uiP0).toContain("include: ${{ fromJSON(needs.plan.outputs.ui_p0_matrix) }}");
     expect(uiP0CiMatrix.map((entry) => entry.name)).toEqual([
       "entry-settings",
       "project-workspace",
       "project-workspace-editor",
-      "project-collab",
       "project-runtime",
       "workspace-restoration",
     ]);
@@ -1721,13 +1720,8 @@ process.stdin.on("end", () => {
       files: [
         "ui/app-design-files.test.ts",
         "ui/app-manual-edit.test.ts",
-        "ui/workspace-team-design-system-picker.test.ts",
       ],
     });
-    expect(uiP0Groups["project-collab"].files).toEqual([
-      "ui/workspace-multi-client-collab.test.ts",
-    ]);
-    expect(uiP0Groups["project-collab"].workers).toBe(1);
     expect(uiP0Groups["critical-extras"]).toEqual({
       grep: "@merge-extra",
       workers: 1,
@@ -2658,8 +2652,10 @@ process.stdin.on("end", () => {
     expect(canary).toContain("ref: main");
     expect(canary).not.toContain("inputs.ref");
     expect(canary).toContain("runs-on: windows-latest");
-    expect(canary).toContain("OPEN_DESIGN_AMR_PROFILE: prod");
-    expect(canary).toContain("OD_VELA_WEB_URL: ${{ secrets.VELA_WEB_URL_PROD }}");
+    // The Cloud purge removed the AMR runtime, so the canary must no longer
+    // carry a Cloud profile or a Vela web URL secret into the packaged smoke.
+    expect(canary).not.toContain("OPEN_DESIGN_AMR_PROFILE");
+    expect(canary).not.toContain("OD_VELA_WEB_URL");
     expect(canary).toContain("--namespace release-prerelease-canary-win");
     expect(canary).toContain('OD_PACKAGED_E2E_RELEASE_CHANNEL: prerelease');
     expect(canary).toContain('OD_PACKAGED_E2E_WIN_SMOKE_PROFILE: core');

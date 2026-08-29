@@ -25,12 +25,9 @@ import type {
   OpenProjectInEditorResponse,
 } from '@open-design/contracts';
 import type { RouteDeps } from '../server-context.js';
-import type { AuthorizeProjectRequest } from '../collab/project-request-authority.js';
 
 export interface RegisterHostToolsRoutesDeps
-  extends RouteDeps<'db' | 'http' | 'paths' | 'projectStore' | 'projectFiles'> {
-  authorizeProjectRequest: AuthorizeProjectRequest;
-}
+  extends RouteDeps<'db' | 'http' | 'paths' | 'projectStore' | 'projectFiles'> {}
 
 export type RealPlatform = 'darwin' | 'win32' | 'linux';
 export type Platform = RealPlatform | 'unknown';
@@ -97,7 +94,7 @@ function pathDirs(): string[] {
   // /opt/homebrew/bin), so add the common locations the user's shell
   // would have on first login. Without this, Cursor / Zed / VS Code
   // shims installed via "Install '...' command" are invisible to the
-  // daemon launched by `open Open Design.app`.
+  // daemon launched by `open OpenDesign.app`.
   const extras = process.platform === 'darwin'
     ? ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin', `${process.env.HOME ?? ''}/.local/bin`]
     : process.platform === 'linux'
@@ -347,7 +344,6 @@ export function registerHostToolsRoutes(app: Express, ctx: RegisterHostToolsRout
       if (!project) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
-      if (!await ctx.authorizeProjectRequest(req, res, project.id, { mode: 'read' })) return;
       const resolvedDir = projectHostOpenDir(
         PROJECTS_DIR,
         project,

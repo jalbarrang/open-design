@@ -9,20 +9,11 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type {
-  CollabCloudComment,
   OdNextDevicePlatformV1,
   ProjectBrowserWorkspaceTab,
   ProjectTabsState,
 } from '@open-design/contracts';
 import { eventsEndedWithUnfinishedWork } from '@open-design/contracts';
-import { migrateCollabSyncSnapshots } from './collab/sync-snapshot-store.js';
-import { migrateCommentRelayOutbox } from './collab/comment-relay-outbox.js';
-import { migratePublicFilePublications } from './collab/public-file-publication-store.js';
-import { migrateAmrTerminalReportOutbox } from './storage/amr-terminal-report-outbox.js';
-import {
-  collapseWorkspaceProjectHomes,
-  type WorkspaceProjectHomeRow,
-} from './collab/workspace-project-home.js';
 import { migrateCritique } from './critique/persistence.js';
 import { migrateMediaTasks } from './media/tasks.js';
 import { migrateLibrary } from './library-store.js';
@@ -387,7 +378,6 @@ function migrate(db: SqliteDb): void {
   if (!workspaceProjectCols.some((c: DbRow) => c.name === 'cloud_tombstoned_at')) {
     db.exec(`ALTER TABLE workspace_projects ADD COLUMN cloud_tombstoned_at INTEGER`);
   }
-  migrateWorkspaceProjectsSingleHome(db);
   const migratedWorkspaceProjectCols = db
     .prepare(`PRAGMA table_info(workspace_projects)`)
     .all() as DbRow[];
@@ -567,112 +557,6 @@ function migrate(db: SqliteDb): void {
   migrateProjectScenarioBindings(db);
   migrateStrategyTaskStore(db);
   migrateOdNextRolloutStore(db);
-  migrateCollabSyncSnapshots(db);
-  migrateCommentRelayOutbox(db);
-  migrateAmrTerminalReportOutbox(db);
-  migratePublicFilePublications(db);
-}
-
-/**
- * Bind every project to exactly ONE workspace, and make any other state
- * unrepresentable.
- *
- * Product ruling (2026-07-21): a project is created in a workspace and lives
- * there; sharing flips `visibility` within that workspace rather than projecting
- * the project into a second one. See collab/workspace-project-home.ts for the
- * full statement and for the rule that picks the surviving row.
- *
- * Two steps, in this order, inside one transaction:
- *   1. collapse the duplicate rows an older build's blanket back-fill wrote —
- *      on the dogfood database 23 of 31 projects had rows in 2-4 workspaces;
- *   2. narrow the primary key from `(workspace_id, project_id)` back to
- *      `project_id`, which is what it was before a migration widened it (the
- *      table it renamed was called `workspace_projects_legacy_single_project`).
- *
- * The order matters: the rebuild's INSERT would fail on the narrowed key if the
- * duplicates were still there. Step 1 therefore runs on every startup, not just
- * on the one that narrows the key, so a row that predates this build is repaired
- * even if the key was already narrow. It is idempotent and costs one indexed
- * scan.
- *
- * A migration rather than the startup reconciliation used for impossible team
- * shares (server.ts `reconcileImpossibleTeamShares`): that one needs the
- * workspace DIRECTORY to decide, which is a signed-in network fact, so it cannot
- * run before the first read. This one decides from the table alone, so it can —
- * and it must, because the read path below now assumes at most one row.
- */
-function migrateWorkspaceProjectsSingleHome(db: SqliteDb): void {
-  const collapse = db.transaction(() => {
-    const rows = db
-      .prepare(
-        `SELECT project_id AS projectId,
-                workspace_id AS workspaceId,
-                visibility,
-                created_by_workspace_member_id AS createdByWorkspaceMemberId,
-                created_at AS createdAt
-           FROM workspace_projects`,
-      )
-      .all() as WorkspaceProjectHomeRow[];
-    const decisions = collapseWorkspaceProjectHomes(rows);
-    if (decisions.length === 0) return 0;
-    const drop = db.prepare(
-      `DELETE FROM workspace_projects WHERE workspace_id = ? AND project_id = ?`,
-    );
-    let dropped = 0;
-    for (const decision of decisions) {
-      for (const row of decision.drop) {
-        drop.run(row.workspaceId, row.projectId);
-        dropped += 1;
-      }
-    }
-    return dropped;
-  });
-  const dropped = collapse();
-  if (dropped > 0) {
-    console.warn(
-      `[od] bound ${dropped} duplicated workspace project row(s) to a single workspace each. ` +
-        'A project belongs to one workspace; the extras came from an older blanket back-fill.',
-    );
-  }
-
-  const cols = db.prepare(`PRAGMA table_info(workspace_projects)`).all() as DbRow[];
-  const projectPk = cols.find((c: DbRow) => c.name === 'project_id')?.pk ?? 0;
-  const workspacePk = cols.find((c: DbRow) => c.name === 'workspace_id')?.pk ?? 0;
-  if (projectPk === 1 && workspacePk === 0) return;
-
-  db.exec(`
-    DROP INDEX IF EXISTS idx_workspace_projects_workspace_visibility;
-    ALTER TABLE workspace_projects RENAME TO workspace_projects_legacy_multi_workspace;
-    CREATE TABLE workspace_projects (
-      project_id TEXT PRIMARY KEY,
-      workspace_id TEXT NOT NULL,
-      visibility TEXT NOT NULL CHECK (visibility IN ('personal', 'team')),
-      resource_state TEXT NOT NULL CHECK (resource_state IN ('active', 'frozen', 'deleted')),
-      created_by_workspace_member_id TEXT,
-      updated_by_workspace_member_id TEXT,
-      resource_hub_resource_id TEXT,
-      cloud_tombstoned_at INTEGER,
-      sync_state TEXT,
-      metadata_refresh_pending INTEGER NOT NULL DEFAULT 0,
-      version INTEGER NOT NULL DEFAULT 1,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
-    );
-    INSERT INTO workspace_projects
-      (project_id, workspace_id, visibility, resource_state,
-       created_by_workspace_member_id, updated_by_workspace_member_id,
-       resource_hub_resource_id, cloud_tombstoned_at,
-       sync_state, version, created_at, updated_at)
-    SELECT project_id, workspace_id, visibility, resource_state,
-           created_by_workspace_member_id, updated_by_workspace_member_id,
-           resource_hub_resource_id, cloud_tombstoned_at,
-           sync_state, version, created_at, updated_at
-      FROM workspace_projects_legacy_multi_workspace;
-    DROP TABLE workspace_projects_legacy_multi_workspace;
-    CREATE INDEX IF NOT EXISTS idx_workspace_projects_workspace_visibility
-      ON workspace_projects(workspace_id, visibility, updated_at DESC);
-  `);
 }
 
 function migratePreviewCommentsSlideKey(db: SqliteDb): void {
@@ -3728,181 +3612,6 @@ export function deleteConversationAndRepairTeamCommentAnchor(
   });
   remove();
   return { anchorCreated };
-}
-
-/**
- * Delete a synced comment by its global id (the author daemon's own id). Used to
- * apply an inbound tombstone. Scoped by project so a stray id can't reach across
- * projects. Returns true when a row was removed.
- */
-export function deleteSyncedPreviewComment(
-  db: SqliteDb,
-  projectId: string,
-  id: string,
-): boolean {
-  const result = db
-    .prepare(`DELETE FROM preview_comments WHERE id = ? AND project_id = ?`)
-    .run(id, projectId);
-  return result.changes > 0;
-}
-
-/**
- * Merge one collab-cloud comment into local `preview_comments`. The cloud
- * comment's id is used verbatim as the local id (it is the author daemon's own
- * id — a global dedup key), so a comment's whole lifecycle keys off that id:
- *
- * - Tombstone (`deleted: true`): delete the local row by id. Delete wins
- *   unconditionally (it does not compare `updatedAt`).
- * - Create/edit: UPSERT by id. A brand-new id inserts; an existing id updates
- *   IN PLACE only when the incoming `updatedAt` is strictly newer
- *   (last-writer-wins), so a re-pull of an unchanged comment is a no-op and a
- *   stale edit never overwrites a fresher local one. Comments are keyed by id,
- *   so multiple notes on the same element coexist, including from the same
- *   member.
- *
- * `conversationId` is the LOCAL project comment anchor (see
- * getProjectCommentAnchorConversationId);
- * the cloud comment's own conversationId is not a valid FK here. It is only used
- * when inserting a new row — an in-place update keeps the row's existing
- * conversation. Returns true when local state changed (insert, update, or delete).
- */
-export function mergeSyncedPreviewComment(
-  db: SqliteDb,
-  projectId: string,
-  conversationId: string,
-  comment: CollabCloudComment,
-): boolean {
-  if (comment.deleted) {
-    return deleteSyncedPreviewComment(db, projectId, comment.id);
-  }
-  const now = Date.now();
-  const slideIndex = Number.isFinite(comment.slideIndex)
-    ? Math.max(0, Math.round(comment.slideIndex as number))
-    : null;
-  const slideKey = slideIndex ?? -1;
-  const selectionKind = comment.selectionKind === 'pod' ? 'pod' : 'element';
-  const podMembers = selectionKind === 'pod' && Array.isArray(comment.podMembers)
-    ? comment.podMembers
-    : null;
-  const memberCount = selectionKind === 'pod'
-    ? (podMembers?.length ?? (Number.isFinite(comment.memberCount) ? comment.memberCount : 0))
-    : null;
-  const status = PREVIEW_COMMENT_STATUSES.has(comment.status) ? comment.status : 'open';
-  const attachments = Array.isArray(comment.attachments) && comment.attachments.length > 0
-    ? comment.attachments
-    : null;
-  const anchorState = typeof comment.anchorState === 'string' ? comment.anchorState : null;
-  const anchoredVersion = Number.isFinite(comment.anchoredVersion)
-    ? Math.max(0, Math.round(comment.anchoredVersion as number))
-    : null;
-  const updatedAt = Number.isFinite(comment.updatedAt) ? (comment.updatedAt as number) : now;
-  const existing = db
-    .prepare(`SELECT updated_at AS updatedAt FROM preview_comments WHERE id = ? AND project_id = ?`)
-    .get(comment.id, projectId) as DbRow | undefined;
-  if (existing) {
-    // Last-writer-wins: only apply a strictly-newer edit. Keeps the existing
-    // row's conversation/created_at/author identity; refreshes mutable content,
-    // status, and drift-ladder anchor state.
-    if (updatedAt <= Number(existing.updatedAt ?? 0)) return false;
-    db.prepare(
-      `UPDATE preview_comments SET
-         selector = ?, label = ?, text = ?, position_json = ?, html_hint = ?,
-         selection_kind = ?, member_count = ?, pod_members_json = ?, style_json = ?,
-         attachments_json = ?, slide_index = ?, slide_key = ?, note = ?, status = ?,
-         anchor_state = ?, anchored_version = ?, last_good_position_json = ?, updated_at = ?
-       WHERE id = ? AND project_id = ?`,
-    ).run(
-      comment.selector,
-      comment.label,
-      typeof comment.text === 'string' ? comment.text : '',
-      JSON.stringify(comment.position ?? { x: 0, y: 0, width: 0, height: 0 }),
-      typeof comment.htmlHint === 'string' ? comment.htmlHint : '',
-      selectionKind,
-      memberCount,
-      podMembers ? JSON.stringify(podMembers) : null,
-      comment.style ? JSON.stringify(comment.style) : null,
-      attachments ? JSON.stringify(attachments) : null,
-      slideIndex,
-      slideKey,
-      typeof comment.note === 'string' ? comment.note : '',
-      status,
-      anchorState,
-      anchoredVersion,
-      comment.lastGoodPosition ? JSON.stringify(comment.lastGoodPosition) : null,
-      updatedAt,
-      comment.id,
-      projectId,
-    );
-    return true;
-  }
-  // New comment. INSERT OR IGNORE guards against a rare id collision without
-  // throwing.
-  //
-  // pin_seq is taken straight from the wire's `seq` — the collab-cloud's own
-  // globally-serialized push sequence for this project (see
-  // CollabCloudComment.seq) — rather than recomputed as a local MAX+1. That
-  // is what makes a comment PULLED from a peer land on the exact same number
-  // the peer's own device converged to via confirmPreviewCommentPinSeq: both
-  // sides end up keyed off the one authoritative cloud value, never off a
-  // second independent local count. Already confirmed (pin_seq_confirmed=1)
-  // since the cloud is the source of truth here, not a local guess awaiting
-  // reconciliation. Falls back to a local MAX+1 only for a comment that
-  // somehow carries no real seq (e.g. an older relay build) so the row still
-  // gets a usable number instead of a permanent NULL.
-  const createdAt = Number.isFinite(comment.createdAt) ? comment.createdAt : now;
-  const hasWireSeq = Number.isFinite(comment.seq) && comment.seq > 0;
-  let pinSeq = hasWireSeq ? Math.round(comment.seq) : null;
-  if (!hasWireSeq) {
-    const pinScope = db
-      .prepare(
-        `SELECT COALESCE(MAX(pin_seq), 0) AS maxPinSeq
-           FROM preview_comments
-          WHERE project_id = ? AND file_path = ?`,
-      )
-      .get(projectId, comment.filePath) as DbRow;
-    pinSeq = Number(pinScope?.maxPinSeq ?? 0) + 1;
-  }
-  const result = db
-    .prepare(
-      `INSERT OR IGNORE INTO preview_comments
-         (id, project_id, conversation_id, file_path, element_id, selector, label,
-          text, position_json, html_hint, selection_kind, member_count, pod_members_json,
-          style_json, attachments_json, slide_index, slide_key, note, status, created_at, updated_at,
-          anchor_state, anchored_version, author_member_id, last_good_position_json,
-          pin_seq, pin_seq_confirmed, sort_key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      comment.id,
-      projectId,
-      conversationId,
-      comment.filePath,
-      comment.elementId,
-      comment.selector,
-      comment.label,
-      typeof comment.text === 'string' ? comment.text : '',
-      JSON.stringify(comment.position ?? { x: 0, y: 0, width: 0, height: 0 }),
-      typeof comment.htmlHint === 'string' ? comment.htmlHint : '',
-      selectionKind,
-      memberCount,
-      podMembers ? JSON.stringify(podMembers) : null,
-      comment.style ? JSON.stringify(comment.style) : null,
-      attachments ? JSON.stringify(attachments) : null,
-      slideIndex,
-      slideKey,
-      typeof comment.note === 'string' ? comment.note : '',
-      status,
-      createdAt,
-      updatedAt,
-      anchorState,
-      anchoredVersion,
-      typeof comment.memberId === 'string' ? comment.memberId : null,
-      comment.lastGoodPosition ? JSON.stringify(comment.lastGoodPosition) : null,
-      pinSeq,
-      1,
-      createdAt,
-    );
-  return result.changes > 0;
 }
 
 export function getPreviewComment(db: SqliteDb, projectId: string, conversationId: string, id: string) {

@@ -124,7 +124,6 @@ export interface StartBrandExtractionOptions {
   /** Matching rollback for a workspace-aware draft creator. */
   deleteUserDesignSystem?: typeof deleteUserDesignSystem;
   /** Final synchronous creation fence; throws to roll back the whole startup. */
-  bindCreatedProject?: (projectId: string) => void;
   /** Workspace to claim the extracted design system for (#145). Design systems
    *  share one directory, so the claim is what keeps a brand extracted in one
    *  workspace out of the next workspace's library. Omitted (signed out /
@@ -461,12 +460,8 @@ export async function startBrandExtraction(
         : {}),
     });
 
-    // Keep the project row and its Workspace envelope in the same startup
-    // rollback boundary as the draft design system. A route-level bind after
-    // this function returns cannot compensate the already-created brand,
-    // project directory, transcript, and design-system envelope on failure.
-    opts.bindCreatedProject?.(projectId);
-
+    // Keep the project row in the same startup rollback boundary as the draft
+    // design system, project directory, and transcript.
     // Programmatic-first runs immediately, but never blocks the start response.
     // The caller should land in the project with a real user/assistant transcript
     // and the extracting skeleton already persisted while the deterministic
@@ -488,7 +483,7 @@ export async function startBrandExtraction(
       : null;
     // Persist the transcript handles so EVERY terminal point — finalize success,
     // soft-fail/blocked/timeout, and user stop — can reconcile the synthetic
-    // "AMR · Working" row out of its perpetual `running` state, regardless of the
+    // synthetic "Working" row out of its perpetual `running` state, regardless of the
     // racy background timer. Without this the row stays "Working 13m…" forever
     // even after the brand finalizes `ready` in the background.
     if (programmaticTranscript) {
@@ -905,7 +900,7 @@ export type ProgrammaticExtractionOutcome = 'succeeded' | 'needs_attention' | 's
 /**
  * Flip the seeded programmatic-extraction transcript row to a terminal run
  * status. This is the SINGLE authority that retires the synthetic
- * "AMR · Working 13m…" row, driven entirely by persisted brand meta + the
+ * synthetic "Working 13m…" row, driven entirely by persisted brand meta and the
  * message itself, so it works from EVERY completion point — finalize success,
  * give-up / blocked / stall, and user stop — and survives a daemon restart.
  * Best-effort and idempotent; safe to call repeatedly.

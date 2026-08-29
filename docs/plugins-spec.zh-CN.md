@@ -163,7 +163,7 @@ OpenDesign 变成一套 **server + CLI + atomic core engine + plugin/marketplace
 6. OD core engine、atomic capabilities、plugin runtime 全部可以通过 CLI 访问，因此任何 code agent 都能 headless 地驱动 OpenDesign。
 7. **插件即长程任务封装**：每个插件覆盖四类产品场景之一（new-generation / code-migration / figma-migration / tune-collab），通过 `od.pipeline` 把 OD 一方 atoms 组装成有序 stages + 可选 devloop（§10）。
 8. **可复现 + 可审计**：每次 apply 落一份不可变 `AppliedPluginSnapshot`（§8.2.1），run / artifact 通过 snapshot id 反查 plugin source；插件升级不破坏历史 run 的 prompt 还原。
-9. **同一 artifact 跨协作面流转**：artifact manifest（§11.5.1）记录 plugin provenance + 各下游协作面（cli / 其他 code agent / 云 / 桌面端）的 export 与 deploy 历史，让后续二次调优、迁移、协作围绕同一 artifact 接续。
+9. **同一 artifact 跨协作面流转**：artifact manifest（§11.5.1）记录 plugin provenance + 各下游协作面（cli / 桌面端 / web / docker / github / figma / 其他 code agent）的 export 与 deploy 历史，让后续二次调优、迁移、协作围绕同一 artifact 接续。
 10. **Generative UI 是 plugin 一等输出**：插件在 manifest 中声明 `od.genui.surfaces[]`（§10.3），agent 运行时通过 OD 受控事件流发布 form / choice / confirmation / oauth-prompt 请求，产品 renderer 负责视觉样式；用户的回应按 `persist` 等级（run / conversation / project）落到 project metadata，被同 project 后续多轮对话、多次 run 复用。外部 AG-UI client 通过 adapter 消费同一条 run，而不是替换 OD 内部 renderer。
 
 **非目标（v1）**
@@ -1161,7 +1161,7 @@ export interface ArtifactManifest {
   renderKind?: 'html' | 'jsx' | 'pptx' | 'markdown' | 'video' | 'image' | 'diff' | 'repo';
   handoffKind?: 'design-only' | 'implementation-plan' | 'patch' | 'deployable-app';
 
-  /** 该 artifact 已经被推送到哪些下游协作面，用于 §1 中提到的 "分发到 cli / 其他 code agent / 云 / 桌面端" */
+  /** 该 artifact 已经被推送到哪些下游协作面，用于 §1 中提到的 "分发到 cli / 桌面端 / web / docker / github / figma / 其他 code agent" */
   exportTargets?: Array<{
     surface: 'cli' | 'desktop' | 'web' | 'docker' | 'github' | 'figma' | 'code-agent';
     target: string;
@@ -1184,7 +1184,7 @@ export interface ArtifactManifest {
 - 每次 `od plugin export` / `od files upload --to <target>` / `od deploy ...` 追加一行 `exportTargets` / `deployTargets`，**不**修改 `sourcePluginSnapshotId`。
 - 二次调优时（`tune-collab`）创建的 artifact 同时记录 `sourcePluginSnapshotId`（本轮 plugin）与 `parentArtifactId`（被调优的上一版），形成可回溯链。
 
-这条契约让「同一个 artifact 在不同协作面之间流转」成为 first-class 操作：cli 上看到 artifact 一定能查到原 plugin、原 inputs、原 design system；云端协作者一定能复现本地生成；后续代码迁移 / Figma 迁移产出的 artifact 之间通过 `parentArtifactId` 串成链。
+这条契约让「同一个 artifact 在不同协作面之间流转」成为 first-class 操作：cli 上看到 artifact 一定能查到原 plugin、原 inputs、原 design system；拿到 artifact 的人一定能复现本地生成；后续代码迁移 / Figma 迁移产出的 artifact 之间通过 `parentArtifactId` 串成链。
 
 ### 11.6 Web changes
 

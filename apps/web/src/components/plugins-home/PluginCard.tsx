@@ -16,7 +16,6 @@ import { useMemo, useRef, useState } from 'react';
 import { VisuallyHidden } from '@open-design/components';
 import type {
   InstalledPluginRecord,
-  WorkspaceCollabContext,
 } from '@open-design/contracts';
 import { useI18n } from '../../i18n';
 import { useDeckPreviewScale } from '../../lib/use-deck-preview-scale';
@@ -53,7 +52,6 @@ interface Props {
   // is the minimal preview tile: a top bar (dot + name + open fullscreen)
   // over the same lazy PreviewSurface used by the rich cards.
   layout?: 'rich' | 'gallery';
-  workspaceContext?: WorkspaceCollabContext | null;
 }
 
 const MAX_VISIBLE_TAGS = 3;
@@ -81,7 +79,7 @@ export function PluginCard({
   // Tiles prefer the cheap pre-baked hover-pan clip; the detail modal still
   // opens the live interactive page (it calls inferPluginPreview without this).
   const preview = useMemo(
-    () => inferPluginPreview(record, { preferBaked: true, workspaceContext }),
+    () => inferPluginPreview(record, { preferBaked: true}),
     [record, workspaceContext],
   );
   const title = localizePluginTitle(locale, record);

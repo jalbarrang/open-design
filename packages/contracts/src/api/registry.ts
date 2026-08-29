@@ -149,25 +149,14 @@ export interface AgentInfo {
   /**
    * When `false`, the Settings model picker hides the "Custom (fill below)"
    * option and the free-text input. Use this for agents whose CLI doesn't
-   * accept a model id (e.g. Antigravity `agy` has no `--model` flag yet —
-   * upstream issue #35) or rejects free-form ids (AMR validates against the
-   * live Vela catalog). Undefined === allow, matching the historical UX.
+   * accept a model id (e.g. Antigravity `agy` has no `--model` flag yet).
+   * Undefined means allowed, matching the historical UX.
    */
   supportsCustomModel?: boolean;
 }
 
 export interface AgentsResponse {
   agents: AgentInfo[];
-}
-
-export type AmrModelsSource = 'preset' | 'remote';
-
-export interface AmrModelsResponse {
-  source: AmrModelsSource;
-  models: AgentModelOption[];
-  refreshing: boolean;
-  stale?: boolean;
-  remoteError?: string;
 }
 
 export type SkillSource = 'built-in' | 'user';
@@ -220,18 +209,6 @@ export interface SkillSummary {
   // prompt" fast-create on a derived card still composes the parent's
   // SKILL.md body.
   aggregatesExamples: boolean;
-  /**
-   * True for a skill materialized locally from a TEAMMATE's team share (the
-   * puller's copy — never set on the sharer's own skill; mirrors
-   * `DesignSystemSummary.teamSynced` / the puller-side marker
-   * `syncSharedTeamSkill`'s `markTeamSynced` stamps into `workspace_resources`
-   * as `visibility: 'team'`). Without this, a pulled skill was indistinguishable
-   * from one the caller authored themselves — `source` reads `'user'` either
-   * way — so unsharing it team-side made it silently reappear in "Personal"
-   * instead of just dropping out of the Team scope like design-system/plugin
-   * already do.
-   */
-  teamSynced?: boolean;
 }
 
 // Body shape for POST /api/skills/import. The daemon turns this into a
@@ -317,24 +294,6 @@ export interface DesignSystemSummary {
   updatedAt?: string;
   provenance?: DesignSystemProvenance;
   projectId?: string;
-  teamSynced?: boolean;
-  /**
-   * This system's id is present in the current caller's explicitly scoped
-   * team-resource index. Unlike `teamSynced`, this also covers the original
-   * local copy owned by the member who shared it. It is display/catalog
-   * membership only and must never be used as mutation authority.
-   */
-  teamShared?: boolean;
-  /**
-   * Whether the current caller may mutate (edit / publish-toggle / delete)
-   * this design system, mirroring the daemon's own `canMutateUserDesignSystem`
-   * gate exactly (recvqb6mfyqXLD): true for anything the caller authored
-   * themselves, and for a `teamSynced` copy true only when the caller is the
-   * original sharer or a workspace owner/admin. Only the single-item GET
-   * (`/api/design-systems/:id`) response computes this per-caller verdict —
-   * treat a missing value (e.g. from the bulk list) as `true`.
-   */
-  canMutate?: boolean;
 }
 
 export interface DesignSystemDetail extends DesignSystemSummary {

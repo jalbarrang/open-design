@@ -10,7 +10,7 @@
 // v3 (2026-07-27): local MCP and external-plugin entry attribution became
 // first-class. Existing v2 events remain queryable; v3 producers add only the
 // bounded source fields below and never treat self-reported plugin metadata as
-// an authorization or billing signal.
+// trusted identity.
 // v4 (2026-08-04): run_created/run_finished add stable task lineage and
 // domain-grouped payloads while dual-writing the selected v2/v3 flat aliases.
 // Older app versions keep sending their original schema version; historical
@@ -52,7 +52,6 @@ export interface AnalyticsPublicParams {
   // daemon-issued installationId (or a local-UUID fallback before consent),
   // identical to PostHog's distinct_id. Only the wire-format key changed.
   device_id: string;
-  user_id?: string;
   client_type: AnalyticsClientType;
   entry_surface?: AnalyticsEntrySurface;
   host_product?: AnalyticsHostProduct;
@@ -73,10 +72,6 @@ export type TrackingConfigureType =
   | 'local_cli'
   | 'byok'
   | 'both'
-  // AMR sign-in is the user's only configured generation path — no local
-  // CLI detected and no BYOK key saved. Counts toward the "configured"
-  // funnel stage alongside local_cli/byok/both.
-  | 'amr'
   | 'none'
   | 'unknown';
 
@@ -86,14 +81,9 @@ export type TrackingConfigureAvailability =
   | 'unknown';
 
 // The single execution runtime the user is set up to run with right now.
-// Unlike `configure_type` — a capability cascade that can report `both` when
-// a user configured more than one path — a runtime is mutually exclusive per
-// run, so there is no `both`. This is the field dashboards segment the
-// behavioural funnel by (AMR / BYOK / CLI). `amr_cloud` is AMR sign-in,
-// `byok` is the user's own key (web-only visibility — see the daemon note in
-// `AnalyticsConfigureGlobals`), `local_cli` is a detected local coding CLI.
+// Unlike `configure_type`, a runtime is mutually exclusive per run, so there
+// is no `both`.
 export type TrackingRuntimeType =
-  | 'amr_cloud'
   | 'byok'
   | 'local_cli'
   | 'none';
@@ -103,33 +93,14 @@ export interface AnalyticsConfigureGlobals {
   configure_type: TrackingConfigureType;
   configure_availability: TrackingConfigureAvailability;
   // Active execution runtime (see TrackingRuntimeType). Registered globally
-  // like the rest of this triplet so client-side events (page_view/ui_click/
-  // *_result emitted from the web) inherit it. Daemon-side run_created/
-  // run_finished cannot see a saved BYOK key, so they derive a best-effort
-  // value here and let the web client override it via the run request's
-  // analytics hints (`ChatAnalyticsHints.runtimeType`) — the client is the
-  // only layer that knows BYOK vs amr_cloud for the run it launched.
+  // like the rest of this triplet so client-side events inherit it. Daemon-side
+  // run events cannot see a saved BYOK key, so the web client may override it
+  // through `ChatAnalyticsHints.runtimeType`.
   runtime_type: TrackingRuntimeType;
-  // Per-path "reached a runnable/usable state" flags. Unlike `configure_type`
-  // — a single priority cascade (both > local_cli > byok > amr) where a value
-  // masks the lower-priority paths — these three are INDEPENDENT booleans, so
-  // a user with both a CLI and a saved BYOK key reports `cli_runnable: true`
-  // AND `byok_runnable: true`. Dashboards split per-path activation off these
-  // without the cascade undercounting AMR/BYOK whenever a CLI is also present.
-  //
-  // `cli_runnable` is intentionally the same signal as
-  // `has_available_configure_cli` (an installed, available non-AMR CLI); it is
-  // restated here only to give the runnable-trio a symmetric shape.
-  //
-  // Caveat for dashboards: these flag a *runnable state*, not an active
-  // configuration action. `cli_runnable` in particular fires when a coding CLI
-  // is merely detected on PATH (common for our dev audience), so it overstates
-  // "the user configured something". For "actively configured & succeeded",
-  // count the success result events instead — `settings_cli_test_result`,
-  // `settings_byok_test_result`, `amr_auth_result` with `result: 'success'`.
+  // Per-path runnable flags. Unlike `configure_type`, these are independent, so
+  // an installation with both paths reports both booleans as true.
   cli_runnable: boolean;
   byok_runnable: boolean;
-  amr_runnable: boolean;
 }
 
 // Wire format used between web and daemon to bridge identity. Web sets these

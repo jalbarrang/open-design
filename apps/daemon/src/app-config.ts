@@ -180,7 +180,7 @@ const AGENT_MODEL_KEYS: ReadonlySet<string> = new Set([
   'reasoning',
   'serviceTier',
 ]);
-const RETIRED_AGENT_IDS: ReadonlySet<string> = new Set(['gemini']);
+const RETIRED_AGENT_IDS: ReadonlySet<string> = new Set(['amr', 'gemini']);
 
 const TELEMETRY_KEYS: ReadonlySet<string> = new Set([
   'metrics',
@@ -201,15 +201,6 @@ function validateTelemetry(raw: unknown): TelemetryPrefs | undefined {
 }
 
 const AGENT_CLI_ENV_KEYS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  ['amr', new Set([
-    'VELA_BIN',
-    'VELA_API_URL',
-    'VELA_LINK_URL',
-    'VELA_RUNTIME_KEY',
-    'VELA_OPENCODE_BIN',
-    'OPEN_DESIGN_AMR_PROFILE',
-    'OPENCODE_TEST_HOME',
-  ])],
   ['aider', new Set(['AIDER_BIN'])],
   ['claude', new Set(['CLAUDE_CONFIG_DIR', 'CLAUDE_BIN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'MMD_MODEL_ROUTES_FILE'])],
   ['codex', new Set(['CODEX_HOME', 'CODEX_BIN', 'OPENAI_BASE_URL', 'CODEX_API_KEY', 'OPENAI_API_KEY'])],
@@ -752,9 +743,8 @@ export async function readAppConfig(dataDir: string): Promise<AppConfigPrefs> {
   return applyTelemetryDefaults(base);
 }
 
-// Synchronous mirror of readAppConfig for callers that cannot await — e.g.
-// building the spawn env for the vela CLI inside the synchronous
-// spawnEnvForAgent. It reuses the exact same parsing, validation and telemetry
+// Synchronous mirror of readAppConfig for callers that cannot await, such as
+// runtime environment construction. It reuses the same parsing and telemetry
 // defaulting as the async path, so the consent decision and installationId can
 // never drift from what the rest of the daemon (and the web analytics config)
 // sees. The only intentional difference is that it skips the best-effort

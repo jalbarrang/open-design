@@ -558,70 +558,6 @@ describe('od project CLI', () => {
     });
   });
 
-  it('lists team projects through the workspace discovery API', async () => {
-    stub = await startProjectStubServer();
-
-    const result = await runCli([
-      'workspace',
-      'projects',
-      'team',
-      '--workspace',
-      'ws-1',
-      '--member',
-      'member-1',
-      '--json',
-      '--daemon-url',
-      stub.baseUrl,
-    ]);
-
-    expect(result.code).toBe(0);
-    expect(result.stderr).toBe('');
-    expect(JSON.parse(result.stdout)).toEqual({
-      projects: [{ projectId: 'team-project-1', displayName: 'Team Project' }],
-    });
-    expect(stub.requests).toHaveLength(1);
-    expect(stub.requests[0]).toMatchObject({
-      method: 'GET',
-      url: '/api/workspace/projects/team',
-    });
-    expect(stub.requests[0]!.headers).toMatchObject({
-      'x-od-workspace-id': 'ws-1',
-      'x-od-workspace-member-id': 'member-1',
-    });
-  });
-
-  it('lists workspace members through the workspace member directory API', async () => {
-    stub = await startProjectStubServer();
-
-    const result = await runCli([
-      'workspace',
-      'members',
-      'list',
-      '--workspace',
-      'ws-1',
-      '--member',
-      'member-1',
-      '--json',
-      '--daemon-url',
-      stub.baseUrl,
-    ]);
-
-    expect(result.code).toBe(0);
-    expect(result.stderr).toBe('');
-    expect(JSON.parse(result.stdout)).toEqual({
-      members: [{ memberId: 'member-1', displayName: 'Member One', role: 'admin' }],
-    });
-    expect(stub.requests).toHaveLength(1);
-    expect(stub.requests[0]).toMatchObject({
-      method: 'GET',
-      url: '/api/workspace/members',
-    });
-    expect(stub.requests[0]!.headers).toMatchObject({
-      'x-od-workspace-id': 'ws-1',
-      'x-od-workspace-member-id': 'member-1',
-    });
-  });
-
   it('rejects workspace directory commands without explicit workspace identity', async () => {
     stub = await startProjectStubServer();
 
@@ -637,39 +573,6 @@ describe('od project CLI', () => {
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('--workspace <id> and --workspace-member <id>');
     expect(stub.requests).toHaveLength(0);
-  });
-
-  it('sends explicit CLI workspace identity to team resource routes', async () => {
-    stub = await startProjectStubServer();
-
-    const result = await runCli([
-      'collab',
-      'team-resources',
-      'skills',
-      '--workspace',
-      'ws-1',
-      '--workspace-member',
-      'member-1',
-      '--json',
-      '--daemon-url',
-      stub.baseUrl,
-    ]);
-
-    expect(result.code).toBe(0);
-    expect(result.stderr).toBe('');
-    expect(JSON.parse(result.stdout)).toEqual({
-      ids: ['team-skill'],
-      resources: [{ id: 'team-skill' }],
-    });
-    expect(stub.requests).toHaveLength(1);
-    expect(stub.requests[0]).toMatchObject({
-      method: 'GET',
-      url: '/api/workspace/skills/team',
-    });
-    expect(stub.requests[0]!.headers).toMatchObject({
-      'x-od-workspace-id': 'ws-1',
-      'x-od-workspace-member-id': 'member-1',
-    });
   });
 
   it('sends repeatable project ids for workspace batch delete', async () => {

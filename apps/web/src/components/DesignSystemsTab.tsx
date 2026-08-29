@@ -16,24 +16,6 @@ import type {
   TrackingDesignSystemStatusValue,
 } from '@open-design/contracts/analytics';
 import { useI18n } from '../i18n';
-import { useWorkspaceContext } from '../collab/useWorkspaceContext';
-import {
-  beginWorkspaceResourceScopedRead,
-  beginWorkspaceScopedRead,
-  resolveWorkspaceResourceReadIdentity,
-  workspaceIdentityCacheKey,
-  workspaceProjectHeaders,
-  workspaceResourceReadIdentityKey,
-  type WorkspaceResourceReadIdentity,
-} from '../collab/workspace-identity';
-import {
-  useWorkspaceInvalidation,
-} from '../collab/workspace-events';
-import { useWorkspaceSnapshotActivation } from '../collab/workspace-snapshot-activation';
-import {
-  workspaceContextHasTeamIdentity,
-  type WorkspaceCollabContext,
-} from '@open-design/contracts';
 import type { Locale } from '../i18n/types';
 import {
   localizeDesignSystemCategory,
@@ -214,7 +196,6 @@ export function DesignSystemsTab({
   // The 团队 collection is a team-workspace surface (B's resource plane is
   // team-only): signed-out / personal-workspace users get no team tab, and a
   // sign-out while on it falls back to 你的体系 (#5517 signed-out form).
-  const workspaceState = useWorkspaceContext();
   const { context: workspaceContext } = workspaceState;
   const resourceReadIdentity = resolveWorkspaceResourceReadIdentity(workspaceState);
   const workspaceDimensions = workspaceAnalyticsDimensions(workspaceContext);
@@ -225,7 +206,7 @@ export function DesignSystemsTab({
   const isActiveRef = useRef(isActive);
   isActiveRef.current = isActive;
   const teamSharedStaleRef = useRef(false);
-  const workspaceIdentity = workspaceIdentityCacheKey(workspaceContext);
+  const workspaceIdentity = 'local';
   // Gate on TEAM IDENTITY — the same predicate the daemon uses to accept a hub
   // share (workspaceContextHasTeamIdentity; see team-resource-share.ts) — NOT on
   // the billing plan. A team on a free/unpaid tier (trial, lapsed, or billing not
@@ -444,7 +425,7 @@ export function DesignSystemsTab({
     const read = beginWorkspaceScopedRead(workspaceContextRef.current);
     if (!read.context || !workspaceContextHasTeamIdentity(read.context)) {
       setTeamSharedState({
-        workspaceIdentity: workspaceIdentityCacheKey(read.context),
+        workspaceIdentity: 'local',
         ids: new Set(),
         meta: new Map(),
       });
@@ -456,7 +437,7 @@ export function DesignSystemsTab({
       // ACTIVE workspace's shared set, so a constant key let a switch that
       // landed inside the in-flight/TTL window serve the previous workspace's
       // ids to the new one.
-      const scopedWorkspaceIdentity = workspaceIdentityCacheKey(context);
+      const scopedWorkspaceIdentity = 'local';
       const cacheKey = `workspace-design-systems-team:${scopedWorkspaceIdentity}`;
       const readTeamIndex = async () => {
         const res = await fetch('/api/workspace/design-systems/team', {
@@ -545,7 +526,6 @@ export function DesignSystemsTab({
       },
     },
     {
-      workspaceContext: hasTeamWorkspace ? workspaceContext : null,
       enabled: hasTeamWorkspace,
       onActive: () => {
         if (!isActiveRef.current) {
@@ -704,7 +684,7 @@ export function DesignSystemsTab({
     try {
       const updated = await updateDesignSystemDraft(system.id, {
         status: willPublish ? 'published' : 'draft',
-      }, workspaceContext);
+      });
       succeeded = Boolean(updated);
       if (!succeeded) errorCode = 'DS_STATUS_UPDATE_RETURNED_NULL';
       if (succeeded) {
@@ -768,7 +748,7 @@ export function DesignSystemsTab({
     let succeeded = false;
     let errorCode: string | undefined;
     try {
-      const deleted = await deleteDesignSystemDraft(system.id, workspaceContext);
+      const deleted = await deleteDesignSystemDraft(system.id);
       succeeded = Boolean(deleted);
       if (!succeeded) errorCode = 'DS_DELETE_RETURNED_FALSE';
       if (succeeded && selectedId === system.id) {
@@ -1211,7 +1191,6 @@ export function DesignSystemsTab({
         <DesignSystemDetail
           key={selectedSystem.id}
           system={selectedSystem}
-          workspaceContext={workspaceContext}
           resourceReadIdentity={resourceReadIdentity}
           isDefault={selectedSystem.id === selectedId}
           busy={busyId === selectedSystem.id}
@@ -1319,7 +1298,6 @@ function useProjectLogoSrc(
     setSrc(undefined);
     void fetchProjectFileText(projectId, 'brand.json', {
       cache: 'no-store',
-      workspaceContext: read.context,
     }).then((raw) => {
       if (cancelled || !read.isStillCurrent(resourceReadIdentityRef.current)) return;
       let primary: string | null = null;
@@ -1437,7 +1415,6 @@ function SystemRow({
 interface DetailProps {
   system: DesignSystemSummary;
   /** Fully verified authority retained for every mutation in this pane. */
-  workspaceContext: WorkspaceCollabContext | null;
   /** May be provisional, and is only used by read-only detail/project loads. */
   resourceReadIdentity: WorkspaceResourceReadIdentity | null;
   isDefault: boolean;
@@ -1469,7 +1446,6 @@ interface DetailProps {
 
 function DesignSystemDetail({
   system,
-  workspaceContext,
   resourceReadIdentity,
   isDefault,
   busy,
@@ -1597,8 +1573,6 @@ function DesignSystemDetail({
     editable: isUser,
     host,
     reloadKey,
-    workspaceContext: resourceReadContext,
-    workspaceReadGeneration: resourceReadIdentityKey,
   });
 
   async function handleDownload() {
@@ -1613,12 +1587,10 @@ function DesignSystemDetail({
         await downloadDesignSystemArchive({
           designSystemId: system.id,
           fallbackTitle: system.title,
-          workspaceContext,
         }) || (projectId
           ? await downloadProjectArchive({
               projectId,
               fallbackTitle: system.title,
-              workspaceContext,
             })
           : false);
       setDownloadFailed(!ok);
@@ -1772,8 +1744,6 @@ function DesignSystemDetail({
       {kit ? (
         <DesignKitView
           kit={kit}
-          workspaceContext={resourceReadContext}
-          workspaceReadGeneration={resourceReadIdentityKey}
           badgeSlot={badgeSlot}
           actionsSlot={actionsSlot}
           showCover={false}

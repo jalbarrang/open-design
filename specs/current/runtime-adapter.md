@@ -41,7 +41,7 @@ entries than the built-in list.
 |---|---|---|
 | `claude-stream-json` | `claude`, `amp`, `codebuddy` | `claude`, `amp`, `codebuddy` |
 | `json-event-stream` | `codex`, `opencode`, `byok-opencode`, `cursor-agent`, `mimo` | `codex`, `opencode-cli`, `opencode-cli`, `cursor-agent`, `mimo` |
-| `acp-json-rpc` | `amr`, `devin`, `hermes`, `trae-cli`, `kimi`, `kiro`, `kilo`, `vibe`, `reasonix` | `vela`, `devin`, `hermes`, `traecli`, `kimi`, `kiro-cli`, `kilo`, `vibe-acp`, `reasonix` |
+| `acp-json-rpc` | `devin`, `hermes`, `trae-cli`, `kimi`, `kiro`, `kilo`, `vibe`, `reasonix` | `devin`, `hermes`, `traecli`, `kimi`, `kiro-cli`, `kilo`, `vibe-acp`, `reasonix` |
 | `pi-rpc` | `pi` | `pi` |
 | `qoder-stream-json` | `qoder` | `qodercli` |
 | `copilot-stream-json` | `copilot` | `copilot` |
@@ -144,7 +144,7 @@ Session continuity is likewise adapter-specific:
 - Codex captures the thread ID from `thread.started` and resumes that explicit
   thread on later turns.
 - Pi persists and reuses its RPC session file.
-- AMR can capture an ACP durable session ID and resume with `session/load`.
+- ACP adapters can capture a durable session ID and resume with `session/load`.
 - Other adapters continue to receive daemon-composed conversation context.
 
 The daemon owns the resume identity checks and transparent reseed behavior, so

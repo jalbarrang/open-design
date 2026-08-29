@@ -6,14 +6,22 @@ import { randomUUID } from 'node:crypto';
 import { hash as blake3Hash } from 'blake3-wasm';
 import { listFiles, readProjectFile, validateProjectPath } from './projects.js';
 import { findRealTagOffset, HTML_TAG_PATTERNS } from '@open-design/contracts/runtime/html-injection-points';
+import { signS3Request } from './deploy/s3-signer.js';
 
 export const VERCEL_PROVIDER_ID = 'vercel-self';
 export const CLOUDFLARE_PAGES_PROVIDER_ID = 'cloudflare-pages';
+export const S3_COMPATIBLE_PROVIDER_ID = 's3-compatible';
 export const SAVED_TOKEN_MASK = 'saved-vercel-token';
 export const SAVED_CLOUDFLARE_TOKEN_MASK = 'saved-cloudflare-token';
+export const SAVED_S3_SECRET_MASK = 'saved-s3-secret';
+/** Default key prefix so a shared bucket keeps OpenDesign uploads together. */
+export const S3_DEFAULT_PREFIX = 'od/';
 
 type JsonObject = Record<string, any>;
-type DeployProviderId = typeof VERCEL_PROVIDER_ID | typeof CLOUDFLARE_PAGES_PROVIDER_ID;
+type DeployProviderId =
+  | typeof VERCEL_PROVIDER_ID
+  | typeof CLOUDFLARE_PAGES_PROVIDER_ID
+  | typeof S3_COMPATIBLE_PROVIDER_ID;
 type DeployErrorDetails = JsonObject | string | undefined;
 type DeployConfig = {
   token: string;
@@ -22,11 +30,21 @@ type DeployConfig = {
   accountId?: string | undefined;
   projectName?: string | undefined;
   cloudflarePages?: CloudflarePagesConfigHints | undefined;
+  accessKeyId?: string | undefined;
+  s3?: S3CompatibleConfigHints | undefined;
 };
 type CloudflarePagesConfigHints = {
   lastZoneId?: string;
   lastZoneName?: string;
   lastDomainPrefix?: string;
+};
+type S3CompatibleConfigHints = {
+  endpoint?: string;
+  region?: string;
+  bucket?: string;
+  prefix?: string;
+  publicBaseUrl?: string;
+  forcePathStyle?: boolean;
 };
 type DeployFile = { file: string; data: Buffer | Uint8Array | string; contentType?: string; sourcePath?: string };
 type DeployFilePlan = { entryPath: string; html: string; files: DeployFile[]; missing: string[]; invalid: string[] };
@@ -76,7 +94,9 @@ export class DeployError extends Error {
 
 export function deployConfigPath(providerId: DeployProviderId = VERCEL_PROVIDER_ID) {
   const base = process.env.OD_USER_STATE_DIR || path.join(os.homedir(), '.open-design');
-  return path.join(base, providerId === CLOUDFLARE_PAGES_PROVIDER_ID ? 'cloudflare-pages.json' : 'vercel.json');
+  if (providerId === CLOUDFLARE_PAGES_PROVIDER_ID) return path.join(base, 'cloudflare-pages.json');
+  if (providerId === S3_COMPATIBLE_PROVIDER_ID) return path.join(base, 's3-compatible.json');
+  return path.join(base, 'vercel.json');
 }
 
 export async function readVercelConfig(): Promise<DeployConfig> {
@@ -186,23 +206,111 @@ export function publicCloudflarePagesConfig(config: Partial<DeployConfig>) {
   return body;
 }
 
+function normalizeS3ConfigHints(input: unknown, fallback: S3CompatibleConfigHints = {}): S3CompatibleConfigHints {
+  const source = (input && typeof input === 'object' ? input : {}) as S3CompatibleConfigHints;
+  const pick = (key: 'endpoint' | 'region' | 'bucket' | 'prefix' | 'publicBaseUrl') =>
+    typeof source[key] === 'string' ? source[key]!.trim() : fallback[key];
+  const hints: S3CompatibleConfigHints = {};
+  const endpoint = pick('endpoint');
+  // Trailing slashes would produce `//` in every signed key path.
+  if (endpoint) hints.endpoint = endpoint.replace(/\/+$/, '');
+  const region = pick('region');
+  if (region) hints.region = region;
+  const bucket = pick('bucket');
+  if (bucket) hints.bucket = bucket;
+  const prefix = pick('prefix');
+  // Normalize to at most one trailing slash and no leading slash.
+  if (prefix !== undefined) hints.prefix = prefix.replace(/^\/+/, '').replace(/\/+$/, '');
+  const publicBaseUrl = pick('publicBaseUrl');
+  if (publicBaseUrl) hints.publicBaseUrl = publicBaseUrl.replace(/\/+$/, '');
+  const forcePathStyle =
+    typeof source.forcePathStyle === 'boolean' ? source.forcePathStyle : fallback.forcePathStyle;
+  if (forcePathStyle !== undefined) hints.forcePathStyle = forcePathStyle;
+  return hints;
+}
+
+export async function readS3CompatibleConfig(): Promise<DeployConfig> {
+  try {
+    const raw = await readFile(deployConfigPath(S3_COMPATIBLE_PROVIDER_ID), 'utf8');
+    const parsed = JSON.parse(raw);
+    return {
+      token: typeof parsed.token === 'string' ? parsed.token : '',
+      accessKeyId: typeof parsed.accessKeyId === 'string' ? parsed.accessKeyId : '',
+      s3: normalizeS3ConfigHints(parsed.s3),
+    };
+  } catch (err) {
+    if (isErrnoException(err) && err.code === 'ENOENT') return { token: '', accessKeyId: '', s3: {} };
+    throw err;
+  }
+}
+
+export async function writeS3CompatibleConfig(input: Partial<DeployConfig>) {
+  const current = await readS3CompatibleConfig();
+  const tokenInput = typeof input?.token === 'string' ? input.token.trim() : '';
+  const s3 = normalizeS3ConfigHints(input?.s3, current.s3);
+  const next: DeployConfig = {
+    // The mask is what the UI sends back when the user did not retype the
+    // secret, so it must never be persisted as the secret itself.
+    token: tokenInput && tokenInput !== SAVED_S3_SECRET_MASK ? tokenInput : current.token,
+    accessKeyId:
+      typeof input?.accessKeyId === 'string' ? input.accessKeyId.trim() : current.accessKeyId,
+    s3,
+  };
+  if (!next.accessKeyId) {
+    throw new DeployError('Access key ID is required.', 400, undefined, 'S3_ACCESS_KEY_ID_REQUIRED');
+  }
+  if (!next.token) {
+    throw new DeployError('Secret access key is required.', 400, undefined, 'S3_SECRET_REQUIRED');
+  }
+  if (!s3.endpoint) {
+    throw new DeployError('Endpoint is required.', 400, undefined, 'S3_ENDPOINT_REQUIRED');
+  }
+  if (!s3.bucket) {
+    throw new DeployError('Bucket is required.', 400, undefined, 'S3_BUCKET_REQUIRED');
+  }
+  await writeDeployConfigFile(deployConfigPath(S3_COMPATIBLE_PROVIDER_ID), next);
+  return publicS3CompatibleConfig(next);
+}
+
+export function publicS3CompatibleConfig(config: Partial<DeployConfig>) {
+  const s3 = normalizeS3ConfigHints(config?.s3);
+  const body: JsonObject = {
+    providerId: S3_COMPATIBLE_PROVIDER_ID,
+    configured: Boolean(config?.token && config?.accessKeyId && s3.endpoint && s3.bucket),
+    tokenMask: config?.token ? SAVED_S3_SECRET_MASK : '',
+    teamId: '',
+    teamSlug: '',
+    accessKeyId: config?.accessKeyId || '',
+    target: 'preview',
+  };
+  if (Object.keys(s3).length > 0) body.s3 = s3;
+  return body;
+}
+
 export async function readDeployConfig(providerId: DeployProviderId = VERCEL_PROVIDER_ID) {
   if (providerId === CLOUDFLARE_PAGES_PROVIDER_ID) return readCloudflarePagesConfig();
+  if (providerId === S3_COMPATIBLE_PROVIDER_ID) return readS3CompatibleConfig();
   return readVercelConfig();
 }
 
 export async function writeDeployConfig(providerId: DeployProviderId = VERCEL_PROVIDER_ID, input: Partial<DeployConfig> = {}) {
   if (providerId === CLOUDFLARE_PAGES_PROVIDER_ID) return writeCloudflarePagesConfig(input);
+  if (providerId === S3_COMPATIBLE_PROVIDER_ID) return writeS3CompatibleConfig(input);
   return writeVercelConfig(input);
 }
 
 export function publicDeployConfigForProvider(providerId: DeployProviderId = VERCEL_PROVIDER_ID, config: Partial<DeployConfig> = {}) {
   if (providerId === CLOUDFLARE_PAGES_PROVIDER_ID) return publicCloudflarePagesConfig(config);
+  if (providerId === S3_COMPATIBLE_PROVIDER_ID) return publicS3CompatibleConfig(config);
   return publicDeployConfig(config);
 }
 
 export function isDeployProviderId(value: unknown): value is DeployProviderId {
-  return value === VERCEL_PROVIDER_ID || value === CLOUDFLARE_PAGES_PROVIDER_ID;
+  return (
+    value === VERCEL_PROVIDER_ID ||
+    value === CLOUDFLARE_PAGES_PROVIDER_ID ||
+    value === S3_COMPATIBLE_PROVIDER_ID
+  );
 }
 
 function normalizeCloudflarePagesConfigHints(input: unknown, fallback: CloudflarePagesConfigHints = {}): CloudflarePagesConfigHints {
@@ -431,6 +539,131 @@ export async function deployToVercel({ config, files, projectId }: { config: Dep
     url: link.url || deploymentUrl(ready) || initialUrl,
     deploymentId,
     target: 'preview',
+    status: link.status,
+    statusMessage: link.statusMessage,
+    reachableAt: link.reachableAt,
+  };
+}
+
+/**
+ * Turn an OD project file into a stable object-key prefix. Redeploying the same
+ * file overwrites the same keys, so the published URL stays put across
+ * republishes — the behaviour `upsertDeployment` already assumes when it reuses
+ * the prior deployment row.
+ */
+export function s3KeyPrefixForDeploy(config: DeployConfig, projectId: string, fileName: string): string {
+  const prefix = config.s3?.prefix ?? S3_DEFAULT_PREFIX.replace(/\/+$/, '');
+  const slug =
+    fileName
+      .replace(/\.html?$/i, '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase() || 'index';
+  return [prefix, projectId, slug].filter(Boolean).join('/') + '/';
+}
+
+/**
+ * Absolute URL of one object, in whichever addressing style the bucket needs.
+ * Virtual-host style (`bucket.host`) is the S3/R2/Spaces default; MinIO and
+ * other self-hosted gateways require path style.
+ */
+function s3ObjectUrl(config: DeployConfig, key: string): string {
+  const endpoint = new URL(config.s3?.endpoint ?? '');
+  const bucket = config.s3?.bucket ?? '';
+  if (config.s3?.forcePathStyle) {
+    return `${endpoint.origin}${endpoint.pathname.replace(/\/+$/, '')}/${bucket}/${key}`;
+  }
+  return `${endpoint.protocol}//${bucket}.${endpoint.host}/${key}`;
+}
+
+/**
+ * Upload the deploy file set to an S3-compatible bucket and return the public
+ * URL of the entry document.
+ *
+ * Unlike Vercel and Cloudflare Pages there is no build step and no deployment
+ * id to poll — object storage is durable as soon as the PUT returns 200 — so
+ * the reachability probe is what decides `ready` vs `link-delayed`. That probe
+ * is also the only thing that catches the most common misconfiguration: a
+ * bucket that accepts writes but does not serve objects publicly.
+ */
+export async function deployToS3Compatible({
+  config,
+  files,
+  projectId,
+  fileName,
+}: {
+  config: DeployConfig;
+  files: DeployFile[];
+  projectId: string;
+  fileName: string;
+}) {
+  if (!config?.accessKeyId || !config?.token) {
+    throw new DeployError('S3 access key ID and secret access key are required.', 400, undefined, 'S3_CREDENTIALS_REQUIRED');
+  }
+  const endpoint = config.s3?.endpoint;
+  const bucket = config.s3?.bucket;
+  if (!endpoint || !bucket) {
+    throw new DeployError('S3 endpoint and bucket are required.', 400, undefined, 'S3_BUCKET_REQUIRED');
+  }
+  // Cloudflare R2 signs with the literal region `auto`; plain S3 needs a real
+  // one, so default to the most permissive rather than guessing from the host.
+  const region = config.s3?.region || 'us-east-1';
+  const keyPrefix = s3KeyPrefixForDeploy(config, projectId, fileName);
+
+  const uploadOne = async (file: DeployFile) => {
+    const key = `${keyPrefix}${file.file}`;
+    const payload = Buffer.from(file.data as Buffer);
+    const url = s3ObjectUrl(config, key);
+    const signed = signS3Request({
+      method: 'PUT',
+      url,
+      region,
+      accessKeyId: config.accessKeyId!,
+      secretAccessKey: config.token,
+      payload,
+      headers: { 'content-type': file.contentType || 'application/octet-stream' },
+    });
+    let resp: Response;
+    try {
+      resp = await fetch(signed.url, { method: 'PUT', headers: signed.headers, body: new Uint8Array(payload) });
+    } catch (err) {
+      throw new DeployError(
+        `Could not reach the S3 endpoint: ${errorMessage(err, 'network error')}`,
+        502,
+        undefined,
+        'S3_ENDPOINT_UNREACHABLE',
+      );
+    }
+    if (!resp.ok) {
+      // S3 errors are XML; surface the raw body so the message names the real
+      // cause (SignatureDoesNotMatch, AccessDenied, NoSuchBucket, ...).
+      const detail = (await resp.text().catch(() => '')).slice(0, 2000);
+      throw new DeployError(
+        `Upload of ${file.file} failed (${resp.status}).`,
+        resp.status === 403 || resp.status === 404 ? 400 : 502,
+        detail || undefined,
+        'S3_UPLOAD_FAILED',
+      );
+    }
+  };
+
+  // Modest concurrency: enough to hide round-trip latency on asset-heavy
+  // deploys without tripping per-connection rate limits on smaller gateways.
+  const queue = [...files];
+  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+    for (let next = queue.shift(); next; next = queue.shift()) await uploadOne(next);
+  });
+  await Promise.all(workers);
+
+  const publicBase = config.s3?.publicBaseUrl || s3ObjectUrl(config, '').replace(/\/+$/, '');
+  const entryUrl = `${publicBase.replace(/\/+$/, '')}/${keyPrefix}index.html`;
+  const link = await waitForReachableDeploymentUrl([entryUrl], { providerLabel: 'S3-compatible storage' });
+
+  return {
+    providerId: S3_COMPATIBLE_PROVIDER_ID,
+    url: link.url || entryUrl,
+    deploymentId: keyPrefix,
+    target: 'production' as const,
     status: link.status,
     statusMessage: link.statusMessage,
     reachableAt: link.reachableAt,

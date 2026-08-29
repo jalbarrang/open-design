@@ -1,9 +1,5 @@
 <h1 align="center">OpenDesign: ทางเลือกโอเพนซอร์สแทน Claude Design</h1>
 
-> ⚡ **[OpenDesign Cloud — บริการโมเดลอย่างเป็นทางการ.](https://open-design.ai/zh/pricing/)** เติมเงินครั้งเดียวเพื่อใช้ทั้งโมเดล Agent และโมเดลภาพใน OpenDesign: GPT, Claude และ DeepSeek สำหรับ Agent; GPT Image 2.0, Seedream 5.0 Pro และ Nano Banana 2.0 สำหรับภาพ
->
-> 🚀 **[DeepSeek V4 Flash และ V4 Pro พร้อมใช้งานแล้ว.](https://open-design.ai/zh/pricing/)** ใช้ความสามารถระดับสูงกับ prototype, deck, design system และงาน Agent ประจำวัน สมาชิก OpenDesign ใช้ทั้งสองโมเดลแบบไม่จำกัดได้สองสัปดาห์ภายในแอป
->
 > 🧩 **[รองรับ DeepSeek Harness แล้ว.](https://open-design.ai/zh/agents/deepseek-harness-design/)** เชื่อมต่อ `dsh` Agent Harness อย่างเป็นทางการของ DeepSeek เป็น runtime แบบ native ใน OpenDesign พร้อม structured thinking, tool calls, model discovery, cancellation และ session resume ไฟล์ที่สร้างยังอยู่ใน workflow ของ OpenDesign เพื่อ live preview และส่งมอบ
 
 <p align="center">
@@ -13,7 +9,6 @@
 <p align="center">
   <a href="https://open-design.ai/">เว็บไซต์</a> ·
   <a href="https://open-design.ai/">ดาวน์โหลด</a> ·
-  <a href="https://open-design.ai/cloud/">OpenDesign Cloud</a> ·
   <a href="https://discord.gg/qhbcCH8Am4">Discord</a> ·
   <a href="https://x.com/nexudotio">ติดตาม @nexudotio</a>
 </p>
@@ -133,7 +128,7 @@ OpenDesign คือสิ่งที่เกิดขึ้นเมื่อ
 ใช้ `od mcp install <agent> --print` เพื่อ preview แบบ dry-run · ใช้ `--uninstall` เพื่อลบ · ดูรายการเต็มด้วย `od mcp install --help`.
 
 <p align="center">
-  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="CLI coding-agent 25 ตัวที่ OpenDesign รองรับ — Claude Code · Codex · OpenCode · Hermes · Antigravity · Vela · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
+  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="CLI coding-agent 25 ตัวที่ OpenDesign รองรับ — Claude Code · Codex · OpenCode · Hermes · Antigravity · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
 </p>
 
 **ยังไม่มี CLI ติดตั้ง?** BYOK proxy ที่ `POST /api/proxy/{anthropic,openai,azure,google,ollama,senseaudio}/stream` ให้ loop แบบเดียวกัน (ไม่ต้อง spawn process) — วาง `baseUrl` + `apiKey` + `model` ได้เลย พร้อมรองรับ OpenAI, Anthropic, Azure OpenAI, Google Gemini, Ollama, LM Studio, vLLM หรือ endpoint ที่เข้ากันได้กับ OpenAI. การป้องกัน SSRF ต่อ target จะบล็อก internal IPs / link-local / CGNAT ที่ daemon edge.
@@ -566,7 +561,7 @@ Architecture เต็ม → [`docs/architecture.md`](../../docs/architecture.m
 - [x] Sidecar protocol + Electron desktop + IPC automation
 - [x] Artifact lint API + 5-dim self-critique pre-emit gate
 - [x] **0.8.0** — plugin marketplace infrastructure (official plugins 261 ตัว, manifest spec, per-agent install scripts)
-- [x] **0.9.0** — OpenDesign Cloud (official Model Router ในตัวแอป: zero config, one-click sign-in)
+- [x] ~~**0.9.0** — OpenDesign Cloud (official Model Router ในตัวแอป: zero config, one-click sign-in)~~ (removed — OpenDesign is local CLI + BYOK only)
 - [x] Packaged Electron builds — macOS (Apple Silicon + Intel) + Windows (x64) + Linux AppImage (optional lane)
 - [ ] Comment-mode surgical edits — ship บางส่วนแล้ว; reliable targeted patching กำลังทำอยู่
 - [ ] AI-emitted tweaks panel UX — ยังไม่ implement

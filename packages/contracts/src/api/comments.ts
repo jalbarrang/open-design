@@ -34,7 +34,7 @@ export type PreviewCommentSelectionKind = 'element' | 'pod';
 export type PreviewVisualMarkKind = 'click' | 'stroke' | 'click+stroke';
 
 /**
- * Team-collaboration comment anchor state.
+ * Comment anchor state.
  * Resolved each render from the live DOM — this is an anchor state, not a
  * processing state. Ladder (strong → weak): exact selector/xpath hit →
  * `anchored`; content changed but re-found via htmlHint → `reanchored`
@@ -84,11 +84,7 @@ export interface PreviewCommentTarget {
   podMembers?: PreviewCommentMember[];
   /** Zero-based deck slide index when the comment was placed. */
   slideIndex?: number;
-  /**
-   * Team collaboration: content version this anchor was captured against. Persisted as
-   * {@link PreviewComment.anchoredVersion}; drives the drift ladder's
-   * "based on older vN" badge.
-   */
+  /** Content version this anchor was captured against. */
   anchoredVersion?: number;
 }
 
@@ -115,39 +111,23 @@ export interface PreviewComment {
   createdAt: number;
   updatedAt: number;
   /**
-   * Permanent canvas pin number within (projectId, filePath). Assigned exactly
-   * once, on creation, and never rewritten by an edit — see
-   * `apps/daemon/src/db.ts`'s `upsertPreviewComment`. On a team-shared project
-   * the freshly-inserted value is a LOCAL provisional guess (this daemon's own
-   * `MAX(pinSeq)+1`) that a background reconciliation
-   * (`confirmPreviewCommentPinSeq`) overwrites once with the collab-cloud's
-   * globally-serialized push `seq` — the mechanism that keeps two devices
-   * creating a comment in the same poll window from ever landing on the same
-   * number. Optional so legacy rows created before this field existed (or a
-   * caller that hasn't migrated a fixture) fall back to a client-computed
-   * creation-order index.
+   * Permanent canvas pin number within (projectId, filePath). Assigned on
+   * creation and never rewritten by an edit. Optional so legacy rows fall back
+   * to a client-computed creation-order index.
    */
   pinSeq?: number;
   /**
    * Persisted sidebar display-order key (higher sorts first; default sort is
    * descending so a fresh comment — with the largest key — shows at the top).
-   * Purely a local display preference: unlike `pinSeq` it is never
-   * reconciled against the collab cloud, so two devices may show a shared
-   * project's comments in a different order without that being a bug.
-   * Rewritten only by an explicit drag-reorder (see the `/reorder` route);
+   * Purely a local display preference. Rewritten only by an explicit
+   * drag-reorder (see the `/reorder` route);
    * absent on legacy rows, which fall back to sorting by `createdAt`.
    */
   sortKey?: number;
-  /**
-   * Team-collaboration anchor fields (all optional; single-user comments omit
-   * them). See {@link PreviewCommentAnchorState}. Resolved/updated at render or
-   * sync time by the drift ladder; persisted as the last-known values.
-   */
+  /** Last-known result from resolving the comment target in the rendered file. */
   anchorState?: PreviewCommentAnchorState;
   /** Content version the comment was anchored to; drives the "based on older vN" badge. */
   anchoredVersion?: number;
-  /** Comment author's workspaceMemberId (for cross-member attribution/display). */
-  authorMemberId?: string;
   /**
    * Bbox written back on each successful anchor. The `lost` ghost pin renders
    * here (last known-good position), NOT the creation-time `position`, which
@@ -165,17 +145,11 @@ export interface PreviewCommentUpsertRequest {
   target: PreviewCommentTarget;
   note: string;
   attachments?: PreviewCommentAttachment[];
-  /**
-   * Team collaboration: comment author's workspaceMemberId. Server-set from the request
-   * identity (B token → member context); clients do not supply it.
-   */
-  authorMemberId?: string;
 }
 
 /**
- * Team collaboration: drift-ladder write-back. The anchoring engine reports where a
- * comment resolved this render so the resolved state persists across sessions
- * (see {@link PreviewCommentAnchorState}).
+ * Drift-ladder write-back. The anchoring engine reports where a comment
+ * resolved so the state persists across sessions.
  */
 export interface PreviewCommentAnchorUpdateRequest {
   anchorState: PreviewCommentAnchorState;

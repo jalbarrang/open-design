@@ -965,11 +965,11 @@ export function resolveSafePromptImagePaths(
 }
 
 export function selectPromptImagePaths(
-  agentId: string | null | undefined,
+  _agentId: string | null | undefined,
   safeImages: string[],
-  amrStagedImages: string[],
+  _alternateImagePaths: string[],
 ) {
-  return agentId === 'amr' ? amrStagedImages : safeImages;
+  return safeImages;
 }
 
 export function excludeAcpImagePathsAlreadyDeliveredAsResources(

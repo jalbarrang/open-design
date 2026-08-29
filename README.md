@@ -1,9 +1,5 @@
 <h1 align="center">OpenDesign: The open-source Claude Design alternative</h1>
 
-> ⚡ **[OpenDesign Cloud — the official model service.](https://open-design.ai/zh/pricing/)** One recharge to use both agent and image models inside OpenDesign: GPT, Claude, and DeepSeek for agents; GPT Image 2.0, Seedream 5.0 Pro, and Nano Banana 2.0 for images.
->
-> 🚀 **[DeepSeek V4 Flash and V4 Pro are now available.](https://open-design.ai/zh/pricing/)** Put top-tier intelligence to work across prototypes, decks, design systems, and everyday agent tasks. OpenDesign members can use both models without limits for two weeks, directly inside the app.
->
 > 🧩 **[DeepSeek Harness is now supported.](https://open-design.ai/zh/agents/deepseek-harness-design/)** Connect DeepSeek's official `dsh` agent harness to OpenDesign as a native runtime, with structured thinking, tool calls, model discovery, cancellation, and session resume. Generated files stay in the OpenDesign workflow for live preview and delivery.
 
 <p align="center">
@@ -13,7 +9,6 @@
 <p align="center">
   <a href="https://open-design.ai/?utm_source=github&utm_medium=referral&utm_content=readme_website">Website</a> ·
   <a href="https://open-design.ai/?utm_source=github&utm_medium=referral&utm_content=readme_download">Download</a> ·
-  <a href="https://open-design.ai/cloud/?utm_source=github&utm_medium=referral&utm_content=readme_cloud">OpenDesign Cloud</a> ·
   <a href="https://discord.gg/mHAjSMV6gz">Discord</a> ·
   <a href="https://x.com/OpenDesignHQ">Follow @OpenDesignHQ</a>
 </p>
@@ -31,7 +26,7 @@
 
 ## What is OpenDesign
 
-🎨 **The open-source Claude Design alternative.** &nbsp;🖥️ **Local-first native desktop app for macOS and Windows.** &nbsp;⚡ **Composable skills, brand-grade `DESIGN.md` design systems, and ready-to-use plugins.** &nbsp;🖼️ Generates **web · desktop · mobile prototypes**, **live dashboards / artifacts**, **decks**, **images**, **video**, plus **HyperFrames** motion graphics. 🔒 Sandboxed iframe preview · HTML / PDF / PPTX / MP4 export. &nbsp;🤖 **Runs on DeepSeek Harness (`dsh`) · Claude Code · OpenClaw · Codex · Cursor · OpenCode · Qwen · Copilot · Amp · Hermes · Kimi · Antigravity and 26 distinct local CLI executables**, or any OpenAI-compatible endpoint via BYOK.
+🎨 **The open-source Claude Design alternative.** &nbsp;🖥️ **Local-first native desktop app for macOS and Windows.** &nbsp;⚡ **Composable skills, brand-grade `DESIGN.md` design systems, and ready-to-use plugins.** &nbsp;🖼️ Generates **web · desktop · mobile prototypes**, **live dashboards / artifacts**, **decks**, **images**, **video**, plus **HyperFrames** motion graphics. 🔒 Sandboxed iframe preview · HTML / PDF / PPTX / MP4 export. &nbsp;🤖 **Runs on DeepSeek Harness (`dsh`) · Claude Code · OpenClaw · Codex · Cursor · OpenCode · Qwen · Copilot · Amp · Hermes · Kimi · Antigravity and 25 distinct local CLI executables**, or any OpenAI-compatible endpoint via BYOK.
 
 OpenDesign is what you get when the **agent-native** loop Anthropic shipped with Claude Design — discover the brief, lock the direction, stream the artifact, critique, deliver — stops being closed and becomes a **filesystem of functional skills, rendering design templates, design systems, and plugins** that the coding agents already on your laptop can read, write, and remix. Your CLI becomes the design engine, your laptop becomes the studio, and your team's `DESIGN.md` becomes the brand contract.
 
@@ -138,7 +133,7 @@ For DeepSeek Harness, install the official `dsh` CLI first, then select it in Op
 ¹ Automatic MCP configuration for Claude Desktop is currently supported on macOS and Windows only.
 
 <p align="center">
-  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="The 26 coding-agent CLIs OpenDesign supports — DeepSeek Harness · Claude Code · Codex · OpenCode · Hermes · Antigravity · Vela · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
+  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="The 25 coding-agent CLIs OpenDesign supports — DeepSeek Harness · Claude Code · Codex · OpenCode · Hermes · Antigravity · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
 </p>
 
 **No CLI installed?** The BYOK proxy at `POST /api/proxy/{anthropic,openai,azure,google,ollama,senseaudio}/stream` gives you the same loop (no process spawn) — paste `baseUrl` + `apiKey` + `model`, with presets for OpenAI, Atlas Cloud, Anthropic, Azure OpenAI, Google Gemini, Ollama, LM Studio, vLLM, or any OpenAI-compatible endpoint. Atlas Cloud uses `https://api.atlascloud.ai/v1` with your own key and OpenAI-compatible model ids such as `qwen/qwen3.5-flash`. Per-target SSRF protection blocks internal IPs / link-local / CGNAT at the daemon edge.
@@ -569,8 +564,8 @@ Plugin registry endpoint: `GET /api/plugins`. Directory overview → [`plugins/R
              ▼
    ┌──────────────────────────────────────────────────────────────────┐
    │  Local runtime definitions come from runtimes/registry.ts;                 │
-   │  the base registry has 27 definitions (including byok-opencode),           │
-   │  backed by 26 distinct local CLI executables because byok-opencode shares │
+   │  the base registry has 26 definitions (including byok-opencode),           │
+   │  backed by 25 distinct local CLI executables because byok-opencode shares │
    │  the OpenCode executable. See docs/agent-adapters.md.                     │
    │  composes a functional skill or design template + DESIGN.md; writes files │
    └──────────────────────────────────────────────────────────────────┘
@@ -592,7 +587,7 @@ Full architecture → [`docs/architecture.md`](docs/architecture.md). Skill prot
 
 ## Roadmap
 
-- [x] Daemon + 27 runtime definitions across 26 distinct coding-agent CLI executables + skill/design-template registries + design-system catalog
+- [x] Daemon + 26 runtime definitions across 25 distinct coding-agent CLI executables + skill/design-template registries + design-system catalog
 - [x] Web app + chat + question form + 5-direction picker + todo progress + sandboxed preview
 - [x] 100+ functional skills · separate rendering-template catalog · 151 design-system packages · 5 visual directions · 5 device frames
 - [x] SQLite-backed projects · conversations · messages · tabs · templates
@@ -601,7 +596,7 @@ Full architecture → [`docs/architecture.md`](docs/architecture.md). Skill prot
 - [x] Sidecar protocol + Electron desktop + IPC automation
 - [x] Artifact lint API + 5-dim self-critique pre-emit gate
 - [x] **0.8.0** — plugin marketplace infrastructure (261 official plugins, manifest spec, per-agent install scripts)
-- [x] **0.9.0** — OpenDesign Cloud (official model service built into the app: zero config, one-click sign-in)
+- [x] ~~**0.9.0** — OpenDesign Cloud (official model service built into the app)~~ — removed; OpenDesign is local CLI + BYOK only
 - [x] **0.10.0** — the all-in-one design workspace: the whole craft loop in one window (references → material → interactive editing → motion → handoff)
 - [x] **0.11.0** — _The Bazaar_: built in the open — a community marketplace of plugins and design systems anyone can pick from and contribute to
 - [x] **0.12.0** — _Brand-backed Design System_: turn the brand you already own into a reusable, portable `DESIGN.md` system

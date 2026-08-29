@@ -32,12 +32,11 @@ export const uiP0Groups = {
       "ui/entry-chrome-flows.test.ts",
       "ui/entry-configuration-flows.test.ts",
       "ui/home-hero-rail.test.ts",
-      "ui/amr-onboarding.test.ts",
+      "ui/onboarding.test.ts",
       "ui/api-empty-response.test.ts",
       "ui/settings-api-protocol.test.ts",
       "ui/settings-connectors-auth-happy-path.test.ts",
       "ui/settings-connectors-auth-recovery.test.ts",
-      "ui/workspace-team-interactions.test.ts",
     ],
   },
   "project-workspace": {
@@ -50,37 +49,24 @@ export const uiP0Groups = {
     ],
   },
   // Keep editor-heavy files on a separate single-worker runtime. Running the
-  // whole workspace domain serially took 11.6 minutes on CI, while enabling a
-  // second worker in one job is unsafe because these flows share Workspace
-  // authority state outside the worker-local daemon. Two runner-isolated jobs
-  // preserve that boundary and balance the historical file timings.
+  // whole workspace domain serially took 11.6 minutes on CI, while these flows
+  // share project/file state through the worker-local daemon, so a second
+  // worker in one job is unsafe. Two runner-isolated jobs preserve that
+  // boundary and balance the historical file timings.
   "project-workspace-editor": {
     grep: String.raw`\[P0\]`,
     workers: 1,
     files: [
       "ui/app-design-files.test.ts",
       "ui/app-manual-edit.test.ts",
-      "ui/workspace-team-design-system-picker.test.ts",
     ],
-  },
-  // Split out of "project-workspace" (2026-08-04): the two multi-client collab
-  // specs alone accounted for ~10 of that group's ~26min single-worker wall
-  // time (workspace-multi-client-collab.test.ts spins up two isolated
-  // client/daemon runtimes per case). Keep this shard limited to the cluster-
-  // owned spec so it does not also boot the default worker runtime needed by
-  // ordinary UI files.
-  "project-collab": {
-    grep: String.raw`\[P0\]`,
-    workers: 1,
-    files: ["ui/workspace-multi-client-collab.test.ts"],
   },
   "project-runtime": {
     grep: String.raw`\[P0\]`,
     workers: 1,
     files: [
       "ui/real-daemon-run.test.ts",
-      "ui/amr-run-failure-recovery.test.ts",
-      "ui/amr-logout-requires-relogin.test.ts",
+      "ui/run-failure-recovery.test.ts",
       "ui/settings-local-cli-codex-fallback.test.ts",
     ],
   },
@@ -92,7 +78,6 @@ export const uiP0CiMatrix = [
   { name: "entry-settings", shard: "entry-settings" },
   { name: "project-workspace", shard: "project-workspace" },
   { name: "project-workspace-editor", shard: "project-workspace-editor" },
-  { name: "project-collab", shard: "project-collab" },
   { name: "project-runtime", shard: "project-runtime" },
   { name: "workspace-restoration", shard: "workspace-restoration" },
 ] as const satisfies readonly UiP0CiMatrixEntry[];
@@ -103,9 +88,6 @@ export const visualCiMatrix = [
 ] as const satisfies readonly VisualCiMatrixEntry[];
 
 const uiP0CoverageFiles = [
-  "ui/amr-logout-requires-relogin.test.ts",
-  "ui/amr-onboarding.test.ts",
-  "ui/amr-run-failure-recovery.test.ts",
   "ui/api-empty-response.test.ts",
   "ui/app-design-files.test.ts",
   "ui/app-manual-edit.test.ts",
@@ -115,15 +97,14 @@ const uiP0CoverageFiles = [
   "ui/entry-chrome-flows.test.ts",
   "ui/entry-configuration-flows.test.ts",
   "ui/home-hero-rail.test.ts",
+  "ui/onboarding.test.ts",
   "ui/project-management-flows.test.ts",
   "ui/real-daemon-run.test.ts",
+  "ui/run-failure-recovery.test.ts",
   "ui/settings-api-protocol.test.ts",
   "ui/settings-connectors-auth-happy-path.test.ts",
   "ui/settings-connectors-auth-recovery.test.ts",
   "ui/settings-local-cli-codex-fallback.test.ts",
-  "ui/workspace-team-interactions.test.ts",
-  "ui/workspace-multi-client-collab.test.ts",
-  "ui/workspace-team-design-system-picker.test.ts",
   "ui/workspace-keyboard-flows.test.ts",
 ] as const;
 

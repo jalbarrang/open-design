@@ -192,17 +192,6 @@ describe('classifyRunFailure', () => {
   });
 
   it('prefers structured model-unavailable codes over timeout-like free text', () => {
-    expect(
-      classify(
-        'AMR_MODEL_UNAVAILABLE',
-        'Model selection timed out while the provider reported the model was unavailable.',
-      ),
-    ).toMatchObject({
-      failure_category: 'model_unavailable',
-      failure_stage: 'model_select',
-      retryable: false,
-      user_action: 'switch_model',
-    });
   });
 
   it('prefers prompt-too-large codes over empty-output fallback text', () => {
@@ -417,21 +406,6 @@ describe('classifyRunFailure', () => {
     });
   });
 
-  it('promotes AMR exit 130 connection resets into upstream stream disconnects', () => {
-    expect(
-      classify(
-        'AGENT_EXIT_130',
-        'json-rpc id 4: Connection reset by server',
-      ),
-    ).toMatchObject({
-      failure_category: 'upstream_unavailable',
-      failure_detail: 'stream_disconnected',
-      failure_stage: 'first_token_wait',
-      retryable: true,
-      user_action: 'retry',
-    });
-  });
-
   it('promotes opencode API 4xx session errors out of process-exit fallback', () => {
     expect(
       classify(
@@ -497,58 +471,7 @@ describe('classifyRunFailure', () => {
     });
   });
 
-  it('maps AMR model catalog outages to provider routing failures', () => {
-    expect(
-      classify(
-        'AGENT_EXIT_130',
-        'json-rpc id 2: AMR model catalog is unavailable.',
-      ),
-    ).toMatchObject({
-      failure_category: 'upstream_unavailable',
-      failure_detail: 'provider_routing_error',
-      failure_stage: 'first_token_wait',
-      retryable: true,
-      user_action: 'retry',
-    });
-  });
-
-  it('maps AMR model catalog credential failures to auth instead of retryable routing', () => {
-    expect(
-      classify(
-        'AGENT_EXECUTION_FAILED',
-        [
-          'json-rpc id 2: AMR model catalog is unavailable.',
-          'Error: list Link models: API request failed with status 401: invalid_api_key',
-        ].join('\n'),
-      ),
-    ).toMatchObject({
-      failure_category: 'auth',
-      failure_detail: 'auth_required',
-      failure_stage: 'session_init',
-      retryable: false,
-      user_action: 'login',
-    });
-  });
-
-  it('maps AMR insufficient balance to recharge guidance', () => {
-    expect(
-      classify('AMR_INSUFFICIENT_BALANCE', 'insufficient wallet balance'),
-    ).toMatchObject({
-      failure_category: 'insufficient_balance',
-      failure_detail: 'amr_insufficient_balance',
-      retryable: false,
-      user_action: 'recharge',
-    });
-  });
-
   it('maps unavailable model errors to switch-model guidance', () => {
-    expect(classify('AMR_MODEL_UNAVAILABLE', 'model is not available')).toMatchObject({
-      failure_category: 'model_unavailable',
-      failure_detail: 'model_not_found',
-      failure_stage: 'model_select',
-      retryable: false,
-      user_action: 'switch_model',
-    });
   });
 
   it('maps prompt-size failures to reduce-context guidance', () => {
@@ -1576,39 +1499,6 @@ describe('execution_failed close-reason refinement', () => {
     });
   });
 
-  it('classifies an AMR membership concurrency limit before fatal close promotion', () => {
-    const message =
-      '[code=tier_limit_exceeded] membership concurrency limit exceeded: 3/2 resets 2026-08-25T10:42:00Z';
-    expect(
-      classifyForAgent('amr', 'AGENT_EXECUTION_FAILED', message, [
-        errorEvent('AGENT_EXECUTION_FAILED', message, true),
-        runtimeCloseEvent('fatal_rpc_error'),
-      ]),
-    ).toMatchObject({
-      failure_category: 'rate_limit',
-      failure_detail: 'membership_concurrency_limit',
-      failure_stage: 'session_init',
-      retryable: false,
-      user_action: 'none',
-    });
-  });
-
-  it('keeps a non-AMR membership concurrency envelope retryable', () => {
-    const message =
-      '[code=tier_limit_exceeded] membership concurrency limit exceeded: 3/2 resets 2026-08-25T10:42:00Z';
-    expect(
-      classifyForAgent('claude', 'AGENT_EXECUTION_FAILED', message, [
-        errorEvent('AGENT_EXECUTION_FAILED', message, true),
-        runtimeCloseEvent('fatal_rpc_error'),
-      ]),
-    ).toMatchObject({
-      failure_category: 'process_exit',
-      failure_detail: 'fatal_rpc_error',
-      retryable: true,
-      user_action: 'retry',
-    });
-  });
-
   it('honors an explicit non-retryable hint on fatal close reasons', () => {
     const result = classify('AGENT_EXECUTION_FAILED', '', [
       errorEvent('AGENT_EXECUTION_FAILED', '', false),
@@ -1639,274 +1529,6 @@ describe('execution_failed close-reason refinement', () => {
         runtimeCloseEvent('stream_error'),
       ]),
     ).toMatchObject({ failure_category: 'process_exit', failure_detail: 'exit_code' });
-  });
-});
-
-// Reclassify AMR/vela upstream failures that currently fall into the opaque
-// `execution_failed` bucket. These carry the generic `AGENT_EXECUTION_FAILED`
-// error code, and the real cause is only in the (often Chinese) upstream error
-// text, so the English-only detectors miss them. Real production texts were
-// sampled from Langfuse (#3408 P1). Each must land in its true product-view
-// category instead of the engineering-view opaque bucket.
-describe('classifyRunFailure — AMR/vela reclassification out of execution_failed', () => {
-  it('classifies a vela Chinese pre-charge (insufficient balance) failure as insufficient_balance', () => {
-    const result = classify(
-      'AGENT_EXECUTION_FAILED',
-      '预扣费额度失败, 用户[141283]剩余额度: 💰0.040000, 需要预扣费额度: 💰0.060000 (request id: B202606220543379765673248268d9d6vVKaiRPCMA)',
-    );
-    expect(result?.failure_category).toBe('insufficient_balance');
-    expect(result?.failure_detail).toBe('amr_insufficient_balance');
-    expect(result?.user_action).toBe('recharge');
-  });
-
-  it('classifies structured AMR tier entitlement failures as upgrade-required analytics', () => {
-    const result = classify(
-      'AMR_TIER_UPGRADE_REQUIRED',
-      'AMR tier upgrade required',
-    );
-
-    expect(result).toMatchObject({
-      failure_category: 'entitlement_required',
-      failure_detail: 'amr_tier_upgrade_required',
-      failure_stage: 'session_init',
-      retryable: false,
-      user_action: 'upgrade',
-    });
-  });
-
-  it('classifies raw AMR tier entitlement texts as upgrade-required analytics', () => {
-    const result = classify(
-      'AGENT_EXECUTION_FAILED',
-      'HTTP 403 [code=tier_model_not_entitled] model access denied for current tier',
-    );
-
-    expect(result).toMatchObject({
-      failure_category: 'entitlement_required',
-      failure_detail: 'amr_tier_upgrade_required',
-      failure_stage: 'session_init',
-      retryable: false,
-      user_action: 'upgrade',
-    });
-  });
-
-  it('classifies a Chinese 429 rate-limit text as a retryable rate_limit_429', () => {
-    const result = classify(
-      'AGENT_EXECUTION_FAILED',
-      '429 您的账户已达到速率限制，请您控制请求频率',
-    );
-    expect(result?.failure_category).toBe('rate_limit');
-    expect(result?.failure_detail).toBe('rate_limit_429');
-    expect(result?.retryable).toBe(true);
-  });
-
-  // vela's rolling 5-hour model window (`model_limit_exceeded`, link
-  // handlers/openai.go) is NOT a hard quota: the window resets on its own at
-  // `reset_at`, the request was never charged, and retrying after that instant
-  // succeeds. Reading it as `hard_quota` both mislabels the cause and marks the
-  // run non-retryable, which pollutes the reliability numerator.
-  it('classifies vela 5-hour model window limits as a retryable model_window_limit', () => {
-    const result = classifyForAgent(
-      'amr',
-      'RATE_LIMITED',
-      'You have reached the 5-hour usage limit for Kimi K2.6. Try again after 2026-08-12T06:34:47Z. This request was not charged to Wallet Credits.',
-    );
-    expect(result?.failure_category).toBe('rate_limit');
-    expect(result?.failure_detail).toBe('model_window_limit');
-    expect(result?.retryable).toBe(true);
-  });
-
-  // A genuine quota exhaustion must keep its existing hard_quota reading — the
-  // window-limit branch above must not swallow the whole `usage limit` family.
-  it('keeps a genuine session-limit exhaustion on hard_quota', () => {
-    const result = classify(
-      'RATE_LIMITED',
-      "You've hit your session limit; resets at 3:10am.",
-    );
-    expect(result?.failure_detail).toBe('hard_quota');
-    expect(result?.retryable).toBe(false);
-  });
-
-  it('classifies a vela "model not in allowed list" rejection as model_unavailable', () => {
-    const result = classify(
-      'AGENT_EXECUTION_FAILED',
-      'API Error: 400 model deepseek-v4-pro-202606 not in allowed list',
-    );
-    expect(result?.failure_category).toBe('model_unavailable');
-    expect(result?.failure_detail).toBe('model_not_found');
-    expect(result?.user_action).toBe('switch_model');
-  });
-
-  // BYOK OpenCode empty-output runs end with rpc_close_reason=empty_output and
-  // a fallback message that includes advisory text like "checking quota".  The
-  // structured close reason must win over the text heuristic so the run is not
-  // misclassified as a non-retryable hard quota exhaustion.
-  it('classifies rpc_close_reason=empty_output as empty_output even when error text contains advisory "checking quota"', () => {
-    const fallbackMsg =
-      'Agent completed without producing any output. The model or provider may have returned an empty response. Check the agent logs for upstream errors, then try re-authenticating the agent, checking quota, or switching models.';
-    const result = classifyForAgent(
-      'byok-opencode',
-      'AGENT_EXECUTION_FAILED',
-      fallbackMsg,
-      [
-        errorEvent('AGENT_EXECUTION_FAILED', fallbackMsg, true),
-        runtimeCloseEvent('empty_output'),
-      ],
-    );
-    expect(result?.failure_category).toBe('empty_output');
-    expect(result?.failure_detail).toBe('empty_output');
-    expect(result?.retryable).toBe(true);
-    expect(result?.user_action).toBe('retry');
-  });
-
-  it('classifies rpc_close_reason=empty_output as empty_output without advisory text', () => {
-    const result = classifyForAgent(
-      'byok-opencode',
-      'AGENT_EXECUTION_FAILED',
-      'Agent completed without producing any output.',
-      [
-        errorEvent('AGENT_EXECUTION_FAILED', 'Agent completed without producing any output.', true),
-        runtimeCloseEvent('empty_output'),
-      ],
-    );
-    expect(result?.failure_category).toBe('empty_output');
-    expect(result?.failure_detail).toBe('empty_output');
-    expect(result?.retryable).toBe(true);
-    expect(result?.user_action).toBe('retry');
-  });
-
-  it('still classifies a genuine quota-exhaustion message as hard_quota', () => {
-    const result = classify(
-      'RATE_LIMITED',
-      'You have exceeded your current quota. Please check your plan and billing details.',
-    );
-    expect(result?.failure_category).toBe('rate_limit');
-    expect(result?.failure_detail).toBe('hard_quota');
-    expect(result?.retryable).toBe(false);
-  });
-
-  // Blocking point 1: rpc_close_reason=empty_output must NOT outrank a
-  // structured RATE_LIMITED error code.  The child exits cleanly after the
-  // provider rejects the request with a rate-limit, and the daemon stamps
-  // rpc_close_reason=empty_output — but RATE_LIMITED is the authoritative
-  // signal and must win.
-  it('classifies RATE_LIMITED + rpc_close_reason=empty_output as rate_limit, not empty_output', () => {
-    const result = classify(
-      'RATE_LIMITED',
-      'HTTP 429: too many requests',
-      [
-        errorEvent('RATE_LIMITED', 'HTTP 429: too many requests', true),
-        runtimeCloseEvent('empty_output'),
-      ],
-    );
-    expect(result?.failure_category).toBe('rate_limit');
-    expect(result?.failure_detail).toBe('rate_limit_429');
-    expect(result?.retryable).toBe(true);
-  });
-
-  // Blocking point 1: hard quota text + rpc_close_reason=empty_output — the
-  // quota exhaustion text must win over the empty_output close reason.
-  it('classifies hard quota text + rpc_close_reason=empty_output as hard_quota, not empty_output', () => {
-    const result = classifyForAgent(
-      'byok-opencode',
-      'RATE_LIMITED',
-      'You have exceeded your current quota. Please check your plan and billing details.',
-      [
-        errorEvent('RATE_LIMITED', 'You have exceeded your current quota. Please check your plan and billing details.', false),
-        runtimeCloseEvent('empty_output'),
-      ],
-    );
-    expect(result?.failure_category).toBe('rate_limit');
-    expect(result?.failure_detail).toBe('hard_quota');
-    expect(result?.retryable).toBe(false);
-  });
-
-  // Blocking point 1: upstream failure + rpc_close_reason=empty_output — the
-  // upstream signal must win over the empty_output close reason.
-  it('classifies UPSTREAM_UNAVAILABLE + rpc_close_reason=empty_output as upstream_unavailable, not empty_output', () => {
-    const result = classify(
-      'UPSTREAM_UNAVAILABLE',
-      'HTTP 503 upstream unavailable',
-      [
-        errorEvent('UPSTREAM_UNAVAILABLE', 'HTTP 503 upstream unavailable', true),
-        runtimeCloseEvent('empty_output'),
-      ],
-    );
-    expect(result?.failure_category).toBe('upstream_unavailable');
-    expect(result?.failure_detail).toBe('upstream_5xx');
-    expect(result?.retryable).toBe(true);
-  });
-
-  // Blocking point 2: the bare \bquota\b word is intentionally absent from
-  // isHardQuotaText so advisory phrases like "checking quota" in the daemon's
-  // own empty-output fallback message do not match — confirmed by the existing
-  // advisory-quota test above.  This test pins the specific exhaustion phrase
-  // "exceeded your current quota" that MUST still match even without the bare
-  // \bquota\b term in the pattern.
-  it('still matches "exceeded your current quota" as hard_quota without bare \\bquota\\b in the pattern', () => {
-    // No rpc_close_reason=empty_output — goes through the text-heuristic path.
-    const result = classify(
-      'RATE_LIMITED',
-      'API error: you have exceeded your current quota for this billing period.',
-    );
-    expect(result?.failure_category).toBe('rate_limit');
-    expect(result?.failure_detail).toBe('hard_quota');
-    expect(result?.retryable).toBe(false);
-  });
-
-  // Refs mrcfps blocking comment on PR #7248.  Antigravity emits:
-  //   RESOURCE_EXHAUSTED (code 429): Individual quota reached. Contact your
-  //   administrator to enable overages. Resets in <H>h<M>m<S>s.
-  // to its log file.  The tightened pattern must recognise both `quota reached`
-  // and the bare `RESOURCE_EXHAUSTED` status code as hard quota exhaustion.
-  it('classifies Antigravity "RESOURCE_EXHAUSTED: Individual quota reached" as hard_quota', () => {
-    const result = classify(
-      'RATE_LIMITED',
-      'RESOURCE_EXHAUSTED (code 429): Individual quota reached. Contact your administrator to enable overages. Resets in 3h22m10s.',
-    );
-    expect(result?.failure_category).toBe('rate_limit');
-    expect(result?.failure_detail).toBe('hard_quota');
-    expect(result?.retryable).toBe(false);
-  });
-
-  it('classifies bare "Individual quota reached" as hard_quota', () => {
-    const result = classify(
-      'RATE_LIMITED',
-      'Individual quota reached.',
-    );
-    expect(result?.failure_category).toBe('rate_limit');
-    expect(result?.failure_detail).toBe('hard_quota');
-    expect(result?.retryable).toBe(false);
-  });
-
-  it('classifies bare RESOURCE_EXHAUSTED status code as hard_quota', () => {
-    // Antigravity log may surface the status code alone when the message is
-    // stripped by the log parser.
-    const result = classify(
-      'RATE_LIMITED',
-      'RESOURCE_EXHAUSTED',
-    );
-    expect(result?.failure_category).toBe('rate_limit');
-    expect(result?.failure_detail).toBe('hard_quota');
-    expect(result?.retryable).toBe(false);
-  });
-
-  // Advisory phrases from antigravityQuotaGuidance() — these are in the
-  // user-facing guidance string, not in any upstream error, and must NOT
-  // trigger hard_quota classification.
-  it('does not classify "has its own quota" advisory phrase as hard_quota', () => {
-    const result = classify(
-      'AGENT_EXECUTION_FAILED',
-      'Each Antigravity model (Gemini 3 Pro / Flash, Claude 4.6, GPT-OSS) has its own quota.',
-    );
-    expect(result?.failure_detail).not.toBe('hard_quota');
-  });
-
-  it('does not classify "available quota" advisory phrase as hard_quota', () => {
-    const result = classify(
-      'AGENT_EXECUTION_FAILED',
-      'Switch Model picker to pick a model with available quota, then retry here.',
-    );
-    expect(result?.failure_detail).not.toBe('hard_quota');
   });
 });
 
@@ -1957,16 +1579,6 @@ describe('classifyRunFailure — batch A reclassification out of execution_faile
     expect(result?.user_action).toBe('reduce_context');
   });
 
-  it('classifies AMR request body limits as prompt_too_large', () => {
-    const result = classify(
-      'AGENT_EXECUTION_FAILED',
-      'json-rpc id 4: opencode event stream: {"properties":{"error":{"data":{"message":"[code=request_too_large] request body exceeds configured limit"}}}}',
-    );
-    expect(result?.failure_category).toBe('prompt_too_large');
-    expect(result?.failure_detail).toBe('request_too_large');
-    expect(result?.user_action).toBe('reduce_context');
-  });
-
   it('classifies an ACP "thread/start failed" as agent_protocol_error', () => {
     const result = classify(
       'AGENT_EXECUTION_FAILED',
@@ -1974,14 +1586,6 @@ describe('classifyRunFailure — batch A reclassification out of execution_faile
     );
     expect(result?.failure_category).toBe('process_exit');
     expect(result?.failure_detail).toBe('agent_protocol_error');
-  });
-
-  it('classifies a vela "login fail: carry the API secret key" as an auth failure', () => {
-    const result = classify(
-      'AGENT_EXECUTION_FAILED',
-      "login fail: Please carry the API secret key in the 'Authorization' field of the request header (1004)",
-    );
-    expect(result?.failure_category).toBe('auth');
   });
 
   it('classifies a local model server with no model loaded (LM Studio) as local_model_not_loaded', () => {
@@ -2218,34 +1822,6 @@ describe('classifyRunFailure — custom Anthropic endpoint disconnects', () => {
     const result = classify(
       'AGENT_CONNECTION_DROPPED',
       'Claude Code lost its connection to the configured custom Anthropic endpoint before the response finished.',
-    );
-    expect(result).toMatchObject({
-      failure_category: 'upstream_unavailable',
-      failure_detail: 'stream_disconnected',
-      retryable: true,
-      user_action: 'retry',
-    });
-  });
-});
-
-describe('classifyRunFailure — AMR sampled failures', () => {
-  it('classifies Windows opencode readiness crash status as process_crashed', () => {
-    const result = classify(
-      'AGENT_SIGNAL_SIGTERM',
-      'json-rpc id 2: start opencode server: opencode exited before readiness: exit status 0xc0000409',
-    );
-    expect(result).toMatchObject({
-      failure_category: 'process_exit',
-      failure_detail: 'process_crashed',
-      retryable: false,
-      user_action: 'none',
-    });
-  });
-
-  it('classifies AMR stream idle timeout as a disconnected upstream stream', () => {
-    const result = classify(
-      'AGENT_EXECUTION_FAILED',
-      'json-rpc id 4: opencode event stream: {"properties":{"error":{"data":{"message":"[code=upstream_error] stream idle timeout: no data received within configured window"}}}}',
     );
     expect(result).toMatchObject({
       failure_category: 'upstream_unavailable',

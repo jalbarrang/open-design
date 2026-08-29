@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { WorkspaceCollabContext } from '@open-design/contracts';
 
-import {
-  projectWorkspaceContext,
-  useProjectWorkspaceScope,
-} from '../../collab/useProjectWorkspaceScope';
-import {
-  workspaceIdentityCacheKey,
-  workspaceProjectHeaders,
-} from '../../collab/workspace-identity';
 import { useCritiqueStream } from './hooks/useCritiqueStream';
 import { TheaterStage } from './TheaterStage';
 import type { CritiqueState } from './state/reducer';
@@ -41,7 +32,6 @@ interface Props {
    * omit this and the mount resolves the persisted project binding itself.
    * Explicit `null` selects the legacy/unbound compatibility path.
    */
-  workspaceContext?: WorkspaceCollabContext | null;
   /** Caller identity used only to authorize the persisted-scope lookup. */
   callerWorkspaceContext?: WorkspaceCollabContext | null;
   /** Workspace id persisted on the project read model. */
@@ -74,7 +64,6 @@ export function CritiqueTheaterMount(props: Props) {
     return (
       <ResolvedCritiqueTheaterMount
         {...sharedProps}
-        workspaceContext={props.workspaceContext ?? null}
       />
     );
   }
@@ -89,7 +78,6 @@ export function CritiqueTheaterMount(props: Props) {
 
 type ResolvedProps = Pick<Props, 'connectionFactory' | 'fetchInterrupt'> & {
   projectId: string;
-  workspaceContext: WorkspaceCollabContext | null;
 };
 
 function PersistedScopeCritiqueTheaterMount({
@@ -137,7 +125,6 @@ function PersistedScopeCritiqueTheaterMount({
       projectId={projectId}
       {...(connectionFactory ? { connectionFactory } : {})}
       {...(fetchInterrupt ? { fetchInterrupt } : {})}
-      workspaceContext={pinnedRef.current.context}
     />
   );
 }
@@ -146,14 +133,12 @@ function ResolvedCritiqueTheaterMount({
   projectId,
   connectionFactory,
   fetchInterrupt,
-  workspaceContext,
 }: ResolvedProps) {
   const options = useMemo(
     () => ({
       ...(connectionFactory ? { connectionFactory } : {}),
-      workspaceContext,
     }),
-    [connectionFactory, workspaceIdentityCacheKey(workspaceContext)],
+    [connectionFactory, 'local'],
   );
   const { state, dispatch } = useCritiqueStream(projectId, true, options);
   const [interruptPending, setInterruptPending] = useState(false);
@@ -197,9 +182,6 @@ function ResolvedCritiqueTheaterMount({
     const url = `/api/projects/${encodeURIComponent(projectId)}/critique/${encodeURIComponent(runId)}/interrupt`;
     fetcher(url, {
       method: 'POST',
-      ...(workspaceContext
-        ? { headers: workspaceProjectHeaders(workspaceContext) }
-        : {}),
     }).then((res) => {
       if (res.ok) {
         dispatch({ type: 'interrupted', runId, bestRound, composite });
@@ -231,7 +213,7 @@ function ResolvedCritiqueTheaterMount({
     dispatch,
     projectId,
     fetchInterrupt,
-    workspaceIdentityCacheKey(workspaceContext),
+    'local',
   ]);
 
   if (state.phase === 'idle') return null;

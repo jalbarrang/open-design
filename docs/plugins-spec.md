@@ -163,7 +163,7 @@ A fifth axis is the product-shape co-evolution with the agent: **UI is requested
 6. The OD core engine, atomic capabilities, and plugin runtime are all reachable from CLI so any code agent can drive OpenDesign headlessly.
 7. **A plugin is a long-task wrapper.** Each plugin targets exactly one of the four product scenarios (new-generation / code-migration / figma-migration / tune-collab) and uses `od.pipeline` to assemble OD's first-party atoms into ordered stages plus an optional devloop (§10).
 8. **Reproducible + auditable.** Every apply persists an immutable `AppliedPluginSnapshot` (§8.2.1); runs and artifacts back-reference the snapshot id. A plugin upgrade never breaks an old run's prompt reconstruction.
-9. **Same artifact, many surfaces.** The artifact manifest (§11.5.1) records plugin provenance plus the export and deploy history across downstream surfaces (cli / other code agents / cloud / desktop) so subsequent tuning, migration, and collaboration always pick up the same artifact.
+9. **Same artifact, many surfaces.** The artifact manifest (§11.5.1) records plugin provenance plus the export and deploy history across downstream surfaces (cli / desktop / web / docker / github / figma / other code agents) so subsequent tuning, migration, and collaboration always pick up the same artifact.
 10. **Generative UI is a first-class plugin output.** Plugins declare `od.genui.surfaces[]` (§10.3) in the manifest; at runtime the agent emits form / choice / confirmation / oauth-prompt requests through OD's controlled event stream, and the product renderer owns the visual style; the user's answer lands in project metadata at `run` / `conversation` / `project` persist tier and is reused across subsequent multi-turn chats and runs in the same project. External AG-UI clients consume the same run through the adapter, not by replacing OD's internal renderer.
 
 **Non-goals (v1)**
@@ -1166,7 +1166,8 @@ export interface ArtifactManifest {
   handoffKind?: 'design-only' | 'implementation-plan' | 'patch' | 'deployable-app';
 
   /** Which downstream collaboration surfaces this artifact has been pushed to,
-   *  serving §1's "distribution to cli / other code agents / cloud / desktop" claim */
+   *  serving §1's "distribution to cli / desktop / web / docker / github / figma /
+   *  other code agents" claim */
   exportTargets?: Array<{
     surface: 'cli' | 'desktop' | 'web' | 'docker' | 'github' | 'figma' | 'code-agent';
     target: string;
@@ -1189,7 +1190,7 @@ Write rules:
 - Every `od plugin export` / `od files upload --to <target>` / `od deploy ...` appends an `exportTargets` / `deployTargets` row but **never** mutates `sourcePluginSnapshotId`.
 - Tuning-class artifacts (`tune-collab`) record both `sourcePluginSnapshotId` (the current plugin) and `parentArtifactId` (the previous version being tuned), forming a back-pointer chain.
 
-This contract makes "the same artifact flows across collaboration surfaces" a first-class operation: a CLI viewer of an artifact can always look up the source plugin / inputs / design system; a cloud collaborator can always reproduce a local result; subsequent code-migration / Figma-migration outputs are linked to their predecessors via `parentArtifactId`.
+This contract makes "the same artifact flows across collaboration surfaces" a first-class operation: a CLI viewer of an artifact can always look up the source plugin / inputs / design system; anyone handed the artifact can reproduce the local result; subsequent code-migration / Figma-migration outputs are linked to their predecessors via `parentArtifactId`.
 
 ### 11.6 Web changes
 

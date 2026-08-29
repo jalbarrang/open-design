@@ -581,7 +581,6 @@ export const SafeObservationManifestEntryV1Schema = z.object({
   reason: nonEmptyStringSchema.optional(),
   project_id: z.string().nullable().optional(),
   run_id: nonEmptyStringSchema.optional(),
-  workspace_id: z.string().nullable().optional(),
   size_bytes: nonNegativeNumberSchema.optional(),
   sha256: nonEmptyStringSchema.optional(),
   mime_type: nonEmptyStringSchema.optional(),

@@ -16,7 +16,7 @@ related:
 ## Overview
 
 #744 now tracks the shared native/ACP session-continuity layer above the
-per-agent resume slices. OpenCode, Codex, Pi, and AMR have shipped session
+per-agent resume slices. OpenCode, Codex, and Pi have shipped session
 continuity paths in #4629, Claude has the earlier #3290 design, and
 cursor-agent is in flight in #4790. Those slices proved the value of resuming an
 upstream agent session, but the shared contract should not be shaped like any
@@ -179,7 +179,6 @@ shape before the adapter work starts.
 | Codex | implemented | `cli-thread-id` | `stream-captured` | `native-resume-by-id` | Captures `thread.started.thread_id`; resumes with `exec resume <thread_id>`. |
 | OpenCode | implemented | `opaque-id` | `stream-captured` | `native-resume-by-id` | Captures OpenCode `sessionID`; resumes with `run -s <id>`. |
 | Pi | implemented | `session-file-path` | `session-file-discovered` | `session-file-resume` | Captures the single `.pi/sessions/*.jsonl` file changed by the run; path-like handle is persist-only/redacted. |
-| AMR | implemented | `acp-session-handle` | `acp-session-load` | `acp-session-load` | Captures durable ACP session handle and maps `resume_failed` to reseed. |
 | cursor-agent | in-flight | `opaque-id` | `stream-captured` | `native-resume-by-id` | #4790 captures emitted `session_id` and resumes with `--resume <chatId>`. |
 | Hermes | candidate | `acp-session-handle` | `acp-session-load` | `acp-session-load` | ACP-native candidate; include in matrix before implementation. |
 | Kimi | candidate | `acp-session-handle` | `acp-session-load` | `acp-session-load` | ACP-native candidate. |

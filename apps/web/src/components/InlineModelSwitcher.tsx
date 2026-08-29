@@ -27,31 +27,11 @@ import {
   modelIdForTracking,
 } from '@open-design/contracts/analytics';
 import { useAnalytics } from '../analytics/provider';
-import {
-  amrHandoffDeviceId,
-  attributedAmrUrl,
-  recordAmrEntry,
-  type AmrEntryAttribution,
-} from '../analytics/amr-attribution';
-import { amrPlansUrlForProfile } from '../runtime/amr-guidance';
-import { codingPlanModelDecision } from '../runtime/amr-unlimited-models';
 import { getResolvedDeviceId } from '../analytics/client';
 import {
   trackDeepSeekCampaignModelBenefitSurfaceView,
   trackExecutionSettingsPopoverClick,
 } from '../analytics/events';
-import {
-  beginAmrAuthTracking,
-  confirmAmrAuthTracking,
-  observeAmrAuthTracking,
-  reconcileAmrAuthAttemptId,
-  resolveAmrAuthTracking,
-} from '../analytics/amr-auth';
-import {
-  useWorkspaceBillingResponse,
-  useWorkspaceContext,
-  workspaceBillingBalanceUsd,
-} from '../collab/useWorkspaceContext';
 import { KNOWN_PROVIDERS } from '../state/config';
 import { fetchProviderModels } from '../providers/provider-models';
 import { SUGGESTED_MODELS_BY_PROTOCOL } from '../state/apiProtocols';
@@ -96,8 +76,6 @@ import {
   providerModelsCacheKey,
   type ProviderModelsCache,
 } from './providerModelsCache';
-import { isDeepSeekV4FlashCampaignModel } from '../campaigns/deepseek-v4-flash';
-import { useDeepSeekV4FlashCampaignVisibility } from '../campaigns/use-deepseek-v4-flash-campaign';
 
 interface Props {
   config: AppConfig;
@@ -216,10 +194,6 @@ export function InlineModelSwitcher({
   // recvqfYKutwWlQ: gate the AMR upgrade entry on billing permission below,
   // not just plan tier — a team member without `canManageBilling` (owner-only)
   // can't act on an upgrade even when the tier itself is upgradeable.
-  const {
-    context: workspaceContext,
-    loading: workspaceContextLoading,
-  } = useWorkspaceContext();
   const workspaceBillingResponse = useWorkspaceBillingResponse();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -968,7 +942,7 @@ export function InlineModelSwitcher({
     ? amrStatus?.account?.plan?.trim() || null
     : null;
   const scopedWorkspaceBalance = formatVelaBalanceUsd(
-    workspaceBillingBalanceUsd(workspaceBillingResponse, workspaceContext),
+    workspaceBillingBalanceUsd(workspaceBillingResponse),
   );
   const amrBalanceLabel = amrLoggedIn && !workspaceContextLoading
     ? workspaceContext?.workspaceType === 'team'

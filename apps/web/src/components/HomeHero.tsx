@@ -32,7 +32,6 @@ import type {
   InputFieldSpec,
   InstalledPluginRecord,
   McpServerConfig,
-  WorkspaceCollabContext,
   WorkspaceContextItem,
 } from '@open-design/contracts';
 import { DesignSystemPicker } from './DesignSystemPicker';
@@ -144,7 +143,6 @@ export interface ExamplePromptInfo {
 }
 
 interface Props {
-  workspaceContext?: WorkspaceCollabContext | null;
   active?: boolean;
   // Arms the first-run guidance trail (prototype chip → first preset
   // card sheen). Tri-state: true = brand-new user (no projects), false =
@@ -1803,7 +1801,6 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
           />
           <div className="home-hero__foot-left">
             <ComposerPlusMenu
-              workspaceContext={workspaceContext}
               triggerTestId="home-hero-plus-trigger"
               placementPreference="down"
               onOpen={() =>
@@ -1980,7 +1977,6 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
             ) : null}
             {projectReferenceOpen ? (
               <ProjectReferenceModal
-                workspaceContext={workspaceContext}
                 onClose={() => {
                   // Only the dismiss paths (X / backdrop / Escape / Cancel)
                   // land here — a confirmed pick closes via
@@ -2160,7 +2156,6 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
           locale={locale}
           onPick={pickExamplePluginPreset}
           pulseFirstPreset={guidePulseFirstPreset}
-          workspaceContext={workspaceContext}
         />
       ) : activePromptExamples.length > 0 ? (
         <div
@@ -2277,7 +2272,6 @@ function PluginPromptPresets({
   onPick: (record: InstalledPluginRecord, chipId: string, promptText: string) => void;
   pendingPluginId: string | null;
   plugins: InstalledPluginRecord[];
-  workspaceContext?: WorkspaceCollabContext | null;
   // First-run guide: the first card carries the attention sheen.
   pulseFirstPreset?: boolean;
 }) {
@@ -2310,7 +2304,6 @@ function PluginPromptPresets({
               disabled={pendingPluginId !== null}
               pulse={pulseFirstPreset && index === 0}
               onPick={onPick}
-              workspaceContext={workspaceContext}
             />
           ))}
         </div>
@@ -2417,13 +2410,12 @@ function PluginPromptPresetCard({
   pending: boolean;
   pulse?: boolean;
   record: InstalledPluginRecord;
-  workspaceContext?: WorkspaceCollabContext | null;
 }) {
   const { t } = useI18n();
   // Example-prompt preset tiles are thumbnails too — prefer the cheap baked
   // hover-pan clip when one exists (same as the gallery cards).
   const preview = useMemo(
-    () => inferPluginPreview(record, { preferBaked: true, workspaceContext }),
+    () => inferPluginPreview(record, { preferBaked: true}),
     [record, workspaceContext],
   );
   // Home cards keep their richer structured-preview path as the last-resort

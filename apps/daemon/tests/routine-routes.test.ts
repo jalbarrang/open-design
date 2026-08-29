@@ -449,76 +449,6 @@ describe('routine routes', () => {
     }
   });
 
-  it('persists a verified create-each-run Workspace scope without consulting B', async () => {
-    const fetchWorkspaceDirectory = vi.fn(async () => ({
-      ok: true,
-      items: [{
-        workspaceId: 'workspace-a',
-        workspaceName: 'A',
-        workspaceType: 'team',
-        workspaceMemberId: 'member-a',
-        role: 'owner',
-        memberStatus: 'active',
-        lifecycleState: 'active',
-      }, {
-        workspaceId: 'workspace-b',
-        workspaceName: 'B',
-        workspaceType: 'team',
-        workspaceMemberId: 'member-b',
-        role: 'owner',
-        memberStatus: 'active',
-        lifecycleState: 'active',
-      }],
-    }));
-    const { app, db } = buildApp({ fetchWorkspaceDirectory });
-    const { server, port } = await listen(app);
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/routines`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-od-workspace-id': 'workspace-a',
-          'x-od-workspace-member-id': 'member-a',
-        },
-        body: JSON.stringify({
-          name: 'A digest',
-          prompt: 'Summarize A.',
-          schedule: { kind: 'daily', time: '09:00', timezone: 'UTC' },
-          target: { mode: 'create_each_run' },
-          context: {
-            workspaceScope: {
-              workspaceId: 'workspace-a',
-              workspaceMemberId: 'member-a',
-            },
-          },
-          enabled: true,
-        }),
-      });
-
-      expect(res.status).toBe(201);
-      const json = await res.json() as {
-        routine: {
-          id: string;
-          context: {
-            workspaceScope: { workspaceId: string; workspaceMemberId: string };
-          };
-        };
-      };
-      expect(json.routine.context.workspaceScope).toEqual({
-        workspaceId: 'workspace-a',
-        workspaceMemberId: 'member-a',
-      });
-      expect(JSON.parse(getRoutine(db, json.routine.id)?.contextJson ?? '{}')).toMatchObject({
-        workspaceScope: {
-          workspaceId: 'workspace-a',
-          workspaceMemberId: 'member-a',
-        },
-      });
-    } finally {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
-  });
-
   it('preserves scoped identity when an authorized patch omits workspaceScope', async () => {
     const fetchWorkspaceDirectory = vi.fn(async () => ({
       ok: true,
@@ -618,56 +548,6 @@ describe('routine routes', () => {
 
       expect(res.status).toBe(201);
       expect(listRoutines(db)).toHaveLength(1);
-      expect(fetchWorkspaceDirectory).not.toHaveBeenCalled();
-    } finally {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
-  });
-
-  it('drops shell Workspace scope for reuse routines because the project binding is authoritative', async () => {
-    const fetchWorkspaceDirectory = vi.fn(async () => ({
-      ok: true,
-      items: [],
-    }));
-    const { app, db } = buildApp({ fetchWorkspaceDirectory });
-    const now = Date.now();
-    insertProject(db, {
-      id: 'project-a',
-      name: 'Project A',
-      createdAt: now,
-      updatedAt: now,
-    });
-    const { server, port } = await listen(app);
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/routines`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-od-workspace-id': 'workspace-b',
-          'x-od-workspace-member-id': 'member-b',
-        },
-        body: JSON.stringify({
-          name: 'Project A digest',
-          prompt: 'Summarize Project A.',
-          schedule: { kind: 'daily', time: '09:00', timezone: 'UTC' },
-          target: { mode: 'reuse', projectId: 'project-a' },
-          context: {
-            connectorIds: ['github'],
-            workspaceScope: {
-              workspaceId: 'workspace-b',
-              workspaceMemberId: 'member-b',
-            },
-          },
-        }),
-      });
-
-      expect(res.status).toBe(201);
-      const json = await res.json() as {
-        routine: { id: string; context: Record<string, unknown> };
-      };
-      expect(json.routine.context).toEqual({ connectorIds: ['github'] });
-      expect(JSON.parse(getRoutine(db, json.routine.id)?.contextJson ?? '{}'))
-        .toEqual({ connectorIds: ['github'] });
       expect(fetchWorkspaceDirectory).not.toHaveBeenCalled();
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));

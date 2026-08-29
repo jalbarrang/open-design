@@ -2,11 +2,8 @@
  * Standing guard: the packaged runtime must not hardcode a backend origin.
  *
  * `apps/packaged` ships inside a public repository, so any origin literal in
- * its source is published. Backend environments that are not themselves public
- * (an internal vela deployment, a staging gateway) therefore have to be
- * injected at packaging time — `tools/pack` reads them from CI secrets, bakes
- * them into `open-design-config.json`, and `sidecars.ts` forwards them into the
- * daemon spawn env, exactly as it already does for `POSTHOG_KEY`.
+ * its source is published. Private backend environments therefore have to be
+ * injected at packaging time rather than hardcoded here.
  *
  * This test fails when a new absolute URL literal appears whose host is not one
  * of the small set of genuinely public / loopback hosts below. If a change

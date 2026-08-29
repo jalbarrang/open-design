@@ -14,9 +14,8 @@ import { describe, expect, it } from 'vitest';
  *
  * That is how `appVersionForCapture` shipped in 0.16.2-beta.148. The name is a
  * local of `createFinalizedMessageTelemetryReporter`; #6221 called it ~7,500
- * lines away inside `startChatRun`'s AMR workspace-scope telemetry, on the spawn
- * path, so every AMR run died with
- * `spawn failed: appVersionForCapture is not defined`.
+ * lines away inside `startChatRun`'s run telemetry, on the spawn path, so every
+ * run died with `spawn failed: appVersionForCapture is not defined`.
  *
  * This suite re-checks the one thing `@ts-nocheck` suppresses and nothing else:
  * every identifier that survives to runtime resolves to a real binding. It runs

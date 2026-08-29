@@ -1,11 +1,18 @@
-# Agent CLI session reuse (codex / opencode / AMR)
+# Agent CLI session reuse (codex / opencode)
 
 Design doc (human/reviewer-facing). Implementation runbooks per slice are written separately at build time.
 
 Shared contract note: the agent-agnostic session-map contract now lives in
 `specs/change/20260707-agent-session-map-contract/spec.md`.
 
-Status: proposed · Parent: #3408 · Upstream background: amr-latency-session-reuse-prompt-cache.md
+Status: proposed · Parent: #3408
+
+> **Historical note.** This spec was written while OpenDesign shipped the
+> OpenDesign Cloud / AMR runtime backed by the `vela` CLI. That capability has
+> since been removed; OpenDesign runs on local coding-agent CLIs and BYOK only.
+> The AMR/vela items below are kept as a record of the investigation, not as
+> current or planned work.
+
 
 ## Why
 

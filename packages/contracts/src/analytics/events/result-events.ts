@@ -15,7 +15,7 @@ import type { ArtifactOriginEntrySurface, ArtifactOriginStatus } from '../../api
 import type { AgentDiagnosticReason, AgentDiagnosticSeverity } from '../../api/registry.js';
 import type { TrackingDesignSystemEditSurface, TrackingDesignSystemKind, TrackingDesignSystemLengthBucket, TrackingDesignSystemOrigin, TrackingDesignSystemRunEntryFrom } from './design-systems.js';
 import type { TrackingSettingsPage } from './event-names.js';
-import type { TrackingAmrOpenCodeErrorPhase, TrackingAmrOpenCodeLastEventType, TrackingAmrOpenCodeLastToolKind, TrackingAmrOpenCodeLastToolStatus, TrackingArtifactKind, TrackingArtifactWriteSource, TrackingArtifactWriteStatus, TrackingByokPreflightBlockReason, TrackingByokProviderId, TrackingCliProviderId, TrackingDesignSystemSource, TrackingExecutionMode, TrackingExportFormat, TrackingExportResult, TrackingFeedbackAction, TrackingFeedbackProviderId, TrackingFeedbackRating, TrackingFeedbackRatingWithNone, TrackingFeedbackReasonCode, TrackingFidelity, TrackingFileSizeBucket, TrackingFileType, TrackingFirstModelEventType, TrackingHarness, TrackingLabsItemId, TrackingLabsOptOutReason, TrackingLabsSystemReason, TrackingLabsToggleSource, TrackingLangfuseDeliveryStatus, TrackingLangfuseDropReason, TrackingLangfuseReportResult, TrackingLangfuseReportSkipReason, TrackingProjectKind, TrackingProjectSource, TrackingPublishErrorCode, TrackingResult, TrackingRunCancelOrigin, TrackingRunCloseReason, TrackingRunDiagnosticSource, TrackingRunFailureCategory, TrackingRunFailureDetail, TrackingRunFailureStage, TrackingRunFailureUserAction, TrackingRunLifecyclePhase, TrackingRunPhaseTimingStatus, TrackingRunResult, TrackingRunRetryFinalResult, TrackingRunRetryStrategy, TrackingRunRetrySuppressedReason, TrackingRunTerminalTrigger, TrackingStderrLineCountBucket, TrackingTestResult, TrackingTokenCountSource } from './shared-enums.js';
+import type { TrackingArtifactKind, TrackingArtifactWriteSource, TrackingArtifactWriteStatus, TrackingByokPreflightBlockReason, TrackingByokProviderId, TrackingCliProviderId, TrackingDesignSystemSource, TrackingExecutionMode, TrackingExportFormat, TrackingExportResult, TrackingFeedbackAction, TrackingFeedbackProviderId, TrackingFeedbackRating, TrackingFeedbackRatingWithNone, TrackingFeedbackReasonCode, TrackingFidelity, TrackingFileSizeBucket, TrackingFileType, TrackingFirstModelEventType, TrackingHarness, TrackingLabsItemId, TrackingLabsOptOutReason, TrackingLabsSystemReason, TrackingLabsToggleSource, TrackingLangfuseDeliveryStatus, TrackingLangfuseDropReason, TrackingLangfuseReportResult, TrackingLangfuseReportSkipReason, TrackingProjectKind, TrackingProjectSource, TrackingResult, TrackingRunCancelOrigin, TrackingRunCloseReason, TrackingRunDiagnosticSource, TrackingRunFailureCategory, TrackingRunFailureDetail, TrackingRunFailureStage, TrackingRunFailureUserAction, TrackingRunLifecyclePhase, TrackingRunPhaseTimingStatus, TrackingRunResult, TrackingRunRetryFinalResult, TrackingRunRetryStrategy, TrackingRunRetrySuppressedReason, TrackingRunTerminalTrigger, TrackingStderrLineCountBucket, TrackingTestResult, TrackingTokenCountSource } from './shared-enums.js';
 import type { ConversationForkAnalyticsContext, TrackingFileVersionSource, TrackingPluginImportSource, TrackingSessionMode, TrackingSettingsArea } from './ui-click.js';
 // ---- Result events -------------------------------------------------------
 
@@ -427,8 +427,7 @@ export interface RunCreatedProps extends RunTaskLineageProps {
   tokens: RunTokenProps;
   design_system?: RunDesignSystemProps;
   // External MCP/Plugin attribution. These fields are optional so existing UI
-  // and CLI Run producers keep their current contract; the OpenDesign Cloud
-  // Plugin path validates and supplies the complete subset.
+  // and CLI Run producers keep their current contract.
   entry_surface?: AnalyticsEntrySurface;
   host_product?: AnalyticsHostProduct;
   external_plugin_id?: string;
@@ -445,7 +444,6 @@ export interface RunCreatedProps extends RunTaskLineageProps {
   resume?: boolean;
   attempt_count?: number;
   generation_slo_window_ms?: number;
-  recharge_wait_duration_ms?: number;
   /**
    * Which harness actually produced this run.
    *
@@ -628,15 +626,6 @@ export interface RunFinishedProps extends Omit<RunCreatedProps, 'area'> {
   stdin_backpressure?: boolean;
   tool_result_sent?: boolean;
   last_progress_age_ms?: number;
-  // Vela's OpenCode bridge attaches this context to `error.data` when an AMR
-  // prompt fails. Keep only fixed enums in analytics: session/tool call ids,
-  // paths, titles, inputs, and outputs are deliberately not copied.
-  // Together these fields distinguish "tool still pending/running" from
-  // "tool completed, but the agent stream never reached done".
-  amr_opencode_error_phase?: TrackingAmrOpenCodeErrorPhase;
-  amr_opencode_last_event_type?: TrackingAmrOpenCodeLastEventType;
-  amr_opencode_last_tool_status?: TrackingAmrOpenCodeLastToolStatus;
-  amr_opencode_last_tool_kind?: TrackingAmrOpenCodeLastToolKind;
   attempt_index?: number;
   attempt_duration_ms?: number;
   attempt_time_to_first_token_ms?: number;
@@ -896,27 +885,6 @@ export interface ArtifactDeployResultProps {
   first_configure: boolean;
   error_code?: string;
   deploy_duration_ms: number;
-  project_id: string;
-  project_kind: TrackingProjectKind | null;
-}
-
-// Fired when a "Publish this file for everyone" attempt from the Share tab
-// resolves — publishing and unpublishing share the event, split by `action`.
-// Fires when the daemon call settles (success once the public URL is returned
-// for publish, or removal is confirmed for unpublish), regardless of whether a
-// newer request superseded this one in the UI. Clicking the publish button
-// reports separately as ui_click element 'publish_file'.
-export interface ArtifactPublishResultProps {
-  page_name: 'artifact';
-  area: 'share_option_popover';
-  artifact_id: string;
-  artifact_kind: TrackingArtifactKind;
-  action: 'publish' | 'unpublish';
-  result: TrackingExportResult;
-  // 'workspace_identity_required' when the workspace context could not be
-  // confirmed (the one actionable failure), 'publish_failed' otherwise.
-  error_code?: TrackingPublishErrorCode;
-  publish_duration_ms: number;
   project_id: string;
   project_kind: TrackingProjectKind | null;
 }

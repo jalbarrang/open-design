@@ -30,13 +30,6 @@ import { Icon } from './Icon';
 import { InviteDialog } from './InviteDialog';
 import { STATUS_LABEL_KEYS } from './DesignsTab';
 import { isDesignSystemProject, isPublishedDesignSystemProject } from './design-system-project';
-import type { SharedProjectPredicate } from '../collab/all-projects-list';
-import { useTeamMembers } from '../collab/useTeamMembers';
-import {
-  notifyTeamProjectsChanged,
-  useWorkspaceBilling,
-  useWorkspaceContext,
-} from '../collab/useWorkspaceContext';
 import {
   canAccessWorkspaceInviteFlow,
   resolveWorkspaceInviteTarget,
@@ -45,11 +38,8 @@ import {
 } from './EntryNavRail';
 import { moveWorkspaceProject, workspaceProjectMoveErrorCode } from '../state/projects';
 import {
-  workspaceContextHasTeamIdentity,
-  type WorkspaceCollabContext,
   type WorkspaceProjectSummary,
 } from '@open-design/contracts';
-import { useWorkspaceInvalidation } from '../collab/workspace-events';
 import {
   THUMBNAIL_OVERSCAN_MARGIN,
   resumeThumbnailLoads,
@@ -63,10 +53,6 @@ import {
   setProjectCoverSnapshot,
 } from '../lib/project-cover-cache';
 import { useInView } from './plugins-home/useInView';
-import {
-  workspaceIdentityCacheKey,
-  workspaceProjectHeaders,
-} from '../collab/workspace-identity';
 import { useAnalytics } from '../analytics/provider';
 import {
   trackProjectCollectionClick,
@@ -362,10 +348,6 @@ export function RecentProjectsStrip({
   // member directory turns an ownerMemberId into a display name, while the
   // workspace context supplies the signed-in user's own name and profile image.
   const { resolve: resolveMember } = useTeamMembers();
-  const {
-    context: workspaceContext,
-    loading: workspaceContextLoading,
-  } = useWorkspaceContext();
   // A cover request captures the complete identity at dispatch. A mutable ref
   // keeps the queue callbacks stable without letting an in-flight read drift
   // to whichever Workspace a different render happens to select later.
@@ -373,7 +355,7 @@ export function RecentProjectsStrip({
   workspaceContextRef.current = workspaceContext;
   const workspaceContextLoadingRef = useRef(workspaceContextLoading);
   workspaceContextLoadingRef.current = workspaceContextLoading;
-  const workspaceIdentity = workspaceIdentityCacheKey(workspaceContext);
+  const workspaceIdentity = 'local';
   const workspaceBilling = useWorkspaceBilling();
   const workspaceDimensions = workspaceAnalyticsDimensions(workspaceContext);
   function trackCollection(
@@ -406,7 +388,7 @@ export function RecentProjectsStrip({
   const canAccessInviteFlow = canAccessWorkspaceInviteFlow(workspaceContext);
   // The invite dialog's seat-gate upgrade CTA shares the public Pricing
   // destination owned by `workspaceUpgradeUrl` in EntryNavRail.tsx.
-  const inviteUpgradeUrl = workspaceUpgradeUrl(workspaceContext, workspaceBilling);
+  const inviteUpgradeUrl = workspaceUpgradeUrl(workspaceBilling);
   const inviteTarget = resolveWorkspaceInviteTarget(workspaceContext);
   const canManageCollection =
     canManageProjectCollection ??
@@ -736,7 +718,6 @@ export function RecentProjectsStrip({
     try {
       files = await fetchProjectFiles(project.id, {
         signal,
-        workspaceContext: requestWorkspaceContext,
         ...(freshFiles ? { fresh: true } : {}),
       });
     } catch {
@@ -805,7 +786,7 @@ export function RecentProjectsStrip({
     if (workspaceContextLoadingRef.current) return Promise.resolve();
     const requestWorkspaceContext = workspaceContextRef.current;
     const snapshotKey = projectCoverSnapshotKey(
-      workspaceIdentityCacheKey(requestWorkspaceContext),
+      'local',
       project.id,
       project.updatedAt,
     );
@@ -891,7 +872,6 @@ export function RecentProjectsStrip({
   }, [
     abortBackgroundCoverRequests,
     requestProjectCover,
-    workspaceContextLoading,
     workspaceIdentity,
   ]);
   const handleCoverCardVisible = useCallback((projectId: string) => {
@@ -947,7 +927,6 @@ export function RecentProjectsStrip({
       },
     },
     {
-      workspaceContext,
       // Thin SSE events are not replayed. On reconnect/focus, retry only cards
       // whose initial scan found no local cover, closing a missed-ready gap
       // without re-fetching every already-resolved card in the grid.
@@ -1064,7 +1043,6 @@ export function RecentProjectsStrip({
       const movedProject = await moveWorkspaceProject({
         projectId: project.id,
         visibility: 'team',
-        workspaceContext,
       });
       onProjectShared?.(movedProject);
       notifyTeamProjectsChanged();
@@ -1116,7 +1094,6 @@ export function RecentProjectsStrip({
       await moveWorkspaceProject({
         projectId: project.id,
         visibility: 'personal',
-        workspaceContext,
       });
       onProjectUnshared?.(project.id);
       notifyTeamProjectsChanged();
@@ -1317,7 +1294,7 @@ export function RecentProjectsStrip({
     const moved = await Promise.all(
       ids.map(async (id) => {
         try {
-          const project = await moveWorkspaceProject({ projectId: id, visibility, workspaceContext });
+          const project = await moveWorkspaceProject({ projectId: id, visibility});
           return { id, project };
         } catch (err) {
           if (action === 'to-team') onProjectShareFailed?.(id);
@@ -1672,7 +1649,6 @@ export function RecentProjectsStrip({
           const cover = projectCover(
             project,
             coverByProject[project.id] ?? null,
-            workspaceContext,
           );
           const designSystemProject = isDesignSystemProject(project);
           const status: ProjectDisplayStatus = project.status?.value ?? 'not_started';
@@ -1824,7 +1800,6 @@ export function RecentProjectsStrip({
                       initial={cover.initial}
                       diagnostic={`${project.id}:${cover.name ?? 'unknown'}`}
                       deckCoverOnly={project.metadata?.kind === 'deck'}
-                      workspaceContext={workspaceContext}
                     />
                   ) : (
                     <span className="recent-projects__card-glyph">{cover.initial}</span>
@@ -2221,7 +2196,6 @@ export function RecentProjectsStrip({
       <InviteDialog
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
-        workspaceContext={workspaceContext}
         canAssignRoles={
           canAssignInviteRoles ?? workspaceContext?.permissions.canInviteMembers === true
         }
@@ -2249,13 +2223,11 @@ function RecentProjectHtmlThumb({
   initial,
   diagnostic,
   deckCoverOnly,
-  workspaceContext,
 }: {
   src: string;
   initial: string;
   diagnostic: string;
   deckCoverOnly: boolean;
-  workspaceContext?: WorkspaceCollabContext | null;
 }) {
   // Plain HTML goes through the shared cover frame (#5762): it HEAD-probes the
   // cover URL in the parent cover queue first and falls back to the initial
@@ -2352,10 +2324,8 @@ function CoverVisibilitySentinel({
 
 function DeckCoverThumb({
   src,
-  workspaceContext,
 }: {
   src: string;
-  workspaceContext?: WorkspaceCollabContext | null;
 }) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const { ref: inViewRef, inView } = useInView<HTMLDivElement>({
@@ -2382,7 +2352,7 @@ function DeckCoverThumb({
     // Deck covers fetch the full document text; defer that until the card is
     // actually near the viewport (Batch A §4.2).
     if (!inView) return;
-    loadDeckCover(src, undefined, workspaceContext)
+    loadDeckCover(src, undefined)
       .then((next) => {
         if (!cancelled) setSrcDoc(next);
       })
@@ -2439,14 +2409,12 @@ function DeckCoverThumb({
 async function loadDeckCover(
   src: string,
   signal?: AbortSignal,
-  workspaceContext?: WorkspaceCollabContext | null,
 ): Promise<string> {
   const cached = deckCoverCache.get(src);
   if (cached) return cached;
   if (signal) {
     const response = await fetch(src, {
       signal,
-      ...(workspaceContext ? { headers: workspaceProjectHeaders(workspaceContext) } : {}),
     });
     if (!response.ok) throw new Error(`Failed to load project cover: ${response.status}`);
     const parsed = deckPreviewSrcDoc(await response.text());
@@ -2627,7 +2595,6 @@ function relativeTime(ts: number, t: ReturnType<typeof useT>): string {
 export function projectCover(
   project: Project,
   override: ProjectCoverOverride | null,
-  workspaceContext?: WorkspaceCollabContext | null,
 ): {
   kind: 'image' | 'video' | 'html' | 'logo' | 'fallback';
   src?: string;
@@ -2653,7 +2620,6 @@ export function projectCover(
         project.id,
         override.name,
         override.mtime,
-        workspaceContext,
       ),
       style,
       initial,
@@ -2667,7 +2633,6 @@ export function projectCover(
       project.id,
       entry,
       project.updatedAt,
-      workspaceContext,
     );
     if (meta?.kind === 'image') return { kind: 'image', src, style, initial };
     if (meta?.kind === 'video') return { kind: 'video', src, style, initial };
@@ -2758,14 +2723,12 @@ async function findDesignSystemCover(
   projectId: string,
   files: ProjectFile[],
   signal?: AbortSignal,
-  workspaceContext?: WorkspaceCollabContext | null,
 ): Promise<ProjectCoverOverride | null> {
   const knownFiles = new Map(files.map((file) => [file.path ?? file.name, file]));
   const brandCover = await designSystemCoverFromBrandJson(
     projectId,
     knownFiles,
     signal,
-    workspaceContext,
   );
   if (signal?.aborted) return null;
   if (brandCover) return brandCover;
@@ -2779,12 +2742,10 @@ async function designSystemCoverFromBrandJson(
   projectId: string,
   knownFiles: ReadonlyMap<string, ProjectFile>,
   signal?: AbortSignal,
-  workspaceContext?: WorkspaceCollabContext | null,
 ): Promise<ProjectCoverOverride | null> {
   const raw = await fetchProjectFileText(projectId, 'brand.json', {
     cache: 'no-store',
     signal,
-    workspaceContext,
   });
   if (signal?.aborted) return null;
   if (!raw) return null;

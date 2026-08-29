@@ -18,10 +18,6 @@ import type {
   DesignSystemsTemplatesModalSurfaceViewProps,
   AssistantFeedbackReasonPanelSurfaceViewProps,
   QuestionsFormSurfaceViewProps,
-  DeepSeekCampaignModalSurfaceViewProps,
-  GoPlanSunsetModalSurfaceViewProps,
-  DeepSeekCampaignBadgeSurfaceViewProps,
-  DeepSeekCampaignModelBenefitSurfaceViewProps,
   // ui_click
   HomeNavClickProps,
   HelpPopoverClickProps,
@@ -73,16 +69,8 @@ import type {
   DesignToolboxClickProps,
   NextStepActionClickProps,
   QuestionsFormClickProps,
-  RunFailedToastClickProps,
   RunRecoveryActionClickProps,
-  AmrAuthResultProps,
-  AmrAuthStageProps,
-  AmrEntryClickProps,
   PreviewRunStatusSurfaceViewProps,
-  DeepSeekCampaignModalClickProps,
-  GoPlanSunsetModalClickProps,
-  DeepSeekCampaignBadgeClickProps,
-  RunFailedToastSurfaceViewProps,
   RunRecoveryActionSurfaceViewProps,
   RunStartBlockedSurfaceViewProps,
   HomeRecommendationClickProps,
@@ -140,7 +128,6 @@ import type {
   ArtifactEditResultProps,
   ArtifactExportResultProps,
   ArtifactDeployResultProps,
-  ArtifactPublishResultProps,
   SketchSaveResultProps,
   SketchExportResultProps,
   FeedbackSubmitResultProps,
@@ -170,20 +157,6 @@ import type {
   UpdateInstallResultProps,
   WhatsNewPopupSurfaceViewProps,
   WhatsNewPopupClickProps,
-  EntryNavigationClickProps,
-  AccountMenuClickProps,
-  WorkspaceSwitcherClickProps,
-  WorkspaceInviteClickProps,
-  ProjectCollectionClickProps,
-  CommunityTemplateClickProps,
-  ExtensionMarketplaceClickProps,
-  WorkspaceSurfaceViewProps,
-  WorkspaceSwitchResultProps,
-  WorkspaceInviteResultProps,
-  WorkspaceProjectActionResultProps,
-  WorkspaceSharedProjectOpenResultProps,
-  WorkspaceResourceActionResultProps,
-  ProjectCommentCreateResultProps,
 } from '@open-design/contracts/analytics';
 
 type TrackOptions = { requestId?: string; insertId?: string };
@@ -221,61 +194,6 @@ export function trackPageView(track: Track, props: PageViewProps): void {
 
 // ---- Workspace redesign -------------------------------------------------
 
-export function trackEntryNavigationClick(track: Track, props: EntryNavigationClickProps): void {
-  send(track, 'ui_click', props);
-}
-
-export function trackAccountMenuClick(track: Track, props: AccountMenuClickProps): void {
-  send(track, 'ui_click', props);
-}
-
-export function trackWorkspaceSwitcherClick(track: Track, props: WorkspaceSwitcherClickProps): void {
-  send(track, 'ui_click', props);
-}
-
-export function trackWorkspaceInviteClick(track: Track, props: WorkspaceInviteClickProps, options?: TrackOptions): void {
-  send(track, 'ui_click', props, options);
-}
-
-export function trackProjectCollectionClick(track: Track, props: ProjectCollectionClickProps, options?: TrackOptions): void {
-  send(track, 'ui_click', props, options);
-}
-
-export function trackCommunityTemplateClick(track: Track, props: CommunityTemplateClickProps): void {
-  send(track, 'ui_click', props);
-}
-
-export function trackExtensionMarketplaceClick(track: Track, props: ExtensionMarketplaceClickProps): void {
-  send(track, 'ui_click', props);
-}
-
-export function trackWorkspaceSurfaceView(track: Track, props: WorkspaceSurfaceViewProps): void {
-  send(track, 'surface_view', props);
-}
-
-export function trackWorkspaceSwitchResult(track: Track, props: WorkspaceSwitchResultProps, options?: TrackOptions): void {
-  send(track, 'workspace_switch_result', props, options);
-}
-
-export function trackWorkspaceInviteResult(track: Track, props: WorkspaceInviteResultProps, options?: TrackOptions): void {
-  send(track, 'workspace_invite_result', props, options);
-}
-
-export function trackWorkspaceProjectActionResult(track: Track, props: WorkspaceProjectActionResultProps, options?: TrackOptions): void {
-  send(track, 'workspace_project_action_result', props, options);
-}
-
-export function trackWorkspaceSharedProjectOpenResult(track: Track, props: WorkspaceSharedProjectOpenResultProps, options?: TrackOptions): void {
-  send(track, 'workspace_shared_project_open_result', props, options);
-}
-
-export function trackWorkspaceResourceActionResult(track: Track, props: WorkspaceResourceActionResultProps, options?: TrackOptions): void {
-  send(track, 'workspace_resource_action_result', props, options);
-}
-
-export function trackProjectCommentCreateResult(track: Track, props: ProjectCommentCreateResultProps): void {
-  send(track, 'project_comment_create_result', props);
-}
 
 // ---- surface_view --------------------------------------------------------
 
@@ -349,12 +267,6 @@ export function trackAssistantFeedbackReasonPanelSurfaceView(
   send(track, 'surface_view', props);
 }
 
-export function trackRunFailedToastSurfaceView(
-  track: Track,
-  props: RunFailedToastSurfaceViewProps,
-): void {
-  send(track, 'surface_view', props);
-}
 
 export function trackRunRecoveryActionSurfaceView(
   track: Track,
@@ -384,12 +296,6 @@ export function trackQuestionsFormSurfaceView(
   send(track, 'surface_view', props);
 }
 
-export function trackRunFailedToastGoAmrClick(
-  track: Track,
-  props: RunFailedToastClickProps,
-): void {
-  send(track, 'ui_click', props);
-}
 
 export function trackRunRecoveryActionClick(
   track: Track,
@@ -428,81 +334,6 @@ export function trackStudioOnboardingHintClick(
   send(track, 'ui_click', props);
 }
 
-export function trackAmrEntryClick(
-  track: Track,
-  props: AmrEntryClickProps,
-): void {
-  send(track, 'ui_click', props);
-}
-
-export function trackDeepSeekCampaignModalSurfaceView(
-  track: Track,
-  props: DeepSeekCampaignModalSurfaceViewProps,
-): void {
-  send(track, 'surface_view', props);
-}
-
-export function trackGoPlanSunsetModalSurfaceView(
-  track: Track,
-  props: GoPlanSunsetModalSurfaceViewProps,
-): void {
-  send(track, 'surface_view', props);
-}
-
-export function trackDeepSeekCampaignBadgeSurfaceView(
-  track: Track,
-  props: DeepSeekCampaignBadgeSurfaceViewProps,
-): void {
-  send(track, 'surface_view', props);
-}
-
-export function trackDeepSeekCampaignModelBenefitSurfaceView(
-  track: Track,
-  props: DeepSeekCampaignModelBenefitSurfaceViewProps,
-): void {
-  send(track, 'surface_view', props);
-}
-
-export function trackDeepSeekCampaignModalClick(
-  track: Track,
-  props: DeepSeekCampaignModalClickProps,
-): void {
-  send(track, 'ui_click', props);
-}
-
-export function trackGoPlanSunsetModalClick(
-  track: Track,
-  props: GoPlanSunsetModalClickProps,
-): void {
-  send(track, 'ui_click', props);
-}
-
-export function trackDeepSeekCampaignBadgeClick(
-  track: Track,
-  props: DeepSeekCampaignBadgeClickProps,
-): void {
-  send(track, 'ui_click', props);
-}
-
-// Fired exactly once per AMR sign-in attempt when the login poll settles.
-// Call sites go through analytics/amr-auth.ts, which owns the
-// begin/resolve dedupe — do not call this wrapper directly from
-// components, or concurrent pollers will double-report one attempt.
-export function trackAmrAuthResult(
-  track: Track,
-  props: AmrAuthResultProps,
-  options?: TrackOptions,
-): void {
-  send(track, 'amr_auth_result', props, options);
-}
-
-export function trackAmrAuthStage(
-  track: Track,
-  props: AmrAuthStageProps,
-  options?: TrackOptions,
-): void {
-  send(track, 'amr_auth_stage', props, options);
-}
 
 // ---- ui_click (home) -----------------------------------------------------
 
@@ -1211,12 +1042,6 @@ export function trackArtifactDeployResult(
   send(track, 'artifact_deploy_result', props, options);
 }
 
-export function trackArtifactPublishResult(
-  track: Track,
-  props: ArtifactPublishResultProps,
-): void {
-  send(track, 'artifact_publish_result', props);
-}
 
 export function trackFileVersionRestoreResult(
   track: Track,

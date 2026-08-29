@@ -1,9 +1,5 @@
 <h1 align="center">OpenDesign: オープンソースの Claude Design 代替ツール</h1>
 
-> ⚡ **[OpenDesign Cloud——公式モデルサービス。](https://open-design.ai/zh/pricing/)** 一度のチャージで、OpenDesign 内のエージェントモデルと画像モデルを利用できます。エージェントには GPT、Claude、DeepSeek、画像には GPT Image 2.0、Seedream 5.0 Pro、Nano Banana 2.0 を提供します。
->
-> 🚀 **[DeepSeek V4 Flash と V4 Pro が利用可能になりました。](https://open-design.ai/zh/pricing/)** プロトタイプ、スライド、デザインシステム、日常的なエージェントタスクに最先端の知能を活用できます。OpenDesign メンバーは、アプリ内で両モデルを 2 週間無制限に利用できます。
->
 > 🧩 **[DeepSeek Harness に対応しました。](https://open-design.ai/zh/agents/deepseek-harness-design/)** DeepSeek 公式の `dsh` Agent Harness を OpenDesign のネイティブランタイムとして接続できます。構造化思考、ツール呼び出し、モデル検出、キャンセル、セッション再開に対応し、生成ファイルはライブプレビューと納品のため OpenDesign のワークフロー内に保持されます。
 
 <p align="center">
@@ -13,7 +9,6 @@
 <p align="center">
   <a href="https://open-design.ai/">ウェブサイト</a> ·
   <a href="https://open-design.ai/">ダウンロード</a> ·
-  <a href="https://open-design.ai/cloud/">OpenDesign Cloud</a> ·
   <a href="https://discord.gg/mHAjSMV6gz">Discord</a> ·
   <a href="https://x.com/OpenDesignHQ">@OpenDesignHQ をフォロー</a>
 </p>
@@ -133,7 +128,7 @@ OpenDesign の中核ワークフローを手早く紹介します。**Home** で
 `od mcp install <agent> --print` でドライランのプレビュー · `--uninstall` で削除 · 完全な一覧は `od mcp install --help` で確認できます。
 
 <p align="center">
-  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="The 25 coding-agent CLIs OpenDesign supports — Claude Code · Codex · OpenCode · Hermes · Antigravity · Vela · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
+  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="The 25 coding-agent CLIs OpenDesign supports — Claude Code · Codex · OpenCode · Hermes · Antigravity · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
 </p>
 
 **CLI を一つもインストールしていない場合は？** `POST /api/proxy/{anthropic,openai,azure,google,ollama,senseaudio}/stream` の BYOK プロキシが同じループ（プロセスのスポーンなし）を提供します——`baseUrl` + `apiKey` + `model` を貼り付けるだけで、OpenAI、Anthropic、Azure OpenAI、Google Gemini、Ollama、LM Studio、vLLM、または任意の OpenAI 互換エンドポイントに対応します。ターゲットごとの SSRF 保護が、内部 IP／リンクローカル／CGNAT をデーモンのエッジでブロックします。
@@ -569,7 +564,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 - [x] サイドカープロトコル + Electron デスクトップ + IPC 自動化
 - [x] アーティファクト lint API + 5 次元の自己批評による発行前ゲート
 - [x] **0.8.0** — プラグインマーケットプレイスのインフラ（261 の公式プラグイン、マニフェスト仕様、エージェントごとのインストールスクリプト）
-- [x] **0.9.0** — OpenDesign Cloud（アプリに組み込まれた公式 Model Router: 設定ゼロ、ワンクリックのサインイン）
+- [x] ~~**0.9.0** — OpenDesign Cloud（アプリに組み込まれた公式 Model Router: 設定ゼロ、ワンクリックのサインイン）~~ (removed — OpenDesign is local CLI + BYOK only)
 - [x] パッケージ化された Electron ビルド — macOS（Apple Silicon + Intel） + Windows（x64） + Linux AppImage（オプションのレーン）
 - [ ] コメントモードの外科的な編集 — 一部提供済み。信頼性の高いターゲット指定のパッチ適用は進行中
 - [ ] AI が発行する tweaks パネルの UX — 未実装

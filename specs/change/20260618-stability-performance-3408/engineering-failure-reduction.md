@@ -1,5 +1,11 @@
 # Deep dive and fixes for engine-fixable failures (engineering-view failure rate)
 
+> **Historical note.** This spec was written while OpenDesign shipped the
+> OpenDesign Cloud / AMR runtime backed by the `vela` CLI. That capability has
+> since been removed; OpenDesign runs on local coding-agent CLIs and BYOK only.
+> The AMR/vela items below are kept as a record of the investigation, not as
+> current or planned work.
+
 Design doc (human/reviewer-facing). Implementation runbooks per slice are written separately at build time.
 
 Status: proposed · Parent: #3408 · Upstream background: spec.md · Spec format: spec-battle

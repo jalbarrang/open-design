@@ -1,9 +1,5 @@
 <h1 align="center">OpenDesign : l'alternative open source à Claude Design</h1>
 
-> ⚡ **[OpenDesign Cloud — le service de modèles officiel.](https://open-design.ai/zh/pricing/)** Une seule recharge pour utiliser des modèles d'agents et d'images dans OpenDesign : GPT, Claude et DeepSeek pour les agents ; GPT Image 2.0, Seedream 5.0 Pro et Nano Banana 2.0 pour les images.
->
-> 🚀 **[DeepSeek V4 Flash et V4 Pro sont maintenant disponibles.](https://open-design.ai/zh/pricing/)** Mettez une intelligence de premier plan au service des prototypes, présentations, systèmes de design et tâches quotidiennes des agents. Les membres OpenDesign peuvent utiliser les deux modèles sans limite pendant deux semaines, directement dans l'application.
->
 > 🧩 **[DeepSeek Harness est maintenant pris en charge.](https://open-design.ai/zh/agents/deepseek-harness-design/)** Connectez l'Agent Harness officiel `dsh` de DeepSeek à OpenDesign en tant que runtime natif, avec raisonnement structuré, appels d'outils, découverte des modèles, annulation et reprise de session. Les fichiers générés restent dans le workflow OpenDesign pour la prévisualisation en direct et la livraison.
 
 <p align="center">
@@ -13,7 +9,6 @@
 <p align="center">
   <a href="https://open-design.ai/">Site web</a> ·
   <a href="https://open-design.ai/">Télécharger</a> ·
-  <a href="https://open-design.ai/cloud/">OpenDesign Cloud</a> ·
   <a href="https://discord.gg/mHAjSMV6gz">Discord</a> ·
   <a href="https://x.com/OpenDesignHQ">Suivre @OpenDesignHQ</a>
 </p>
@@ -133,7 +128,7 @@ Dans le Studio d'un projet, la conversation, les fichiers générés et la prév
 `od mcp install <agent> --print` pour un aperçu à blanc · `--uninstall` pour supprimer · liste complète avec `od mcp install --help`.
 
 <p align="center">
-  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="Les 25 CLI d'agents de code pris en charge par OpenDesign — Claude Code · Codex · OpenCode · Hermes · Antigravity · Vela · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
+  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="Les 25 CLI d'agents de code pris en charge par OpenDesign — Claude Code · Codex · OpenCode · Hermes · Antigravity · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
 </p>
 
 **Aucun CLI installé ?** Le proxy BYOK à `POST /api/proxy/{anthropic,openai,azure,google,ollama,senseaudio}/stream` vous offre la même boucle (sans spawn de processus) — collez `baseUrl` + `apiKey` + `model`, avec prise en charge d'OpenAI, Anthropic, Azure OpenAI, Google Gemini, Ollama, LM Studio, vLLM ou tout point de terminaison compatible OpenAI. Une protection SSRF par cible bloque les IP internes / link-local / CGNAT à la périphérie du daemon.
@@ -569,7 +564,7 @@ Architecture complète → [`docs/architecture.md`](../../docs/architecture.md).
 - [x] Protocole sidecar + bureau Electron + automatisation IPC
 - [x] API de lint d'artefacts + portail d'auto-critique en 5 dimensions avant émission
 - [x] **0.8.0** — infrastructure de marketplace de plugins (261 plugins officiels, spec de manifeste, scripts d'installation par agent)
-- [x] **0.9.0** — OpenDesign Cloud (Model Router officiel intégré à l'application : zéro configuration, connexion en un clic)
+- [x] ~~**0.9.0** — OpenDesign Cloud (Model Router officiel intégré à l'application : zéro configuration, connexion en un clic)~~ (removed — OpenDesign is local CLI + BYOK only)
 - [x] Builds Electron packagés — macOS (Apple Silicon + Intel) + Windows (x64) + AppImage Linux (voie optionnelle)
 - [ ] Éditions chirurgicales en mode commentaire — partiellement livré ; patching ciblé fiable en cours
 - [ ] UX du panneau de réglages émis par l'IA — pas encore implémenté

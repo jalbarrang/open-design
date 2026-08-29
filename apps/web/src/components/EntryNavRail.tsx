@@ -36,10 +36,8 @@ import {
 import { createPortal } from 'react-dom';
 import { coalescedGet, evictCoalescedGet } from '../lib/coalesced-get';
 import {
-  workspaceSeatCapacityState,
   type WorkspaceActiveResponse,
   type WorkspaceBillingSummary,
-  type WorkspaceCollabContext,
   type WorkspaceDirectoryItem,
   type WorkspaceDirectoryResponse,
 } from '@open-design/contracts';
@@ -61,23 +59,7 @@ import type { EntrySettingsSection } from './EntrySettingsMenu';
 import { useI18n } from '../i18n';
 import { useDismissOnOutsideInteraction } from '../hooks/useDismissOnOutsideInteraction';
 import { ENTRY_RAIL_TOGGLE_EVENT } from './entryRailBridge';
-import {
-  beginWorkspaceScopedRead,
-  notifyTeamProjectsChanged,
-  notifyWorkspaceBillingRefresh,
-  notifyWorkspaceContextRefresh,
-  useWorkspaceBillingResponse,
-  useWorkspaceContext,
-  workspaceBillingBalanceUsd,
-  workspaceBillingSummaryForContext,
-  workspaceIdentityCacheKey,
-} from '../collab/useWorkspaceContext';
-import { canUpgradeFromPlanTier, resolvePlanLabelTier } from '../collab/team-plan';
 import { shouldShowCreditsBalance } from './entry-rail-account-state';
-import { amrPlansUrlForProfile } from '../runtime/amr-guidance';
-import { useWorkspaceInvalidation } from '../collab/workspace-events';
-import { resolveDeepSeekV4FlashCampaignAudience } from '../campaigns/deepseek-v4-flash';
-import { useDeepSeekV4FlashCampaignVisibility } from '../campaigns/use-deepseek-v4-flash-campaign';
 import type { EntryHomeView } from '../router';
 import type {
   AccountMenuClickProps,
@@ -1107,7 +1089,6 @@ export function WorkspaceTopRightAccountCluster({
   onSignedOut,
   updaterSlot,
   workspaceContextOverride,
-  workspaceContextLoading,
   amrLoggedIn = null,
   amrAccountPlan = null,
   metricsConsent = false,
@@ -1118,13 +1099,11 @@ export function WorkspaceTopRightAccountCluster({
   /** Keep the project-detail account cluster on the same updater surface as Home. */
   updaterSlot?: ReactNode;
   workspaceContextOverride?: WorkspaceCollabContext | null;
-  workspaceContextLoading?: boolean;
   amrLoggedIn?: boolean | null;
   amrAccountPlan?: string | null;
   metricsConsent?: boolean;
   installationId?: string | null;
 }) {
-  const ambient = useWorkspaceContext();
   const hasExplicitWorkspaceContext = workspaceContextOverride !== undefined;
   const context = hasExplicitWorkspaceContext
     ? workspaceContextOverride
@@ -1309,7 +1288,7 @@ export function EntryNavRail({
   const [workspaceItems, setWorkspaceItems] = useState<WorkspaceDirectoryItem[]>(
     () => attributableWorkspaceDirectory(context) ?? [],
   );
-  const railIdentity = workspaceIdentityCacheKey(context);
+  const railIdentity = 'local';
   const [workspaceDirectoryLoading, setWorkspaceDirectoryLoading] = useState(false);
   const [workspaceSwitchingId, setWorkspaceSwitchingId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -1367,7 +1346,7 @@ export function EntryNavRail({
       // The coalescing key carries the caller's identity for the same reason the
       // module cache does: `coalescedGet` shares a settled result for a second,
       // and this read's answer depends on WHO asked.
-      const cacheKey = `workspace-directory:${workspaceIdentityCacheKey(read.context)}`;
+      const cacheKey = `workspace-directory:${'local'}`;
       if (options.force) evictCoalescedGet(cacheKey);
       const readDirectory = async () => {
         const response = await fetch('/api/workspace/directory', { cache: 'no-store' });
@@ -1511,7 +1490,6 @@ export function EntryNavRail({
       },
     },
     {
-      workspaceContext: context,
       onActive: () => {
         void loadWorkspaceDirectory({ force: true });
       },
@@ -1914,7 +1892,6 @@ export function EntryNavRail({
       <InviteDialog
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
-        workspaceContext={context}
         canAssignRoles={canInviteMembers}
         availableSeats={workspaceInviteAvailableSeats(context)}
         entryFrom="workspace_switcher"

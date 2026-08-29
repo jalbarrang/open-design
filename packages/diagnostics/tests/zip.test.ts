@@ -55,7 +55,7 @@ describe("buildDiagnosticsZip", () => {
       redaction: { username: "alice" },
       summaries: {
         "runtime-health.json": {
-          amr: { sessionState: "reauth_required", credentialRevision: "safe-digest" },
+          claude: { authStatus: "missing", detectedVersion: "safe-version" },
           note: "/Users/alice/private",
         },
       },
@@ -63,7 +63,7 @@ describe("buildDiagnosticsZip", () => {
 
     const zip = await JSZip.loadAsync(result.zip);
     const runtimeHealth = await zip.file("summary/runtime-health.json")!.async("string");
-    expect(runtimeHealth).toContain('"sessionState": "reauth_required"');
+    expect(runtimeHealth).toContain('"authStatus": "missing"');
     expect(runtimeHealth).toContain('/Users/<USER>/private');
     expect(runtimeHealth).not.toContain('/Users/alice');
   });

@@ -1,17 +1,12 @@
 import { expect, test } from '@/playwright/suite';
 import { ensureRailOpen, openNewProjectModal } from '@/playwright/rail';
-import { settingsSurface } from '@/playwright/amr';
+import { settingsSurface } from '@/playwright/app';
 import { expectStableCount } from '@/playwright/assertions';
 import { openHomeTemplateMenu } from '@/playwright/home-hero';
-import type {
-  WorkspaceCollabContext,
-  WorkspaceDirectoryItem,
-} from '@open-design/contracts';
 import type { Page, Request } from '@playwright/test';
 import {
   applyStandardMocks,
   fulfillAgentsRoute,
-  routeSignedOutVelaStatus,
   routeSuccessfulRuns,
   STORAGE_KEY,
 } from '@/playwright/mock-factory';
@@ -51,25 +46,6 @@ const DESIGN_SYSTEMS = [
     swatches: ['#111827', '#38bdf8'],
   },
 ] as const;
-const TAB_PERSONAL_WORKSPACE = {
-  workspaceId: 'ws-tab-personal',
-  workspaceName: 'Personal workspace',
-  workspaceType: 'personal',
-  workspaceMemberId: 'wm-tab-personal',
-  role: 'owner',
-  memberStatus: 'active',
-  lifecycleState: 'active',
-} satisfies WorkspaceDirectoryItem;
-const TAB_TEAM_WORKSPACE = {
-  workspaceId: 'ws-tab-team',
-  workspaceName: 'Team Atlas',
-  workspaceType: 'team',
-  workspaceMemberId: 'wm-tab-team',
-  role: 'owner',
-  memberStatus: 'active',
-  lifecycleState: 'active',
-} satisfies WorkspaceDirectoryItem;
-
 test.describe.configure({ timeout: T.xlong });
 
 test.beforeEach(async ({ page }) => {
@@ -176,110 +152,6 @@ test('[P1] cold Home defers Automations reads until the route becomes active', a
   }
 });
 
-test('[P0] @critical workspace selection remains isolated across two browser tabs', async ({ page, context }) => {
-  const server = { activeWorkspaceId: TAB_PERSONAL_WORKSPACE.workspaceId };
-  const requestsA: WorkspaceContextRequestWitness[] = [];
-  const requestsB: WorkspaceContextRequestWitness[] = [];
-  await routeTabWorkspaceApi(page, server, requestsA);
-
-  const pageB = await context.newPage();
-  try {
-    await applyStandardMocks(pageB);
-    await routeTabWorkspaceApi(pageB, server, requestsB);
-
-    await Promise.all([gotoEntryHome(page), gotoEntryHome(pageB)]);
-    await Promise.all([ensureRailOpen(page), ensureRailOpen(pageB)]);
-
-    await expect(page.getByTestId('workspace-switcher')).toContainText(
-      TAB_PERSONAL_WORKSPACE.workspaceName,
-    );
-    await expect(pageB.getByTestId('workspace-switcher')).toContainText(
-      TAB_PERSONAL_WORKSPACE.workspaceName,
-    );
-    expect(await readTabWorkspaceSelection(page)).toEqual({
-      workspaceId: TAB_PERSONAL_WORKSPACE.workspaceId,
-      workspaceMemberId: TAB_PERSONAL_WORKSPACE.workspaceMemberId,
-    });
-    expect(await readTabWorkspaceSelection(pageB)).toEqual({
-      workspaceId: TAB_PERSONAL_WORKSPACE.workspaceId,
-      workspaceMemberId: TAB_PERSONAL_WORKSPACE.workspaceMemberId,
-    });
-
-    await page.getByTestId('workspace-switcher').click();
-    await page.getByRole('menuitem', { name: TAB_TEAM_WORKSPACE.workspaceName }).click();
-    await expect(page.getByTestId('workspace-switcher')).toContainText(
-      TAB_TEAM_WORKSPACE.workspaceName,
-    );
-
-    // The compatibility endpoint's echo changed to Team, but that server-side
-    // value is not browser authority. Tab B keeps its own session selection.
-    expect(server.activeWorkspaceId).toBe(TAB_TEAM_WORKSPACE.workspaceId);
-    expect(await readTabWorkspaceSelection(page)).toEqual({
-      workspaceId: TAB_TEAM_WORKSPACE.workspaceId,
-      workspaceMemberId: TAB_TEAM_WORKSPACE.workspaceMemberId,
-    });
-    expect(await readTabWorkspaceSelection(pageB)).toEqual({
-      workspaceId: TAB_PERSONAL_WORKSPACE.workspaceId,
-      workspaceMemberId: TAB_PERSONAL_WORKSPACE.workspaceMemberId,
-    });
-    await expect(pageB.getByTestId('workspace-switcher')).toContainText(
-      TAB_PERSONAL_WORKSPACE.workspaceName,
-    );
-
-    // An ambient Personal read may already be in flight when the switch click
-    // begins. The switch response retires that request before it can commit,
-    // but the mock records requests at dispatch time. Start the post-switch
-    // witness after the Team selection is visibly and durably adopted so only
-    // reads issued under the new identity are judged below.
-    const requestsABeforeSwitch = requestsA.length;
-
-    // Exercise both ambient revalidation edges with the two tabs active at the
-    // same time. The poll retries only an idempotent browser event until the
-    // one-second GET coalescing window expires; there is no fixed sleep.
-    await refreshTabsInterleaved(
-      { page, eventName: 'focus', requests: requestsA },
-      { page: pageB, eventName: 'pageshow', requests: requestsB },
-    );
-    await refreshTabsInterleaved(
-      { page, eventName: 'pageshow', requests: requestsA },
-      { page: pageB, eventName: 'focus', requests: requestsB },
-    );
-
-    const teamReads = requestsA.slice(requestsABeforeSwitch);
-    expect(teamReads.length).toBeGreaterThanOrEqual(2);
-    for (const request of teamReads) {
-      expect(request).toEqual({
-        workspaceId: TAB_TEAM_WORKSPACE.workspaceId,
-        workspaceMemberId: TAB_TEAM_WORKSPACE.workspaceMemberId,
-      });
-    }
-    expect(requestsB.length).toBeGreaterThanOrEqual(3);
-    for (const request of requestsB) {
-      expect(request).toEqual({
-        workspaceId: TAB_PERSONAL_WORKSPACE.workspaceId,
-        workspaceMemberId: TAB_PERSONAL_WORKSPACE.workspaceMemberId,
-      });
-    }
-
-    expect(await readTabWorkspaceSelection(page)).toEqual({
-      workspaceId: TAB_TEAM_WORKSPACE.workspaceId,
-      workspaceMemberId: TAB_TEAM_WORKSPACE.workspaceMemberId,
-    });
-    expect(await readTabWorkspaceSelection(pageB)).toEqual({
-      workspaceId: TAB_PERSONAL_WORKSPACE.workspaceId,
-      workspaceMemberId: TAB_PERSONAL_WORKSPACE.workspaceMemberId,
-    });
-    await expect(page.getByTestId('workspace-switcher')).toContainText(
-      TAB_TEAM_WORKSPACE.workspaceName,
-    );
-    await expect(pageB.getByTestId('workspace-switcher')).toContainText(
-      TAB_PERSONAL_WORKSPACE.workspaceName,
-    );
-  } finally {
-    await pageB.close();
-  }
-});
-
 test('[P0] @critical home hero submit creates a project and lands on a usable workspace', async ({ page }) => {
   await routeSuccessfulRuns(page, { runIdPrefix: 'home-entry-workspace-smoke' });
 
@@ -306,7 +178,7 @@ test('[P0] @critical home hero submit creates a project and lands on a usable wo
   await expect(page.getByTestId('file-workspace')).toBeVisible();
 });
 
-test('[P1] onboarding lands on the home composer without a recommended-start strip', async ({ page }) => {
+test('[P1] home opens on the composer without a recommended-start strip', async ({ page }) => {
   const createdBodies: Array<Record<string, unknown>> = [];
   const runBodies: Array<Record<string, unknown>> = [];
   const runRequests = await routeSuccessfulRuns(page, {
@@ -326,7 +198,7 @@ test('[P1] onboarding lands on the home composer without a recommended-start str
         agentId: 'mock',
         skillId: null,
         designSystemId: null,
-        onboardingCompleted: false,
+        onboardingCompleted: true,
         agentModels: {},
         privacyDecisionAt: 1,
         telemetry: { metrics: false, content: false, artifactManifest: false },
@@ -342,7 +214,7 @@ test('[P1] onboarding lands on the home composer without a recommended-start str
       await route.fulfill({
         json: {
           config: {
-            onboardingCompleted: false,
+            onboardingCompleted: true,
             agentId: 'mock',
             skillId: null,
             designSystemId: null,
@@ -376,32 +248,11 @@ test('[P1] onboarding lands on the home composer without a recommended-start str
       },
     });
   });
-  await page.route('**/api/integrations/vela/status', async (route) => {
-    await route.fulfill({
-      json: {
-        loggedIn: true,
-        loginInFlight: false,
-        profile: 'local',
-        configPath: '/tmp/.amr/config.json',
-        user: { id: 'entry-onboarding', email: 'entry-onboarding@example.com' },
-      },
-    });
-  });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.getByText('Loading OpenDesign…').waitFor({ state: 'hidden', timeout: T.long });
 
-  // Cloud-first onboarding no longer contains the legacy runtime/About-you/
-  // Product-design survey. A signed-in user accepts the recommended Hosted
-  // source and lands directly on Home.
-  const cloudPrimary = page.locator('.onboarding-cloud__primary');
-  await expect(cloudPrimary).toBeEnabled();
-  await cloudPrimary.click();
-  await expect(page.getByRole('heading', { name: /Choose your model source|选择模型来源/i })).toBeVisible();
-  await page.getByRole('radio', { name: /OpenDesign Hosted/i }).click();
-  await page.getByRole('button', { name: /^Continue$/i }).click();
-
-  // Finishing model-source setup lands the user on Home with the composer
-  // ready — and NOT on the old recommended-start strip. That strip (sparkle +
+  // Home opens with the composer ready — and NOT on the old recommended-start
+  // strip. That strip (sparkle +
   // 「Start with your first project」 + 全部类型 / 开始创作) sat between the
   // composer and the template line, offering a third way to say what the two
   // around it already said, and has been removed. Nothing may create a project
@@ -412,15 +263,14 @@ test('[P1] onboarding lands on the home composer without a recommended-start str
 
   await expectStableCount(() => createdBodies.length, 0, {
     timeout: T.short,
-    message: 'finishing onboarding should not create a project automatically',
+    message: 'opening Home should not create a project automatically',
   });
   await runRequests.expectNone({
-    message: 'finishing onboarding should not start a run automatically',
+    message: 'opening Home should not start a run automatically',
   });
 });
 
 test('[P1] entry top navigation matches the current home tab structure', async ({ page }) => {
-  await routeSignedOutVelaStatus(page);
   await gotoEntryHome(page);
   await ensureRailOpen(page);
 
@@ -1110,8 +960,7 @@ test('[P2] home topbar overlays close on outside click, Escape, and Settings ope
 // inside the Home composer footer and does not follow the user to secondary
 // entry pages. This spec now pins the rail's surviving destinations plus the
 // pill at its new, Home-only home.
-test('[P0] signed-out Local setup can navigate the surviving rail destinations', async ({ page }) => {
-  await routeSignedOutVelaStatus(page);
+test('[P0] Local setup can navigate the surviving rail destinations', async ({ page }) => {
   await routeDesignSystems(page);
   await gotoEntryHome(page);
 
@@ -1301,8 +1150,7 @@ test('[P0] @critical home hero input keeps Shift+Enter as a newline and submits 
   await expect(page).toHaveURL(/\/projects\//);
 });
 
-test('[P0] signed-out Local setup can apply a plugin from the Home composer', async ({ page }) => {
-  await routeSignedOutVelaStatus(page);
+test('[P0] Local setup can apply a plugin from the Home composer', async ({ page }) => {
   await page.route('**/api/plugins', async (route) => {
     await route.fulfill({
       json: {
@@ -1473,184 +1321,6 @@ test('[P1] rail can be collapsed again on coarse-pointer / non-hover devices', a
   await toggle.click();
   await expect(page.locator('.entry')).not.toHaveClass(/entry--rail-open/);
 });
-
-interface WorkspaceContextRequestWitness {
-  workspaceId: string | null;
-  workspaceMemberId: string | null;
-}
-
-interface TabWorkspaceMockState {
-  activeWorkspaceId: string;
-}
-
-function tabWorkspaceContext(item: WorkspaceDirectoryItem): WorkspaceCollabContext {
-  return {
-    ...item,
-    billingState: item.workspaceType === 'team' ? 'active' : 'free',
-    planId: item.workspaceType === 'team' ? 'team_basic' : null,
-    providerMode: 'platform_credits',
-    seatSummary: {
-      seatLimit: item.workspaceType === 'team' ? 5 : 1,
-      usedSeats: 1,
-      availableSeats: item.workspaceType === 'team' ? 4 : 0,
-      isSeatFull: item.workspaceType !== 'team',
-    },
-    permissions: {
-      canManageMembers: true,
-      canManageBilling: true,
-      canInviteMembers: true,
-      canManageAutoRecharge: true,
-      canShareProjects: true,
-      canWriteSyncedFiles: true,
-      canViewWorkspaceSettings: true,
-      canManageSharedResources: true,
-    },
-    ...(item.workspaceType === 'team'
-      ? {
-          teamId: 'team-tab-atlas',
-          teamName: item.workspaceName,
-          workspaceSettingsUrl: 'https://example.invalid/team-tab-atlas',
-        }
-      : {}),
-  };
-}
-
-async function routeTabWorkspaceApi(
-  page: Page,
-  state: TabWorkspaceMockState,
-  contextRequests: WorkspaceContextRequestWitness[],
-): Promise<void> {
-  const directory = [TAB_PERSONAL_WORKSPACE, TAB_TEAM_WORKSPACE];
-
-  await page.route('**/api/workspace/directory', async (route) => {
-    if (route.request().method() !== 'GET') {
-      await route.fallback();
-      return;
-    }
-    await route.fulfill({
-      json: {
-        items: directory,
-        activeWorkspaceId: state.activeWorkspaceId,
-      },
-    });
-  });
-
-  await page.route('**/api/workspace/context', async (route) => {
-    if (route.request().method() !== 'GET') {
-      await route.fallback();
-      return;
-    }
-    const headers = route.request().headers();
-    const witness = {
-      workspaceId: headers['x-od-workspace-id'] ?? null,
-      workspaceMemberId: headers['x-od-workspace-member-id'] ?? null,
-    };
-    contextRequests.push(witness);
-    const selected = directory.find(
-      (item) =>
-        item.workspaceId === witness.workspaceId
-        && item.workspaceMemberId === witness.workspaceMemberId,
-    );
-    if (!selected) {
-      await route.fulfill({
-        status: 400,
-        json: { error: 'exact_workspace_scope_required' },
-      });
-      return;
-    }
-    await route.fulfill({ json: { context: tabWorkspaceContext(selected) } });
-  });
-
-  await page.route('**/api/workspace/active', async (route) => {
-    if (route.request().method() !== 'PUT') {
-      await route.fallback();
-      return;
-    }
-    const body = route.request().postDataJSON() as {
-      workspaceId?: unknown;
-      workspaceMemberId?: unknown;
-    };
-    const selected = directory.find(
-      (item) =>
-        item.workspaceId === body.workspaceId
-        && item.workspaceMemberId === body.workspaceMemberId,
-    );
-    if (!selected) {
-      await route.fulfill({
-        status: 400,
-        json: { error: 'exact_workspace_scope_required' },
-      });
-      return;
-    }
-    state.activeWorkspaceId = selected.workspaceId;
-    await route.fulfill({
-      json: {
-        activeWorkspaceId: selected.workspaceId,
-        context: tabWorkspaceContext(selected),
-      },
-    });
-  });
-}
-
-async function readTabWorkspaceSelection(page: Page): Promise<WorkspaceContextRequestWitness> {
-  return page.evaluate(() => {
-    const raw = JSON.parse(
-      window.sessionStorage.getItem('od.workspaceSelection.v1') ?? 'null',
-    ) as {
-      workspaceId?: unknown;
-      workspaceMemberId?: unknown;
-    } | null;
-    return {
-      workspaceId: typeof raw?.workspaceId === 'string' ? raw.workspaceId : null,
-      workspaceMemberId:
-        typeof raw?.workspaceMemberId === 'string' ? raw.workspaceMemberId : null,
-    };
-  });
-}
-
-async function refreshTabsInterleaved(
-  first: {
-    page: Page;
-    eventName: 'focus' | 'pageshow';
-    requests: WorkspaceContextRequestWitness[];
-  },
-  second: {
-    page: Page;
-    eventName: 'focus' | 'pageshow';
-    requests: WorkspaceContextRequestWitness[];
-  },
-): Promise<void> {
-  const firstCount = first.requests.length;
-  const secondCount = second.requests.length;
-  await expect
-    .poll(
-      async () => {
-        await Promise.all([
-          dispatchAmbientWorkspaceEvent(first.page, first.eventName),
-          dispatchAmbientWorkspaceEvent(second.page, second.eventName),
-        ]);
-        return {
-          first: first.requests.length > firstCount,
-          second: second.requests.length > secondCount,
-        };
-      },
-      { timeout: T.medium },
-    )
-    .toEqual({ first: true, second: true });
-}
-
-async function dispatchAmbientWorkspaceEvent(
-  page: Page,
-  eventName: 'focus' | 'pageshow',
-): Promise<void> {
-  await page.evaluate((name) => {
-    window.dispatchEvent(
-      name === 'pageshow'
-        ? new PageTransitionEvent('pageshow', { persisted: false })
-        : new Event('focus'),
-    );
-  }, eventName);
-}
 
 async function gotoEntryHome(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });

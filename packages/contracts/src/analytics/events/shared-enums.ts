@@ -57,85 +57,6 @@ export type TrackingProjectSource =
   | 'chat_composer'
   | 'unknown';
 
-export type TrackingAmrEntrySource =
-  | 'onboarding_amr_card'
-  | 'onboarding_amr_sign_in_continue'
-  | 'inline_model_switcher_amr_row'
-  | 'settings_amr_agent_card'
-  | 'settings_amr_authorize'
-  // The 'use OpenDesign Cloud' callout on the execution tab. Same device-auth
-  // flow as settings_amr_authorize, kept distinct so the two entry points stay
-  // separable in funnel analysis.
-  | 'settings_cloud_callout'
-  | 'settings_amr_console'
-  | 'settings_amr_install'
-  | 'avatar_amr_console'
-  | 'handoff_amr_website'
-  | 'chat_error_authorize_retry'
-  | 'chat_error_recharge'
-  | 'chat_error_upgrade'
-  | 'chat_balance_gate_upgrade'
-  | 'home_balance_gate_upgrade'
-  | 'chat_low_balance_warn_recharge'
-  | 'home_low_balance_warn_recharge'
-  | 'chat_balance_gate_sign_in'
-  | 'home_balance_gate_sign_in'
-  | 'chat_error_switch_retry_card'
-  | 'generation_preview_authorize_retry'
-  | 'generation_preview_recharge'
-  | 'generation_preview_switch_retry_card'
-  | 'settings_amr_upgrade'
-  | 'inline_amr_upgrade'
-  | 'go_plan_sunset_modal'
-  | 'deepseek_unpaid_modal'
-  | 'deepseek_workbench_badge'
-  | 'deepseek_model_switcher_upgrade'
-  | 'avatar_amr_upgrade'
-  | 'avatar_amr_agent_card'
-  | 'artifact_success_upgrade'
-  | 'home_artifact_upgrade';
-
-// `deepseek_v4_flash` is the finished 8/6-8/13 free week; `deepseek_v4_pro`
-// is the 8/13-8/27 two-model window that follows it. Both stay declared so
-// the finished campaign's rows keep a valid id in the warehouse.
-export type TrackingCampaignId =
-  | 'deepseek_v4_flash'
-  | 'deepseek_v4_pro'
-  | 'go_plan_sunset_202608';
-export type TrackingCampaignUserState = 'paid' | 'unpaid';
-export type TrackingCampaignDeliveryMode = 'demo' | 'targeted';
-export type TrackingCampaignConversionSource =
-  | 'go_plan_sunset_modal'
-  | 'deepseek_unpaid_modal'
-  | 'deepseek_workbench_badge'
-  | 'deepseek_model_switcher_upgrade'
-  | 'landing_home_banner'
-  | 'landing_pricing_personal_plan'
-  | 'landing_pricing_team_plan';
-
-export interface AmrEntryAttribution {
-  entryId: string;
-  sourceProduct: 'open_design';
-  sourceDetail: TrackingAmrEntrySource;
-  occurredAt: string;
-  // Campaign joins keep the first entry source stable and record the final
-  // conversion touch separately. Both fields are forwarded to Vela so a
-  // Stripe payment result can be attributed without replacing first touch.
-  campaignId?: TrackingCampaignId;
-  conversionSource?: TrackingCampaignConversionSource;
-  // OpenDesign install/device id forwarded only on consent-gated AMR handoffs.
-  odDeviceId?: string;
-  // Self-reported onboarding profile, forwarded to AMR (anchored to entryId) so
-  // AMR can segment paid conversion by who the visitor is. Open strings, not a
-  // union: onboarding keeps these open so a new option never forces a contract
-  // bump. Absent when the visitor skipped or never reached onboarding. useCase
-  // is multi-select, hence an array.
-  odRole?: string;
-  odOrgSize?: string;
-  odUseCase?: string[];
-  odSource?: string;
-}
-
 // The six tabs inside the New project modal (CSV row 7 tab_name).
 export type TrackingNewProjectTab =
   | 'prototype'
@@ -176,9 +97,7 @@ export type TrackingByokProviderId =
   | 'senseaudio'
   | 'aihubmix';
 
-// v2 CLI provider catalogue (CSV row 63 + image 59). Adds `qoder_cli` and
-// `kilo` over v1, plus `amr` (the vela CLI runtime) so AMR runs no longer
-// fold into the `other` catch-all bucket.
+// v2 CLI provider catalogue (CSV row 63 + image 59).
 // Every agent the daemon can detect needs its own id here. An agent that falls
 // through to `other` is invisible to any breakdown or alert that asks *which*
 // CLI failed — which is the only question worth asking when an install someone
@@ -211,7 +130,6 @@ export type TrackingCliProviderId =
   | 'atomcode'
   | 'deepseek'
   | 'deepseek_harness'
-  | 'amr'
   | 'other';
 
 export type TrackingFeedbackProviderId =
@@ -262,16 +180,10 @@ export type TrackingRunTerminalTrigger =
   | 'acp_stage_timeout'
   | 'daemon_restart';
 export type TrackingExportResult = 'success' | 'failed' | 'cancelled';
-// Stable codes for artifact_publish_result.error_code. Deliberately a CLOSED
-// set — unlike artifact_deploy_result's open-ended provider/HTTP codes — so no
-// free-form message text can ever be passed as an analytics error code.
-export type TrackingPublishErrorCode = 'workspace_identity_required' | 'publish_failed';
 export type TrackingTestResult = 'success' | 'failed' | 'timeout';
 export type TrackingRunFailureCategory =
   | 'auth'
   | 'rate_limit'
-  | 'insufficient_balance'
-  | 'entitlement_required'
   | 'model_unavailable'
   | 'prompt_too_large'
   | 'upstream_unavailable'
@@ -288,20 +200,7 @@ export type TrackingRunFailureDetail =
   | 'missing_api_key'
   | 'invalid_api_key'
   | 'hard_quota'
-  // A rolling per-model usage window (vela's 5-hour `model_limit_exceeded`)
-  // that resets on its own at a known instant. Distinct from `hard_quota`:
-  // nothing was charged, nothing needs topping up, and the same request
-  // succeeds once the window rolls over — so it stays retryable and must not
-  // be counted as a quota exhaustion in reliability reporting.
-  | 'model_window_limit'
-  // Vela membership policy concurrency is temporarily full. The upstream
-  // reset instant makes this waitable, but it is deliberately non-retryable
-  // for automation so the daemon cannot create an immediate retry storm.
-  | 'membership_concurrency_limit'
-  | 'workspace_credits_exhausted'
   | 'rate_limit_429'
-  | 'amr_insufficient_balance'
-  | 'amr_tier_upgrade_required'
   | 'model_not_found'
   | 'model_not_supported'
   | 'model_disabled'
@@ -399,8 +298,6 @@ export type TrackingFirstModelEventType =
 export type TrackingRunFailureUserAction =
   | 'retry'
   | 'login'
-  | 'recharge'
-  | 'upgrade'
   | 'switch_model'
   | 'reduce_context'
   | 'install_cli'
@@ -449,33 +346,6 @@ export type TrackingRunCloseReason =
   | 'fatal_rpc_error'
   | 'empty_output'
   | 'unknown';
-export type TrackingAmrOpenCodeErrorPhase =
-  | 'timeout'
-  | 'event_stream_start'
-  | 'event_stream'
-  | 'prompt_async'
-  | 'other';
-export type TrackingAmrOpenCodeLastEventType =
-  | 'tool_call'
-  | 'tool_call_update'
-  | 'agent_message_chunk'
-  | 'agent_thought_chunk'
-  | 'done'
-  | 'other';
-export type TrackingAmrOpenCodeLastToolStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'failed'
-  | 'other';
-export type TrackingAmrOpenCodeLastToolKind =
-  | 'read'
-  | 'write'
-  | 'edit'
-  | 'search'
-  | 'execute'
-  | 'fetch'
-  | 'other';
 export type TrackingLangfuseDeliveryStatus =
   | 'not_expected'
   | 'queued'
@@ -492,12 +362,6 @@ export type TrackingLangfuseDropReason =
   | 'relay_5xx'
   | 'langfuse_4xx'
   | 'langfuse_5xx'
-  | 'vela_400'
-  | 'vela_401'
-  | 'vela_403'
-  | 'vela_413'
-  | 'vela_429'
-  | 'vela_5xx'
   | 'network_error';
 export type TrackingLangfuseReportResult =
   | 'accepted'

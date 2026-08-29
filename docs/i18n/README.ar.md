@@ -2,10 +2,6 @@
 
 <h1 align="center">OpenDesign: البديل مفتوح المصدر لـ Claude Design</h1>
 
-> ⚡ **[‏OpenDesign Cloud — خدمة النماذج الرسمية.](https://open-design.ai/zh/pricing/)** شحنة واحدة لاستخدام نماذج الوكلاء والصور داخل OpenDesign: ‏GPT وClaude وDeepSeek للوكلاء؛ وGPT Image 2.0 وSeedream 5.0 Pro وNano Banana 2.0 للصور.
->
-> 🚀 **[أصبح DeepSeek V4 Flash وV4 Pro متاحين الآن.](https://open-design.ai/zh/pricing/)** استخدم ذكاءً من الطراز الأول للنماذج الأولية والعروض التقديمية وأنظمة التصميم ومهام الوكلاء اليومية. يمكن لأعضاء OpenDesign استخدام النموذجين بلا حدود لمدة أسبوعين مباشرة داخل التطبيق.
->
 > 🧩 **[أصبح DeepSeek Harness مدعومًا الآن.](https://open-design.ai/zh/agents/deepseek-harness-design/)** صِل Agent Harness الرسمي `dsh` من DeepSeek بـ OpenDesign كبيئة تشغيل أصلية، مع التفكير المنظم واستدعاءات الأدوات واكتشاف النماذج والإلغاء واستئناف الجلسات. تبقى الملفات الناتجة ضمن سير عمل OpenDesign للمعاينة الحية والتسليم.
 
 <p align="center">
@@ -15,7 +11,6 @@
 <p align="center">
   <a href="https://open-design.ai/">الموقع</a> ·
   <a href="https://open-design.ai/">التنزيل</a> ·
-  <a href="https://open-design.ai/cloud/">OpenDesign Cloud</a> ·
   <a href="https://discord.gg/mHAjSMV6gz">Discord</a> ·
   <a href="https://x.com/OpenDesignHQ">تابع ‎@OpenDesignHQ</a>
 </p>
@@ -135,7 +130,7 @@
 `od mcp install <agent> --print` لمعاينة تجريبية دون تنفيذ · `--uninstall` للإزالة · القائمة الكاملة عبر `od mcp install --help`.
 
 <p align="center">
-  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="The 25 coding-agent CLIs OpenDesign supports — Claude Code · Codex · OpenCode · Hermes · Antigravity · Vela · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
+  <img src="https://repo-assets.open-design.ai/resources/images/coding-agents.png" alt="The 25 coding-agent CLIs OpenDesign supports — Claude Code · Codex · OpenCode · Hermes · Antigravity · Grok Build · Kimi · Cursor Agent · Qwen · Qoder · GitHub Copilot · Pi · Kiro · Kilo · Mistral Vibe · DeepSeek · Reasonix · Aider · Amp · CodeBuddy · Mimo · AtomCode · Devin · Trae" width="100%" />
 </p>
 
 **لا توجد واجهة CLI مثبَّتة؟** يمنحك وكيل BYOK على `POST /api/proxy/{anthropic,openai,azure,google,ollama,senseaudio}/stream` الحلقة نفسها (دون إنشاء عملية) — الصق `baseUrl` + `apiKey` + `model`، مع دعم OpenAI وAnthropic وAzure OpenAI وGoogle Gemini وOllama وLM Studio وvLLM، أو أي نقطة نهاية متوافقة مع OpenAI. تمنع حماية SSRF لكل هدف عناوين IP الداخلية / link-local / CGNAT عند حافة الـ daemon.
@@ -571,7 +566,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 - [x] بروتوكول جانبي + سطح مكتب Electron + أتمتة IPC
 - [x] واجهة API لفحص المخرجات + بوابة نقد ذاتي بخمسة أبعاد قبل الإصدار
 - [x] **0.8.0** — بنية تحتية لسوق الإضافات (261 إضافة رسمية، مواصفة البيان، سكربتات تثبيت لكل وكيل)
-- [x] **0.9.0** — OpenDesign Cloud (Model Router الرسمي مدمج في التطبيق: بلا إعداد، تسجيل دخول بنقرة واحدة)
+- [x] ~~**0.9.0** — OpenDesign Cloud (Model Router الرسمي مدمج في التطبيق: بلا إعداد، تسجيل دخول بنقرة واحدة)~~ (removed — OpenDesign is local CLI + BYOK only)
 - [x] إصدارات Electron مجمَّعة — macOS (Apple Silicon + Intel) + Windows (x64) + Linux AppImage (مسار اختياري)
 - [ ] تعديلات جراحية في وضع التعليق — مشحونة جزئيًا؛ الترقيع المستهدف الموثوق قيد التنفيذ
 - [ ] تجربة استخدام لوحة تعديلات يصدرها الذكاء الاصطناعي — لم تُنفَّذ بعد

@@ -12,7 +12,6 @@ import {
   revokeProjectSurface,
 } from '../genui/index.js';
 import { resolveProjectDir } from '../projects.js';
-import type { AuthorizeProjectRequest } from '../collab/project-request-authority.js';
 
 export interface RegisterGenuiRoutesDeps {
   db: Database.Database;
@@ -24,29 +23,14 @@ export interface RegisterGenuiRoutesDeps {
   paths: {
     PROJECTS_DIR: string;
   };
-  authorizeProjectRequest: AuthorizeProjectRequest;
 }
 
 export function registerGenuiRoutes(app: Express, deps: RegisterGenuiRoutesDeps): void {
   const { db, design } = deps;
   const { PROJECTS_DIR } = deps.paths;
-  const authorizeRun = async (
-    req: any,
-    res: any,
-    options: { mode: 'read' } | { mode: 'write'; capability: 'writeFiles' },
-  ) => {
-    const run = design.runs.get(req.params.runId);
-    if (!run) {
-      res.status(404).json({ error: 'run not found' });
-      return false;
-    }
-    if (!run.projectId) return true;
-    return deps.authorizeProjectRequest(req, res, run.projectId, options);
-  };
 
-  app.get('/api/runs/:runId/genui', async (req, res) => {
+  app.get('/api/runs/:runId/genui', (req, res) => {
     try {
-      if (!await authorizeRun(req, res, { mode: 'read' })) return;
       const surfaces = listSurfacesForRun(db, req.params.runId);
       res.json({ runId: req.params.runId, surfaces });
     } catch (err) {
@@ -54,14 +38,8 @@ export function registerGenuiRoutes(app: Express, deps: RegisterGenuiRoutesDeps)
     }
   });
 
-  app.get('/api/projects/:projectId/genui', async (req, res) => {
+  app.get('/api/projects/:projectId/genui', (req, res) => {
     try {
-      if (!await deps.authorizeProjectRequest(
-        req,
-        res,
-        req.params.projectId,
-        { mode: 'read' },
-      )) return;
       const surfaces = listSurfacesForProject(db, req.params.projectId);
       res.json({ projectId: req.params.projectId, surfaces });
     } catch (err) {
@@ -71,11 +49,6 @@ export function registerGenuiRoutes(app: Express, deps: RegisterGenuiRoutesDeps)
 
   app.post('/api/runs/:runId/genui/:surfaceId/respond', async (req, res) => {
     try {
-      if (!await authorizeRun(
-        req,
-        res,
-        { mode: 'write', capability: 'writeFiles' },
-      )) return;
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       const value = 'value' in body ? body.value : null;
       const respondedBy =
@@ -132,14 +105,8 @@ export function registerGenuiRoutes(app: Express, deps: RegisterGenuiRoutesDeps)
     }
   });
 
-  app.post('/api/projects/:projectId/genui/:surfaceId/revoke', async (req, res) => {
+  app.post('/api/projects/:projectId/genui/:surfaceId/revoke', (req, res) => {
     try {
-      if (!await deps.authorizeProjectRequest(
-        req,
-        res,
-        req.params.projectId,
-        { mode: 'write', capability: 'writeFiles' },
-      )) return;
       const changed = revokeProjectSurface(db, {
         projectId: req.params.projectId,
         surfaceId: req.params.surfaceId,
@@ -150,14 +117,8 @@ export function registerGenuiRoutes(app: Express, deps: RegisterGenuiRoutesDeps)
     }
   });
 
-  app.post('/api/projects/:projectId/genui/prefill', async (req, res) => {
+  app.post('/api/projects/:projectId/genui/prefill', (req, res) => {
     try {
-      if (!await deps.authorizeProjectRequest(
-        req,
-        res,
-        req.params.projectId,
-        { mode: 'write', capability: 'writeFiles' },
-      )) return;
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       const snapshotId = typeof body.snapshotId === 'string' ? body.snapshotId : '';
       const surfaceId = typeof body.surfaceId === 'string' ? body.surfaceId : '';
@@ -186,9 +147,8 @@ export function registerGenuiRoutes(app: Express, deps: RegisterGenuiRoutesDeps)
     }
   });
 
-  app.get('/api/runs/:runId/genui/:surfaceId', async (req, res) => {
+  app.get('/api/runs/:runId/genui/:surfaceId', (req, res) => {
     try {
-      if (!await authorizeRun(req, res, { mode: 'read' })) return;
       const row = db.prepare(
         `SELECT id FROM genui_surfaces
           WHERE run_id = ? AND surface_id = ?
@@ -210,9 +170,8 @@ export function registerGenuiRoutes(app: Express, deps: RegisterGenuiRoutesDeps)
     }
   });
 
-  app.get('/api/runs/:runId/devloop-iterations', async (req, res) => {
+  app.get('/api/runs/:runId/devloop-iterations', (req, res) => {
     try {
-      if (!await authorizeRun(req, res, { mode: 'read' })) return;
       const iterations = listIterationsForRun(db, req.params.runId);
       res.json({ runId: req.params.runId, iterations });
     } catch (err) {
@@ -220,9 +179,8 @@ export function registerGenuiRoutes(app: Express, deps: RegisterGenuiRoutesDeps)
     }
   });
 
-  app.post('/api/runs/:runId/replay', async (req, res) => {
+  app.post('/api/runs/:runId/replay', (req, res) => {
     try {
-      if (!await authorizeRun(req, res, { mode: 'read' })) return;
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       const explicitSnapshotId = typeof body.snapshotId === 'string' ? body.snapshotId : '';
       const snapshotId = explicitSnapshotId;

@@ -14,9 +14,7 @@ import type { UiScenario } from '@/playwright/resources';
 import { T } from '@/timeouts';
 import { expectStableCount } from '../lib/playwright/assertions.js';
 import {
-  AMR_PERSONAL_WORKSPACE_HEADERS,
-  mockAmrPersonalWorkspace,
-} from '@/playwright/amr';
+} from '@/playwright/app';
 import {
   applyStandardMocks,
   failedRunEventBody,
@@ -1179,21 +1177,6 @@ test('[P0] @critical daemon error details persist between failed sends', async (
     eventBodies: [failedRunEventBody('connection refused')],
   });
 
-  // This scenario exercises a local agent, not authentication. Give project
-  // creation a deterministic Personal Workspace identity: signed-out would
-  // enter Cloud-first onboarding, while an unresolved status leaves the new
-  // workspace bootstrap gate unable to authorize project creation.
-  await page.route('**/api/integrations/vela/status*', async (route) => {
-    await route.fulfill({
-      json: {
-        loggedIn: true,
-        profile: 'local',
-        configPath: '/tmp/.amr/config.json',
-        user: { id: 'restoration-error', email: 'restoration-error@example.com' },
-      },
-    });
-  });
-  await mockAmrPersonalWorkspace(page);
   await gotoEntryHome(page);
   await createProject(page, entry);
   await expectWorkspaceReady(page);
@@ -1210,8 +1193,7 @@ test('[P0] @critical daemon error details persist between failed sends', async (
     projectId,
     'error-cross-tab.html',
     '<!doctype html><html><body><h1>Error cross tab</h1></body></html>',
-    AMR_PERSONAL_WORKSPACE_HEADERS,
-  );
+    );
   // The file is written out-of-band through APIRequestContext, so reload the
   // real project surface instead of depending on an in-app mutation event or
   // an eventual catalog poll that this external write cannot emit.
@@ -2441,10 +2423,8 @@ async function seedHtmlArtifact(
   projectId: string,
   fileName: string,
   content: string,
-  workspaceHeaders?: Readonly<Record<string, string>>,
 ) {
   const resp = await page.request.post(`/api/projects/${projectId}/files`, {
-    ...(workspaceHeaders ? { headers: { ...workspaceHeaders } } : {}),
     data: {
       name: fileName,
       content,
@@ -2980,9 +2960,8 @@ function uniqueProjectName(base: string): string {
  *
  * #5517 deleted the rail's Projects destination (`entry-nav-projects`), so the
  * project list a user actually reaches is Home's recent-projects strip, or the
- * team workspace's 全部项目 grid. Both branches stay here because the strip is
- * suppressed while the workspace has no projects at all; a signed-in team
- * workspace then answers with the grid instead.
+ * 全部项目 grid. Both branches stay here because the strip is suppressed while
+ * there are no projects at all; the grid answers in that case instead.
  */
 async function expectProjectsView(page: Page) {
   const legacyProjectsToolbar = page.locator('.tab-panel-toolbar');

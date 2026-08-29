@@ -42,19 +42,7 @@ import {
   trackOnboardingRuntimeScanResult,
   trackPageView,
 } from '../analytics/events';
-import {
-  amrHandoffDeviceId,
-  recordAmrEntry,
-  type AmrEntryAttribution,
-} from '../analytics/amr-attribution';
 import { getResolvedDeviceId } from '../analytics/client';
-import {
-  beginAmrAuthTracking,
-  confirmAmrAuthTracking,
-  observeAmrAuthTracking,
-  reconcileAmrAuthAttemptId,
-  resolveAmrAuthTracking,
-} from '../analytics/amr-auth';
 import {
   clearOnboardingSessionId,
   getOrCreateOnboardingSessionId,
@@ -115,13 +103,6 @@ import { DeepSeekHarnessSetupDialog } from './DeepSeekHarnessSetupDialog';
 import { AmrBalanceDialog } from './AmrBalanceDialog';
 import { installDeepSeekHarnessCompanion } from '../providers/agent-companion';
 import { AmrLowBalanceDialog, type AmrLowBalanceDecision } from './AmrLowBalanceDialog';
-import {
-  amrBalanceGateScopeForWorkspaceContext,
-  checkAmrBalanceGate,
-  retryUnavailableAmrBalanceGate,
-  type AmrBalanceGateScope,
-} from '../runtime/amr-balance-gate';
-import { isPaidAmrPlan, resolveAmrPlan } from '../runtime/amr-low-balance-plan';
 import { HomeView, seedHomeComposerPrompt } from './HomeView';
 import { entryStrategyRoutingFields } from './entry-strategy-routing';
 import { EntryBlankState } from './EntryBlankState';
@@ -145,42 +126,7 @@ import {
 import { AgentIcon } from './AgentIcon';
 import { CommunityView } from './CommunityView';
 import { TeamSlotPlaceholder } from './TeamSlotPlaceholder';
-import {
-  notifyTeamProjectsChanged,
-  notifyWorkspaceBillingRefresh,
-  notifyWorkspaceContextRefresh,
-  currentWorkspaceAccountGeneration,
-  useTeamProjects,
-  useWorkspaceBillingResponse,
-  useWorkspaceContext,
-  workspaceResourceReadContext,
-  workspaceBillingBalanceUsd,
-  workspaceBillingSummaryForContext,
-} from '../collab/useWorkspaceContext';
-import { useWorkspaceInvalidation } from '../collab/workspace-events';
-import { resolvePlanLabelTier } from '../collab/team-plan';
-import { resolveDeepSeekV4FlashCampaignAudience } from '../campaigns/deepseek-v4-flash';
-import { useDeepSeekV4FlashCampaignVisibility } from '../campaigns/use-deepseek-v4-flash-campaign';
 import { WorkbenchCampaignBadge } from './WorkbenchCampaignBadge';
-import {
-  beginWorkspaceScopedRead,
-  workspaceIdentityCacheKey,
-  workspaceProjectHeaders,
-} from '../collab/workspace-identity';
-import {
-  buildAllProjectsList,
-  buildDraftsList,
-  createSharedProjectPredicate,
-  reconcileSharedProjectCatalogFields,
-} from '../collab/all-projects-list';
-import {
-  forgetOptimisticProjectOwnership,
-  optimisticProjectOwnershipScopeKey,
-  projectOwnerMemberIdsWithOptimisticWitnesses,
-  reconcileOptimisticProjectOwnership,
-  recordOptimisticProjectOwnership,
-  type OptimisticProjectOwnershipWitnesses,
-} from '../collab/optimistic-project-ownership';
 import type { ModelCapabilityTag } from './modelCapabilityTags';
 import { LanguageMenu } from './LanguageMenu';
 import { IntegrationsView, type IntegrationTab } from './IntegrationsView';
@@ -610,10 +556,8 @@ export function EntryShell({
   // The whole state (not just `context`) so workspace-scoped WRITES can go
   // through `resolvedWorkspaceContextForWrite`, which refuses to collapse an
   // unresolved or unavailable authority into an anonymous, unbound create.
-  const workspaceContextState = useWorkspaceContext();
   const { context: workspaceContext, loading: workspaceLoading } = workspaceContextState;
   const accountFooterState = resolveEntryRailAccountFooterState(
-    workspaceContextState,
     amrLoggedIn,
     amrSessionState,
   );
@@ -656,7 +600,6 @@ export function EntryShell({
   // 额度 row beside it correctly followed the switch.
   const workspaceBilling = workspaceBillingSummaryForContext(
     workspaceBillingResponse,
-    workspaceContext,
   );
   const [goPlanSunsetMessagePending, setGoPlanSunsetMessagePending] = useState(false);
   const deepSeekCampaignVisibility = useDeepSeekV4FlashCampaignVisibility();
@@ -686,7 +629,6 @@ export function EntryShell({
       : deepSeekV4FlashCampaignAudience;
   const workspaceBalanceUsd = workspaceBillingBalanceUsd(
     workspaceBillingResponse,
-    workspaceContext,
   );
   // Team-wide shared-project discovery for the "全部项目" view. The member's own
   // `projects` prop is only their LOCAL list; team-shared projects come from the
@@ -709,7 +651,6 @@ export function EntryShell({
     () => new Set<string>(),
   );
   const optimisticOwnershipScopeKey = optimisticProjectOwnershipScopeKey(
-    workspaceContext,
     currentWorkspaceAccountGeneration(),
   );
   const [optimisticOwnershipWitnesses, setOptimisticOwnershipWitnesses] = useState<
@@ -767,24 +708,21 @@ export function EntryShell({
       createSharedProjectPredicate({
         teamProjects: teamProjects.projects,
         localProjects: projects,
-        workspaceContext,
         sharedThisSession,
         unsharedThisSession,
       }),
-    [projects, teamProjects.projects, workspaceContext, sharedThisSession, unsharedThisSession],
+    [projects, teamProjects.projects, sharedThisSession, unsharedThisSession],
   );
   // 草稿 is the complement of 全部项目: sharing moves a project from one to the
   // other, so a shared project must stop appearing here (acceptance #78).
   const draftProjectsList: Project[] = buildDraftsList({
     projects,
     teamProjects: teamProjects.projects,
-    workspaceContext,
     isShared: isSharedProject,
   });
   const allProjectsList: Project[] = buildAllProjectsList({
     projects,
     teamProjects: teamProjects.projects,
-    workspaceContext,
     sharedFallbackName: t('recentProjects.sharedProjectFallbackName'),
     isShared: isSharedProject,
   });
@@ -793,7 +731,6 @@ export function EntryShell({
     () => reconcileSharedProjectCatalogFields({
       projects,
       teamProjects: teamProjects.projects,
-      workspaceContext,
     }),
     [projects, teamProjects.projects, workspaceContext],
   );
@@ -820,7 +757,7 @@ export function EntryShell({
   const readyWorkspaceId = workspaceContext?.workspaceId ?? null;
   const readyWorkspaceMemberId = workspaceContext?.workspaceMemberId ?? null;
   const readyScopeKey = workspaceContext
-    ? workspaceIdentityCacheKey(workspaceContext)
+    ? 'local'
     : null;
   const contentReadyScopeKeyRef = useRef<string | null>(null);
   if (contentReadyScopeKeyRef.current !== readyScopeKey) {
@@ -906,7 +843,7 @@ export function EntryShell({
         currentWorkspaceMemberId,
       );
     },
-  }, { workspaceContext });
+  });
   useEffect(() => {
     if (!readyScopeKey) return;
     for (const [projectId, eventScope] of pendingContentReadyProjectIdsRef.current) {
@@ -1360,7 +1297,7 @@ export function EntryShell({
         const gateWorkspaceContext = gateWorkspaceState.failure === 'unsupported'
           ? null
           : workspaceResourceReadContext(gateWorkspaceState);
-        const gateWorkspaceIdentity = workspaceIdentityCacheKey(gateWorkspaceContext);
+        const gateWorkspaceIdentity = 'local';
         const gateScope = amrBalanceGateScopeForWorkspaceContext(gateWorkspaceContext);
         let gate = await retryUnavailableAmrBalanceGate(
           () => checkAmrBalanceGate(gateScope, amrModelId),
@@ -1665,7 +1602,6 @@ export function EntryShell({
             // Search spans personal drafts plus the shared workspace catalog.
             // The pull-first handler still opens not-yet-local shared projects.
             projects={projectSearchProjects}
-            workspaceContext={workspaceContext}
             onOpenProject={handleOpenAllProjects}
             onClose={() => setProjectSearchOpen(false)}
           />

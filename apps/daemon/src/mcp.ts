@@ -34,12 +34,10 @@ import {
   ANALYTICS_HEADER_SESSION_ID,
   buildProjectRawFileUrl,
   type McpAnalyticsContextResponse,
-  type WorkspaceProjectsResponse,
 } from '@open-design/contracts';
 import { randomUUID } from 'node:crypto';
 
 import { postCreateArtifactRequest } from './artifacts/create.js';
-import { resolveMcpWorkspaceContext } from './mcp-workspace-context.js';
 import {
   createLocalMcpBriefStore as createBriefStore,
   localMcpBriefResponseCopy,
@@ -49,7 +47,6 @@ import {
   OPEN_DESIGN_BRIEF_APP_HTML,
   OPEN_DESIGN_BRIEF_APP_VERSION,
 } from './mcp-apps/brief-resource.js';
-import { DEFAULT_AMR_RECHARGE_URL } from './integrations/vela-errors.js';
 import {
   type ExternalPluginContext,
   logicalPluginRequestDigest,
@@ -70,10 +67,8 @@ const MAX_MCP_STDIO_IDLE_EXIT_MS = 24 * 60 * 60 * 1000;
 export const OPEN_DESIGN_BRIEF_APP_RESOURCE =
   'ui://open-design/artifact-card-v8.html';
 
-export const MCP_SERVER_INSTRUCTIONS = [
-  'Use only these product names in user-facing replies: OpenDesign Cloud and Local Codex.',
-  'Tool names, runtime ids, endpoints, and correlation values are machine protocol. Never repeat them as product copy.',
-].join('\n');
+export const MCP_SERVER_INSTRUCTIONS =
+  'OpenDesign works with local agent CLIs and user-configured BYOK providers. Tool names, endpoints, and correlation values are machine protocol, not product copy.';
 
 type JsonObject = Record<string, unknown>;
 interface RunMcpOptions {
@@ -91,7 +86,7 @@ interface ProjectPayload { project?: ProjectSummary; id?: string; name?: string;
 interface ActiveContext { active?: boolean; projectId?: string; projectName?: string | null; fileName?: string | null; ageMs?: number | null }
 type ResolvedProject = { id: string; name: string; source: 'uuid' | 'id' | 'exact' | 'slug' | 'substring' };
 interface ProjectListCache { baseUrl: string; t: number; list: ProjectSummary[] }
-interface McpArgs extends JsonObject { project?: unknown; entry?: unknown; include?: unknown; maxBytes?: unknown; path?: unknown; offset?: unknown; limit?: unknown; since?: unknown; query?: unknown; pattern?: unknown; max?: unknown; name?: unknown; content?: unknown; encoding?: unknown; artifactManifest?: unknown; confirm?: unknown; prompt?: unknown; plugin?: unknown; inputs?: unknown; agent?: unknown; model?: unknown; serviceTier?: unknown; apiKey?: unknown; requestId?: unknown; resume?: unknown; runId?: unknown; id?: unknown; designSystem?: unknown; skill?: unknown; skills?: string[]; includeUnavailable?: unknown; artifactType?: unknown; projectTitle?: unknown; locale?: unknown; knownAnswers?: unknown; skip?: unknown; briefDraftId?: unknown; nonce?: unknown; answers?: unknown; externalPluginContext?: unknown; pluginWorkflowId?: unknown }
+interface McpArgs extends JsonObject { project?: unknown; entry?: unknown; include?: unknown; maxBytes?: unknown; path?: unknown; offset?: unknown; limit?: unknown; since?: unknown; query?: unknown; pattern?: unknown; max?: unknown; name?: unknown; content?: unknown; encoding?: unknown; artifactManifest?: unknown; confirm?: unknown; prompt?: unknown; plugin?: unknown; inputs?: unknown; agent?: unknown; model?: unknown; serviceTier?: unknown; apiKey?: unknown; requestId?: unknown; runId?: unknown; id?: unknown; designSystem?: unknown; skill?: unknown; skills?: string[]; includeUnavailable?: unknown; artifactType?: unknown; projectTitle?: unknown; locale?: unknown; knownAnswers?: unknown; skip?: unknown; briefDraftId?: unknown; nonce?: unknown; answers?: unknown; externalPluginContext?: unknown; pluginWorkflowId?: unknown }
 interface ProjectFileBundleEntry { name: string; mime: string; size: number | null; content: string | null; binary: boolean }
 interface BundleInput { project: ProjectPayload | ProjectSummary; entry: string; files: ProjectFileBundleEntry[]; truncated: boolean; skippedFileCount?: number; active: ActiveContext | null; resolved?: ResolvedProject | null }
 interface ErrorWithCode { message?: string; code?: string; cause?: { code?: string } }
@@ -118,7 +113,6 @@ const SAFE_MCP_DAEMON_RETRY_CALLS = new Set([
   'get_file',
   'get_project',
   'get_run',
-  'get_vela_login_status',
   'list_agents',
   'list_files',
   'list_plugins',
@@ -718,36 +712,6 @@ export const TOOL_DEFS = [
     annotations: { ...READ_ANNOTATIONS, title: 'List OpenDesign plugins' },
   },
   {
-    name: 'start_vela_login',
-    description:
-      'Start OpenDesign Cloud browser sign-in through the local OpenDesign daemon. Returns the activation URL and user code when manual browser completion is needed. The tool name is an internal compatibility identifier and must not be repeated to the user.',
-    inputSchema: {
-      type: 'object',
-      properties: { pluginWorkflowId: PLUGIN_WORKFLOW_ID_ARG },
-      additionalProperties: false,
-    },
-    annotations: {
-      ...WRITE_ANNOTATIONS,
-      openWorldHint: true,
-      title: 'Sign in to OpenDesign Cloud',
-    },
-  },
-  {
-    name: 'get_vela_login_status',
-    description:
-      'Check whether OpenDesign Cloud browser sign-in is complete. Does not expose credentials. The tool name is an internal compatibility identifier and must not be repeated to the user.',
-    inputSchema: {
-      type: 'object',
-      properties: { pluginWorkflowId: PLUGIN_WORKFLOW_ID_ARG },
-      additionalProperties: false,
-    },
-    annotations: {
-      ...READ_ANNOTATIONS,
-      openWorldHint: true,
-      title: 'Check OpenDesign Cloud sign-in',
-    },
-  },
-  {
     name: 'start_run',
     description:
       'Commission OpenDesign to generate or refine a design. OpenDesign spawns its own agent to do the work and returns a runId immediately. Poll get_run(runId) until status is terminal; its Preview/Studio reference is the default delivery. Call get_artifact only when source context is genuinely needed. Project optional; defaults to the active project. Requires an existing project (create one first with create_project).',
@@ -794,11 +758,6 @@ export const TOOL_DEFS = [
           type: 'string',
           description:
             'Stable canonical UUID or ULID for this confirmed generation action. Generate it once before calling start_run and reuse it verbatim if the tool response is lost or retried; a different payload with the same id is rejected.',
-        },
-        resume: {
-          type: 'boolean',
-          description:
-            'Set true only after the user has topped up a paused OpenDesign Cloud run. Reuse the exact original requestId and payload; OpenDesign resumes the same logical run.',
         },
         pluginWorkflowId: PLUGIN_WORKFLOW_ID_ARG,
       },
@@ -939,7 +898,7 @@ export function localMcpResourceDefinitions() {
       name: 'OpenDesign brief',
       title: 'Choose the artifact direction',
       description:
-        'Interactive local OpenDesign brief card shared by OpenDesign Cloud and Local Codex modes.',
+        'Interactive local OpenDesign brief card.',
       mimeType: 'text/html;profile=mcp-app',
       _meta: {
         ui: {
@@ -974,17 +933,9 @@ export async function _listMcpResources(
     'list_resources',
     {},
     async (baseUrl) => {
-      // Resource listings (`/api/skills`, `/api/design-systems`) are scoped
-      // the same way project/run tools are (#6569): a headerless caller reads
-      // the NO-SCOPE catalog, so claimed Personal design systems are filtered
-      // out. Resolve the signed-in workspace once and forward the headers on
-      // both listing calls so the MCP resource catalog matches what the user
-      // sees in the app. See #6770.
-      const workspaceContext = await resolveMcpWorkspaceContext(baseUrl);
-      const headers = workspaceContext?.headers;
       const [skillsData, dsData] = await Promise.all([
-        getJson<SkillsPayload>(`${baseUrl}/api/skills`, headers).catch((): SkillsPayload => ({ skills: [] })),
-        getJson<DesignSystemsPayload>(`${baseUrl}/api/design-systems`, headers).catch((): DesignSystemsPayload => ({ designSystems: [] })),
+        getJson<SkillsPayload>(`${baseUrl}/api/skills`).catch((): SkillsPayload => ({ skills: [] })),
+        getJson<DesignSystemsPayload>(`${baseUrl}/api/design-systems`).catch((): DesignSystemsPayload => ({ designSystems: [] })),
       ]);
       return ok({ skillsData, dsData });
     },
@@ -1061,20 +1012,11 @@ export async function _readMcpResource(
   }
   const [, kind, id] = m as [string, 'skills' | 'design-systems', string, string];
   const route = kind === 'skills' ? 'skills' : 'design-systems';
-  // Reading a `od://design-systems/<id>/DESIGN.md` resource resolves the
-  // bound Personal design system. The daemon treats a headerless read as a
-  // NO-SCOPE caller, so the design-system route returns 404 for a Personal
-  // system that the workspace actually owns. Forward the same workspace
-  // headers as the project/run tools (#6569) so the resource read lands on
-  // the binding instead of returning `404 design system not found`. See #6770.
-  const result = await daemonTarget.call('read_resource', {}, async (baseUrl) => {
-    const workspaceContext = await resolveMcpWorkspaceContext(baseUrl);
-    const headers = workspaceContext?.headers;
-    return ok(await getJson<ResourcePayload>(
+  const result = await daemonTarget.call('read_resource', {}, async (baseUrl) =>
+    ok(await getJson<ResourcePayload>(
       `${baseUrl}/api/${route}/${encodeURIComponent(decodeURIComponent(id))}`,
-      headers,
-    ));
-  });
+    )),
+  );
   if (result.isError === true) throw new Error(result.content[0]?.text);
   const data = parseMcpResult(result) as ResourcePayload | null;
   const text =
@@ -1497,9 +1439,7 @@ function mcpFailureFacts(
   const failureStage =
     name === 'collect_brief' || name === 'confirm_brief'
       ? 'brief'
-      : name.includes('vela_login')
-        ? 'auth'
-        : name.includes('project')
+      : name.includes('project')
           ? 'project'
         : name === 'start_run'
           ? 'run_accept'
@@ -1517,9 +1457,7 @@ function mcpFailureFacts(
         ? 'open_design_daemon'
         : errorCode === 'DELIVERABLE_MISSING'
           ? 'artifact_store'
-          : message.includes('VELA_') || message.includes('AMR_')
-            ? 'vela_api'
-            : 'open_design_daemon';
+          : 'open_design_daemon';
   return {
     error_code: errorCode,
     failure_stage: failureStage,
@@ -1850,14 +1788,10 @@ export async function runMcpStdio(options: RunMcpOptions): Promise<void> {
         'read/edit files), commission a run - you do not run skills yourself:',
         ' - collect_brief first for a new artifact unless the user explicitly',
         '    asks to skip questions. Let the user complete the rendered card;',
-        '    confirm_brief returns the readable brief to reuse with OpenDesign',
-        '    Cloud or Local Codex. Never print or ask the user to copy',
+        '    confirm_brief returns the readable brief to reuse with a local',
+        '    agent or BYOK provider. Never print or ask the user to copy',
         '    briefDraftId, nonce, or any other internal correlation value.',
         ' - list_skills / list_plugins to see what you can ask OD to make.',
-        ' - for OpenDesign Cloud, call the Cloud login-status tool first.',
-        '    If signed out, call the Cloud sign-in tool once, show its activation',
-        '    URL/code when present, and poll login status until loggedIn:true.',
-        '    The tool and runtime ids are internal protocol; never show them.',
         ' - list_agents when you need to pass start_run.agent — do not',
         '    guess "claude" / "codex" / "opencode"; only agents in the',
         '    returned list will actually spawn on this machine.',
@@ -1869,9 +1803,6 @@ export async function runMcpStdio(options: RunMcpOptions): Promise<void> {
         '    user action and reuse the exact same value after a timeout/lost',
         '    response. Do not call',
         '    start_run again while get_run reports the original run in flight.',
-        '    If get_run returns failureAction:"recharge", show rechargeUrl;',
-        '    after the user confirms top-up, call the exact original start_run',
-        '    once with the same requestId and resume:true.',
         '    OpenDesign spawns its own agent to do the work.',
         ' - get_run(runId) polls until status is succeeded/failed/canceled;',
         '    on success it returns a previewUrl you can open in a browser',
@@ -2030,33 +1961,6 @@ function containsMcpCredentialField(value: unknown, depth = 0): boolean {
   );
 }
 
-function publicVelaLoginStatus(status: unknown): unknown {
-  if (!status || typeof status !== 'object' || Array.isArray(status)) return status;
-  const { configPath: _configPath, ...publicStatus } = status as JsonObject;
-  return publicStatus;
-}
-
-// Tools that address projects or runs are workspace-scoped after 0.18.0:
-// bound projects are invisible to a headerless caller and bound-project reads
-// 400 with WORKSPACE_CONTEXT_REQUIRED (#6569). These resolve the signed-in
-// workspace and send x-od-workspace-* headers on every daemon call.
-const PROJECT_OR_RUN_TOOLS = new Set([
-  'list_projects',
-  'get_project',
-  'get_file',
-  'list_files',
-  'search_files',
-  'get_artifact',
-  'write_file',
-  'delete_file',
-  'delete_project',
-  'create_project',
-  'create_artifact',
-  'start_run',
-  'get_run',
-  'cancel_run',
-]);
-
 async function handleMcpToolCall(
   baseUrl: string,
   name: unknown,
@@ -2064,11 +1968,7 @@ async function handleMcpToolCall(
   options: HandleMcpToolCallOptions = {},
 ): Promise<McpToolCallResult> {
   try {
-    const workspaceContext = PROJECT_OR_RUN_TOOLS.has(String(name))
-      ? await resolveMcpWorkspaceContext(baseUrl)
-      : null;
-    const headers = workspaceContext?.headers;
-    const workspaceId = workspaceContext?.workspaceId;
+    const headers: Record<string, string> | undefined = undefined;
     switch (name) {
       case 'collect_brief': {
         const collected = (options.briefStore ?? createLocalMcpBriefStore())
@@ -2109,20 +2009,6 @@ async function handleMcpToolCall(
         };
       }
       case 'list_projects':
-        if (workspaceId && headers) {
-          const data = await getJson<WorkspaceProjectsResponse>(
-            `${baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/projects`,
-            headers,
-          );
-          return ok({
-            projects: (data?.projects ?? []).map((p) => ({
-              id: p.id,
-              name: p.name,
-              ...(p.metadata ? { metadata: p.metadata as unknown as JsonObject } : {}),
-              workspaceId: p.workspaceId,
-            })),
-          });
-        }
         return ok(await getJson<ProjectsPayload>(`${baseUrl}/api/projects`));
       case 'get_active_context': {
         const data = await getJson<ActiveContext>(`${baseUrl}/api/active`);
@@ -2244,25 +2130,6 @@ async function handleMcpToolCall(
         return ok(await listPlugins(baseUrl));
       case 'list_agents':
         return ok(await listAgents(baseUrl, args.includeUnavailable === true));
-      case 'start_vela_login': {
-        const started = await postJson<JsonObject>(
-          `${baseUrl}/api/integrations/vela/login`,
-          options.pluginAttribution
-            ? { pluginWorkflowId: options.pluginAttribution.pluginWorkflowId }
-            : {},
-          options.analyticsHeaders,
-        );
-        const status = publicVelaLoginStatus(
-          await getJson<JsonObject>(`${baseUrl}/api/integrations/vela/status`),
-        );
-        return ok({ started, status });
-      }
-      case 'get_vela_login_status':
-        return ok(
-          publicVelaLoginStatus(
-            await getJson<JsonObject>(`${baseUrl}/api/integrations/vela/status`),
-          ),
-        );
       case 'start_run':
         return await startRun(baseUrl, args, options, headers);
       case 'get_run':
@@ -2423,17 +2290,7 @@ async function createProject(
   if (typeof args.skill === 'string' && args.skill.length > 0) {
     body.skillId = args.skill;
   }
-  // Send the workspace pair so the daemon binds the project to the
-  // workspace immediately. If workspace authority fails (e.g. the cached
-  // membership went stale between refreshes), retry headerless once — a
-  // headerless create is always legal and the project is lazy-adopted on
-  // the next workspace list.
-  try {
-    return ok(await postJson<JsonObject>(`${baseUrl}/api/projects`, body, headers ?? {}));
-  } catch (err) {
-    if (!headers || !String(err).includes('WORKSPACE_')) throw err;
-    return ok(await postJson<JsonObject>(`${baseUrl}/api/projects`, body));
-  }
+  return ok(await postJson<JsonObject>(`${baseUrl}/api/projects`, body, headers ?? {}));
 }
 
 // Flatten daemon's plugin record into the few fields an external agent
@@ -2561,10 +2418,6 @@ async function startRun(
       briefState: options.briefState ?? 'not_applicable',
     };
   }
-  if (args.resume !== undefined) {
-    if (typeof args.resume !== 'boolean') throw new Error('resume must be a boolean');
-    body.resume = args.resume;
-  }
   if (typeof args.prompt === 'string' && args.prompt.length > 0) {
     body.message = args.prompt;
     body.currentPrompt = args.prompt;
@@ -2648,15 +2501,8 @@ async function getRun(
     const studioUrl = buildStudioUrl(webBase, status.projectId, status.conversationId, null);
     const enriched: JsonObject = { ...status };
     if (studioUrl) enriched.studioUrl = studioUrl;
-    if (status.failureAction === 'recharge') {
-      enriched.rechargeUrl = DEFAULT_AMR_RECHARGE_URL;
-      enriched.hint =
-        'OpenDesign Cloud paused this logical run because the account balance is insufficient. Preserve the brief and project, show rechargeUrl to the user, and do not switch modes. After the user confirms the top-up, call start_run once with the exact original payload, the same requestId, and resume:true; OpenDesign Cloud will resume the existing run and billing operation. Do not expose internal runtime or tool identifiers.';
-    }
     if (typeof status.eventsLogPath === 'string' && status.eventsLogPath.length > 0) {
-      if (status.failureAction !== 'recharge') {
-        enriched.hint = 'Run still in flight. Tail eventsLogPath in your own shell (e.g. `tail -n 50 -f "' + status.eventsLogPath + '"`) to see live text_delta / tool_use events from the inner agent — that is your in-flight progress signal. Keep polling get_run every 30–60s; do not cancel because file mtimes look static, that is the agent thinking between writes.';
-      }
+      enriched.hint = 'Run still in flight. Tail eventsLogPath in your own shell (e.g. `tail -n 50 -f "' + status.eventsLogPath + '"`) to see live text_delta / tool_use events from the inner agent. Keep polling get_run every 30–60s; do not cancel because file mtimes look static.';
       if (studioUrl) {
         enriched.hint += ` While the run is in flight, studioUrl can be used as an optional workspace progress link — render it as \`[Watch progress in OpenDesign studio](${studioUrl})\` if you choose to show it. This URL is valid for the current OpenDesign runtime; call get_run again after OpenDesign restarts.`;
       }
@@ -2941,33 +2787,17 @@ async function fetchProjectList(
   baseUrl: string,
   headers?: Record<string, string>,
 ): Promise<ProjectSummary[]> {
-  const workspaceId = headers?.['x-od-workspace-id'] ?? '';
-  // Cache key includes the workspace so a scoped and an unbound list never mix.
-  const cacheKey = workspaceId ? `${baseUrl}|${workspaceId}` : baseUrl;
   const now = Date.now();
   if (
     projectListCache &&
-    projectListCache.baseUrl === cacheKey &&
+    projectListCache.baseUrl === baseUrl &&
     now - projectListCache.t < PROJECT_LIST_TTL_MS
   ) {
     return projectListCache.list;
   }
-  let list: ProjectSummary[];
-  if (workspaceId && headers) {
-    const data = await getJson<WorkspaceProjectsResponse>(
-      `${baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/projects`,
-      headers,
-    );
-    list = (data?.projects ?? []).map((p) => ({
-      id: p.id,
-      name: p.name,
-      ...(p.metadata ? { metadata: p.metadata as unknown as JsonObject } : {}),
-    }));
-  } else {
-    const data = await getJson<ProjectsPayload>(`${baseUrl}/api/projects`);
-    list = Array.isArray(data?.projects) ? data.projects : [];
-  }
-  projectListCache = { baseUrl: cacheKey, t: now, list };
+  const data = await getJson<ProjectsPayload>(`${baseUrl}/api/projects`);
+  const list = Array.isArray(data?.projects) ? data.projects : [];
+  projectListCache = { baseUrl, t: now, list };
   return list;
 }
 

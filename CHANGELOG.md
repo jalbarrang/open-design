@@ -5,6 +5,13 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> **Historical note.** Entries at and before 0.9.0 describe OpenDesign Cloud
+> (also called "OpenDesign AMR", backed by the `vela` CLI): the hosted account,
+> sign-in, wallet, and team-workspace features. All of it has since been removed
+> from the product. OpenDesign now runs only on local coding-agent CLIs and your
+> own provider keys (BYOK). Those entries are kept as a record of what shipped at
+> the time; they do not describe current behavior.
+
 ## [Unreleased]
 
 - [Fixed] Long speaker notes are now scrollable inside the presenter view instead of being clipped when notes push the layout past the viewport. (#6271)

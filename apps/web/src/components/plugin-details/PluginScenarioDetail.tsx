@@ -12,7 +12,6 @@ import { Dialog } from '@open-design/components';
 import type {
   InstalledPluginRecord,
   PluginManifest,
-  WorkspaceCollabContext,
 } from '@open-design/contracts';
 import { useI18n } from '../../i18n';
 import { localizePluginChrome } from '../../i18n/plugin-content';
@@ -32,7 +31,6 @@ interface Props {
   onDuplicate?: (record: InstalledPluginRecord) => void;
   isApplying?: boolean;
   hideUseAction?: boolean;
-  workspaceContext?: WorkspaceCollabContext | null;
 }
 
 export function PluginScenarioDetail({
@@ -140,7 +138,6 @@ export function PluginScenarioDetail({
               pluginId={record.id}
               pluginTitle={localizedTitle}
               examples={examples}
-              workspaceContext={workspaceContext}
             />
           ) : null}
 

@@ -83,13 +83,4 @@ describe('od media generate repeated --image', () => {
     expect(body.image).toBe('one.png');
     expect(body.images).toEqual(images);
   });
-
-  it('rejects six Vela images before making an HTTP request', async () => {
-    const images = Array.from({ length: 6 }, (_, index) => `ref-${index}.png`);
-    const result = await runCli(images);
-
-    expect(result.code).toBe(2);
-    expect(result.stderr).toContain('at most 5 --image values');
-    expect(seenBodies).toHaveLength(0);
-  });
 });
