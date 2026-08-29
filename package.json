@@ -18,6 +18,7 @@
     "tools-serve": "pnpm exec tools-serve",
     "nix:update-hash": "node --experimental-strip-types ./scripts/update-nix-pnpm-deps-hash.ts",
     "guard": "tsx ./scripts/guard.ts",
+    "lint": "oxlint --config oxlint.config.ts .",
     "lint:craft": "tsx ./scripts/lint-craft-references.ts",
     "i18n:check": "tsx ./scripts/i18n-check.ts",
     "i18n:coverage": "tsx ./scripts/i18n-coverage-report.ts",
@@ -35,7 +36,9 @@
     "@open-design/tools-pack": "workspace:*",
     "@open-design/tools-release": "workspace:*",
     "@open-design/tools-serve": "workspace:*",
+    "@oxlint/plugins": "1.80.0",
     "@types/node": "20.19.39",
+    "oxlint": "1.80.0",
     "tsx": "4.22.3",
     "typescript": "5.9.3"
   },

@@ -11,6 +11,7 @@ import {
   type StrategyTaskTypeV2,
 } from '../plugins/strategy-v2.js';
 import type { ChatSessionMode } from '../api/chat.js';
+import type { ProjectMetadata } from '../api/projects.js';
 import type { OdNextDeviceFrameContextV2 } from './od-next-device-frame.js';
 import { serializeOdNextRequestTurnV1 } from './od-next-prompt-bundle.js';
 import type {
@@ -68,7 +69,7 @@ export interface OdNextStrategyStableRequestContextV2 {
   agentId?: string | null | undefined;
   sessionMode?: ChatSessionMode | undefined;
   locale?: string | undefined;
-  metadata?: object | undefined;
+  metadata?: ProjectMetadata | undefined;
   template?: {
     id?: string | undefined;
     name: string;
@@ -421,7 +422,7 @@ function stableJson(value: unknown): string {
   }, 2) ?? 'null';
 }
 
-function planningMetadata(metadata: object): Record<string, unknown> {
+function planningMetadata(metadata: ProjectMetadata): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(metadata).filter(([key]) => !OMITTED_PROJECT_METADATA_KEYS.has(key)),
   );
