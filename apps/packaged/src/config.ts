@@ -15,11 +15,6 @@ async function loadElectronApp() {
 export const PACKAGED_CONFIG_PATH_ENV = "OD_PACKAGED_CONFIG_PATH";
 export const PACKAGED_NAMESPACE_ENV = "OD_PACKAGED_NAMESPACE";
 export const PACKAGED_NAMESPACE_BASE_ROOT_ENV = "OD_PACKAGED_NAMESPACE_BASE_ROOT";
-export const PACKAGED_WEB_OUTPUT_MODE_OVERRIDE_ENV = "OD_PACKAGED_ALLOW_WEB_OUTPUT_MODE_OVERRIDE";
-export const PACKAGED_WEB_STANDALONE_ROOT_ENV = "OD_WEB_STANDALONE_ROOT";
-export const PACKAGED_WEB_OUTPUT_MODE_ENV = "OD_WEB_OUTPUT_MODE";
-
-export type PackagedWebOutputMode = "server" | "standalone";
 
 export type RawPackagedConfig = {
   appVersion?: string;
@@ -42,8 +37,6 @@ export type RawPackagedConfig = {
   posthogKey?: string;
   posthogHost?: string;
   webSidecarEntryRelative?: string;
-  webStandaloneRoot?: string;
-  webOutputMode?: string;
 };
 
 export type PackagedConfig = {
@@ -59,8 +52,6 @@ export type PackagedConfig = {
   posthogKey: string | null;
   posthogHost: string | null;
   webSidecarEntry: string | null;
-  webStandaloneRoot: string | null;
-  webOutputMode: PackagedWebOutputMode;
 };
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -119,26 +110,6 @@ function cleanOptionalString(value: string | undefined): string | null {
   return trimmed.length === 0 ? null : trimmed;
 }
 
-function resolvePackagedWebOutputMode(value: string | undefined): PackagedWebOutputMode {
-  if (value == null || value.length === 0) return "server";
-  if (value === "server" || value === "standalone") return value;
-  throw new Error(`unsupported packaged web output mode: ${value}`);
-}
-
-function isTruthyEnv(value: string | undefined): boolean {
-  return value === "1" || value === "true" || value === "yes";
-}
-
-function resolvePackagedWebStandaloneRoot(
-  webOutputMode: PackagedWebOutputMode,
-  value: string | undefined,
-): string | null {
-  const configured = resolveOptionalPath(value);
-  if (configured != null) return configured;
-  if (webOutputMode !== "standalone") return null;
-  return join(process.resourcesPath, "open-design-web-standalone");
-}
-
 async function resolvePackagedRelativeEntry(value: string | undefined): Promise<string | null> {
   const cleaned = cleanOptionalString(value);
   if (cleaned == null) return null;
@@ -166,18 +137,6 @@ export async function readPackagedConfig(): Promise<PackagedConfig> {
       : raw.nodeCommandRelative;
   const nodeCommandCandidate = join(process.resourcesPath, relativeNodeCommand);
   const nodeCommand = (await pathExists(nodeCommandCandidate)) ? nodeCommandCandidate : null;
-  const allowWebOutputModeOverride = isTruthyEnv(process.env[PACKAGED_WEB_OUTPUT_MODE_OVERRIDE_ENV]);
-  const webOutputMode = resolvePackagedWebOutputMode(
-    allowWebOutputModeOverride
-      ? process.env[PACKAGED_WEB_OUTPUT_MODE_ENV] ?? raw.webOutputMode
-      : raw.webOutputMode,
-  );
-  const webStandaloneRoot = resolvePackagedWebStandaloneRoot(
-    webOutputMode,
-    allowWebOutputModeOverride
-      ? process.env[PACKAGED_WEB_STANDALONE_ROOT_ENV] ?? raw.webStandaloneRoot
-      : raw.webStandaloneRoot,
-  );
   const daemonCliEntry = await resolvePackagedRelativeEntry(raw.daemonCliEntryRelative);
   const daemonSidecarEntry = await resolvePackagedRelativeEntry(raw.daemonSidecarEntryRelative);
   const webSidecarEntry = await resolvePackagedRelativeEntry(raw.webSidecarEntryRelative);
@@ -195,7 +154,5 @@ export async function readPackagedConfig(): Promise<PackagedConfig> {
     posthogKey: cleanOptionalString(raw.posthogKey),
     posthogHost: cleanOptionalString(raw.posthogHost),
     webSidecarEntry,
-    webStandaloneRoot,
-    webOutputMode,
   };
 }

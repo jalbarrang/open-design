@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { lstat, mkdir, open, readdir, rm, symlink, writeFile, type FileHandle } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 
 import { cac } from "cac";
@@ -468,8 +468,6 @@ async function spawnWebRuntime(config: ToolDevConfig, options: CliOptions): Prom
   const logHandle = await openAppLog(config, APP_KEYS.WEB);
 
   try {
-    await ensureWebDevNodeModules(config);
-    await writeWebDevTsconfig(config);
     await logHandle.write(`\n[tools-dev] launching web at ${new Date().toISOString()}\n`);
     await logHandle.write(`[tools-dev] proxying web API requests to daemon port ${daemonPort}\n`);
     return await spawnSidecarRuntime({
@@ -481,13 +479,11 @@ async function spawnWebRuntime(config: ToolDevConfig, options: CliOptions): Prom
           path.join(config.workspaceRoot, "node_modules"),
         ]),
         [SIDECAR_ENV.DAEMON_PORT]: daemonPort,
-        [SIDECAR_ENV.WEB_DIST_DIR]: config.apps.web.nextDistDir,
-        [SIDECAR_ENV.WEB_TSCONFIG_PATH]: config.apps.web.nextTsconfigPath,
         [SIDECAR_ENV.WEB_PORT]: String(webPort ?? 0),
         PORT: String(webPort ?? 0),
         ...(options.parentPid == null ? {} : { [TOOLS_DEV_PARENT_PID_ENV]: String(options.parentPid) }),
         ...(options.prod === true
-          ? { NODE_ENV: "production", OD_WEB_OUTPUT_MODE: "server", OD_WEB_PROD: "1" }
+          ? { NODE_ENV: "production", OD_WEB_PROD: "1" }
           : {}),
       },
       logHandle,
@@ -575,38 +571,6 @@ async function ensureContractsBuild(config: ToolDevConfig, logHandle: FileHandle
     logFd: logHandle.fd,
     windowsVerbatimArguments: invocation.windowsVerbatimArguments,
   });
-}
-
-async function ensureWebDevNodeModules(config: ToolDevConfig): Promise<void> {
-  const webRuntimeRoot = path.dirname(config.apps.web.nextDistDir);
-  const runtimeNodeModules = path.join(webRuntimeRoot, "node_modules");
-  const webNodeModules = path.join(config.workspaceRoot, "apps/web/node_modules");
-
-  await mkdir(webRuntimeRoot, { recursive: true });
-  const current = await lstat(runtimeNodeModules).catch(() => null);
-  if (current?.isSymbolicLink()) return;
-  if (current != null) await rm(runtimeNodeModules, { force: true, recursive: true });
-  await symlink(webNodeModules, runtimeNodeModules, "junction");
-}
-
-async function writeWebDevTsconfig(config: ToolDevConfig): Promise<void> {
-  const webRoot = path.join(config.workspaceRoot, "apps/web");
-  const tsconfigPath = config.apps.web.nextTsconfigPath;
-  const tsconfigDir = path.dirname(tsconfigPath);
-  const sourceTsconfig = path.join(webRoot, "tsconfig.json");
-  const relativeSourceTsconfig = (path.relative(tsconfigDir, sourceTsconfig) || "./tsconfig.json").replaceAll("\\", "/");
-
-  await mkdir(tsconfigDir, { recursive: true });
-  await writeFile(
-    tsconfigPath,
-    `${JSON.stringify({
-      extends: relativeSourceTsconfig,
-      compilerOptions: {
-        plugins: [{ name: "next" }],
-      },
-    }, null, 2)}\n`,
-    "utf8",
-  );
 }
 
 async function spawnDesktopRuntime(config: ToolDevConfig, options: CliOptions): Promise<{ pid: number }> {

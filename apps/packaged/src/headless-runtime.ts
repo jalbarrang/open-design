@@ -241,8 +241,6 @@ export async function runPackagedHeadless(
         // passes `true` because it does start that desktop bridge.
         requireDesktopAuth: false,
         webSidecarEntry: activeConfig.webSidecarEntry,
-        webStandaloneRoot: activeConfig.webStandaloneRoot,
-        webOutputMode: activeConfig.webOutputMode,
       }),
     // Write a headless-specific identity marker so `tools-pack linux stop
     // --headless` can find this process without confusing it for a

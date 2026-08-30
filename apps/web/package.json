@@ -12,7 +12,6 @@
   },
   "files": [
     "dist",
-    "app",
     "index.html",
     "package.json",
     "public",

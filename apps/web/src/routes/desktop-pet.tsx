@@ -1,8 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 
-// The desktop pet renders in its own dedicated window (`apps/web/app` used to
-// serve it as a separate Next.js page); it shares the SPA shell's HTML but
+// The desktop pet renders in its own dedicated route/window. It shares the
+// SPA shell's HTML but
 // never mounts the product App.
 const DesktopPetSurface = lazy(
   () => import('../components/pet/DesktopPetSurface').then((m) => ({ default: m.DesktopPetSurface })),

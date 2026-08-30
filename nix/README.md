@@ -3,7 +3,7 @@
 This flake exposes OpenDesign as a reproducible package, a `nix run` entry
 point, a dev shell, and Home Manager / NixOS modules. The architecture
 mirrors the runtime: the **daemon** (`od` CLI, Express API on `/api/*`)
-and the **web frontend** (Next.js static SPA at `apps/web/out/`) are
+and the **web frontend** (Vite static SPA from `apps/web/dist/web/`) are
 **separate packages** and **separate services** — you can run either or
 both.
 
@@ -12,7 +12,7 @@ both.
 | Output                                     | What it is                                                                             |
 | ------------------------------------------ | -------------------------------------------------------------------------------------- |
 | `packages.<system>.daemon`                 | The `@open-design/daemon` package — produces `bin/od`. Default output.                 |
-| `packages.<system>.web`                    | The Next.js static export (`apps/web/out/`) ready to drop into any static file server. |
+| `packages.<system>.web`                    | The Vite static SPA (`apps/web/dist/web/`) ready to drop into any static file server. |
 | `apps.<system>.default`                    | `nix run github:nexu-io/open-design` — boots the daemon.                               |
 | `devShells.<system>.default`               | Node 26 + Corepack-pinned pnpm 10.33 — reproduces `pnpm install` locally.              |
 | `homeManagerModules.{default,open-design}` | Home Manager module — primary individual-developer interface.                          |

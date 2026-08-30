@@ -30,9 +30,7 @@ function fakeConfig(root: string, appVersion = "1.2.3-beta.4"): PackagedConfig {
     resourceRoot: join(root, "installed", "resources", "open-design"),
     telemetryRelayUrl: null,
     updateMetadataUrl: null,
-    webOutputMode: "server",
     webSidecarEntry: null,
-    webStandaloneRoot: null,
   };
 }
 
@@ -58,7 +56,6 @@ async function writeActiveMacPayloadFixture(
     `${JSON.stringify({
       appVersion: version,
       ...(telemetryRelayUrl == null ? {} : { telemetryRelayUrl }),
-      webOutputMode: "server",
     })}\n`,
   );
   await writeFile(
@@ -205,7 +202,6 @@ describe("resolvePackagedLauncherRuntime", () => {
           appVersion: "1.2.3-beta.5",
           daemonSidecarEntryRelative: "prebundled/daemon/daemon-sidecar.mjs",
           nodeCommandRelative: "open-design/bin/node",
-          webOutputMode: "standalone",
           webSidecarEntryRelative: "prebundled/web/web-sidecar.mjs",
         })}\n`,
       );
@@ -261,7 +257,6 @@ describe("resolvePackagedLauncherRuntime", () => {
       expect(runtime.config.resourceRoot).toBe(join(resourcesPath, "open-design"));
       expect(runtime.config.daemonSidecarEntry).toBe(join(resourcesPath, "prebundled", "daemon", "daemon-sidecar.mjs"));
       expect(runtime.config.webSidecarEntry).toBe(join(resourcesPath, "prebundled", "web", "web-sidecar.mjs"));
-      expect(runtime.config.webStandaloneRoot).toBe(join(resourcesPath, "open-design-web-standalone"));
       expect(runtime.paths.resourceRoot).toBe(join(resourcesPath, "open-design"));
       await expect(readFile(runtime.launcherPaths.attemptsPath, "utf8")).rejects.toThrow();
 
@@ -357,7 +352,6 @@ describe("resolvePackagedLauncherRuntime", () => {
           appVersion: "1.2.3-beta.5",
           daemonSidecarEntryRelative: "prebundled/daemon/daemon-sidecar.mjs",
           nodeCommandRelative: "open-design/bin/node",
-          webOutputMode: "standalone",
           webSidecarEntryRelative: "prebundled/web/web-sidecar.mjs",
         })}\n`,
       );
@@ -525,10 +519,8 @@ describe("resolvePackagedLauncherRuntime", () => {
       });
       const resourcesPath = join(versionPaths.versionRoot, "payload", "resources");
       const payloadExePath = join(versionPaths.versionRoot, "payload", "Open Design.exe");
-      const webStandaloneRoot = join(resourcesPath, "open-design-web-standalone");
       await mkdir(join(resourcesPath, "prebundled", "daemon"), { recursive: true });
       await mkdir(join(resourcesPath, "prebundled", "web"), { recursive: true });
-      await mkdir(webStandaloneRoot, { recursive: true });
       await mkdir(join(versionPaths.versionRoot, "payload"), { recursive: true });
       await writeFile(payloadExePath, "");
       await writeFile(join(resourcesPath, "prebundled", "daemon", "daemon-sidecar.mjs"), "");
@@ -538,7 +530,6 @@ describe("resolvePackagedLauncherRuntime", () => {
         `${JSON.stringify({
           appVersion: "1.2.3-beta.5",
           daemonSidecarEntryRelative: "prebundled/daemon/daemon-sidecar.mjs",
-          webOutputMode: "standalone",
           webSidecarEntryRelative: "prebundled/web/web-sidecar.mjs",
         })}\n`,
       );
@@ -577,11 +568,8 @@ describe("resolvePackagedLauncherRuntime", () => {
         expect(runtime.electronNodeCommand).not.toBe(payloadExePath);
         expect(runtime.electronNodeCommand).toContain(`${sep}en${sep}`);
         await expect(readFile(runtime.electronNodeCommand ?? "", "utf8")).resolves.toBe("");
-        expect(runtime.config.webStandaloneRoot).not.toBe(webStandaloneRoot);
-        expect(runtime.config.webStandaloneRoot).toContain(`${sep}ws${sep}`);
       } else {
         expect(runtime.electronNodeCommand).toBe(payloadExePath);
-        expect(runtime.config.webStandaloneRoot).toBe(webStandaloneRoot);
       }
       expect(runtime.config.daemonSidecarEntry).toBe(join(resourcesPath, "prebundled", "daemon", "daemon-sidecar.mjs"));
       expect(runtime.config.webSidecarEntry).toBe(join(resourcesPath, "prebundled", "web", "web-sidecar.mjs"));

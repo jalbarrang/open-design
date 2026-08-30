@@ -3892,7 +3892,7 @@ export const fr: Dict = {
   'settings.memoryStarterFeedbackBody': '- Thème : sombre par défaut\n- Corps de texte : ≥ 18 px\n- Densité d’information : privilégier l’espace, moins d’éléments par écran\n\nPourquoi : moins de fatigue visuelle pendant les longues sessions.\nQuand l’appliquer : lorsque vous générez des UI, pages web ou slides.',
   'settings.memoryStarterProjectName': 'Projet actuel',
   'settings.memoryStarterProjectDesc': 'OpenDesign v0.5 — éditeur de design piloté par chat',
-  'settings.memoryStarterProjectBody': '- Objectif : livrer l’éditeur piloté par chat ce trimestre\n- Priorités : rendu en streaming, multimodal local, offline-first\n- Stack : Next.js 16, daemon Express, SQLite\n\nQuand l’appliquer : dans toute conversation à propos de ce projet.',
+  'settings.memoryStarterProjectBody': '- Objectif : livrer l’éditeur piloté par chat ce trimestre\n- Priorités : rendu en streaming, multimodal local, offline-first\n- Stack : Vite + TanStack Router, daemon Express, SQLite\n\nQuand l’appliquer : dans toute conversation à propos de ce projet.',
   'settings.memorySaveHint': 'Non enregistré automatiquement — cliquez sur Créer / Enregistrer pour appliquer.',
   'settings.memoryIndexSaveHint': 'Les modifications de l’index ne sont pas enregistrées automatiquement — cliquez sur Enregistrer l’index pour appliquer.',
   'settings.memoryIndexUnsaved': 'Modifications non enregistrées',

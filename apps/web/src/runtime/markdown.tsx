@@ -493,8 +493,8 @@ function MarkdownCodeBlock({ body, lang }: { body: string; lang: string | null }
 
 // Allowed schemes / forms for image `src` attributes. The BYOK chat
 // tool loop emits relative URLs like `/api/byok-image/<id>.png` which
-// the web's Next.js rewrites proxy to the daemon — that's the common
-// case. data: + blob: cover inline / generated images. http(s):// is
+// the web sidecar proxies to the daemon — that's the common case.
+// data: + blob: cover inline / generated images. http(s):// is
 // allowed so a model can reference public images. Anything else
 // (javascript:, file:, vbscript:, …) is rejected so a hallucinated
 // or adversarial URL cannot exfiltrate or execute.

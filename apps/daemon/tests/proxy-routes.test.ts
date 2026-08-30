@@ -1894,7 +1894,7 @@ describe('API proxy routes', () => {
     await proxyRes.text();
 
     expect(capturedUrl).toBeDefined();
-    // The URL the tool emits is relative — same-origin via Next.js
+    // The URL the tool emits is relative — same-origin via the web sidecar
     // rewrite in production, hits this test server directly here.
     // We GET the captured URL through the standard project file route
     // and assert the bytes come back. This proves both halves:

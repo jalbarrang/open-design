@@ -1,6 +1,3 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-
 import type { ToolPackCache } from "../cache/index.js";
 import type { ToolPackConfig } from "../config/index.js";
 import { processWebSourcemaps } from "../web-sourcemaps.js";
@@ -8,9 +5,6 @@ import { ensureWorkspaceBuildArtifacts } from "../workspace-build.js";
 import { runPnpm } from "./commands.js";
 
 async function buildWorkspaceArtifacts(config: ToolPackConfig): Promise<void> {
-  const webNextEnvPath = join(config.workspaceRoot, "apps", "web", "next-env.d.ts");
-  const previousWebNextEnv = await readFile(webNextEnvPath, "utf8").catch(() => null);
-
   await runPnpm(config, ["--filter", "@open-design/contracts", "build"]);
   await runPnpm(config, ["--filter", "@open-design/registry-protocol", "build"]);
   await runPnpm(config, ["--filter", "@open-design/sidecar-proto", "build"]);
@@ -25,22 +19,12 @@ async function buildWorkspaceArtifacts(config: ToolPackConfig): Promise<void> {
   await runPnpm(config, ["--filter", "@open-design/dsh-runtime", "build"]);
   await runPnpm(config, ["--filter", "@open-design/components", "build"]);
   await runPnpm(config, ["--filter", "@open-design/daemon", "build"]);
-  try {
-    await runPnpm(config, ["--filter", "@open-design/web", "build"], {
-      OD_WEB_OUTPUT_MODE: config.webOutputMode,
-    });
-    await runPnpm(config, ["--filter", "@open-design/web", "build:sidecar"]);
-    // Inject chunk IDs + upload browser sourcemaps to PostHog, then strip
-    // .map files. Runs before any packaging step copies the web output into
-    // the Electron resources so .map never ends up inside the .app bundle.
-    await processWebSourcemaps(config);
-  } finally {
-    if (previousWebNextEnv == null) {
-      await rm(webNextEnvPath, { force: true });
-    } else {
-      await writeFile(webNextEnvPath, previousWebNextEnv, "utf8");
-    }
-  }
+  await runPnpm(config, ["--filter", "@open-design/web", "build"]);
+  await runPnpm(config, ["--filter", "@open-design/web", "build:sidecar"]);
+  // Inject chunk IDs + upload browser sourcemaps to PostHog, then strip
+  // .map files. Runs before any packaging step copies the web output into
+  // the Electron resources so .map never ends up inside the .app bundle.
+  await processWebSourcemaps(config);
   await runPnpm(config, ["--filter", "@open-design/desktop", "build"]);
   await runPnpm(config, ["--filter", "@open-design/packaged", "build"]);
 }

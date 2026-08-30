@@ -116,7 +116,7 @@ describe('executeGenerateImage', () => {
 
     expect(result.ok).toBe(true);
     // Returns a relative URL through the project file route so the
-    // chat UI loads same-origin via Next.js's /api/:path* rewrite,
+    // chat UI loads same-origin through the web sidecar's /api/* proxy,
     // satisfying the strict CSP `img-src 'self'`. Path component is
     // url-encoded so unusual (but isSafeId-passing) project ids don't
     // break the URL.

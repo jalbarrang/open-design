@@ -12,11 +12,11 @@
   pnpmDepsSrc ? src,
   workspacePaths,
 }:
-# Builds the @open-design/web Next.js static export.
+# Builds the @open-design/web Vite static SPA.
 #
-# Output layout: $out/ contains the contents of `apps/web/out/` (an
-# index.html plus _next/ and asset subdirectories). Drop $out into any
-# static file server.
+# Output layout: $out/ contains the contents of `apps/web/dist/web/` (an
+# index.html plus hashed asset subdirectories). Drop $out into any static file
+# server with an index.html fallback for product routes.
 #
 # OD_DAEMON_URL is set to "" at build time so the bundled JS issues
 # relative requests (`/api/*`, `/artifacts/*`, `/frames/*`) instead of
@@ -66,8 +66,6 @@ in
         pnpm -C "$target" run --if-present build
       done
 
-      # next.config.ts gates static-export emission on NODE_ENV=production
-      # and writes to apps/web/out/.
       pnpm --filter @open-design/web run build
       runHook postBuild
     '';
@@ -75,7 +73,7 @@ in
     installPhase = ''
       runHook preInstall
       mkdir -p $out
-      cp -r apps/web/out/. $out/
+      cp -r apps/web/dist/web/. $out/
       runHook postInstall
     '';
 
@@ -85,7 +83,7 @@ in
     };
 
     meta = with lib; {
-      description = "OpenDesign — Next.js static SPA (apps/web)";
+      description = "OpenDesign — Vite static SPA (apps/web)";
       homepage = "https://github.com/nexu-io/open-design";
       license = licenses.asl20;
       platforms = platforms.linux ++ platforms.darwin;

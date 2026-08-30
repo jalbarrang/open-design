@@ -544,7 +544,7 @@ Plugin registry endpoint: `GET /api/plugins`. Directory overview → [`plugins/R
 ## Architecture
 
 ```
-┌────────────────── browser (Next.js 16) / Electron shell ──────────────┐
+┌──────────── browser (Vite + TanStack Router) / Electron shell ────────┐
 │  chat · file workspace · iframe preview · settings · import · MCP     │
 └──────────────┬─────────────────────────────────────┬─────────────────┘
                │ /api/*                              │
@@ -573,7 +573,7 @@ Plugin registry endpoint: `GET /api/plugins`. Directory overview → [`plugins/R
 
 | Layer | Stack |
 |---|---|
-| Frontend | Next.js 16 App Router + React 18 + TypeScript |
+| Frontend | Vite + TanStack Router + React 18 + TypeScript |
 | Daemon | Node 26 · Express · SSE streaming · `better-sqlite3` |
 | Storage | Before changing or documenting daemon storage paths, you MUST read `AGENTS.md` → **Daemon data directory contract**. This README MUST NOT restate it. |
 | Preview | Filesystem runs render canonical project files; BYOK/plain-API runs parse one complete `<artifact>` block into a sandboxed `srcdoc` iframe |

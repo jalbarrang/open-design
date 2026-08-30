@@ -111,7 +111,7 @@ env:
   POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
   # PostHog Error tracking sourcemap upload. Personal API key (phx_...) and
   # project ID let tools-pack's web-sourcemaps step ship browser sourcemaps
-  # to PostHog after `next build` and before the .map files are stripped
+  # to PostHog after `vite build` and before the .map files are stripped
   # from the packaged bundle. Missing in PR/fork builds → upload is skipped
   # and the helper still strips .map to keep source out of the installer.
   POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}

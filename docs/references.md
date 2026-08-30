@@ -30,7 +30,7 @@ Every external project this spec leans on. Three questions per entry: what is it
   - Sandboxed iframe preview (`<iframe sandbox="allow-scripts">` with vendored React 18 + Babel standalone for JSX).
   - Export pipeline shape (HTML/PDF/PPTX/ZIP/MD).
 - **What we don't:**
-  - **Electron as the product runtime** — our product UI remains the shared Next.js web app; `apps/desktop` and `apps/packaged` provide a thin Electron host around the same daemon/web sidecars.
+  - **Electron as the product runtime** — our product UI remains the shared Vite/TanStack web app; `apps/desktop` and `apps/packaged` provide a thin Electron host around the same daemon/web sidecars.
   - **Bundled agent on `pi-ai`** — we delegate to the user's existing CLI.
   - **Proprietary skill format** (TypeScript modules compiled into the app) — we use Claude Code's `SKILL.md` so third-party skills drop in.
   - **SQLite blobs for artifact bytes** — generated files remain on disk while daemon SQLite owns project and metadata state.
@@ -167,7 +167,7 @@ Every external project this spec leans on. Three questions per entry: what is it
 | Dimension | [Claude Design][cd] | [Open CoDesign][ocod] | [multica][multica] | [cc-switch][ccsw] | **OD** |
 |---|---|---|---|---|---|
 | Open source | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Primary form factor | Web (hosted) | Electron | Web + Go daemon | Tauri | **Next.js web + Node daemon** |
+| Primary form factor | Web (hosted) | Electron | Web + Go daemon | Tauri | **Vite web + Node daemon** |
 | Vercel-deployable | ❌ | ❌ | ❌ | ❌ | **✅** |
 | Runs local-only | ❌ | ✅ | ✅ | ✅ | **✅** |
 | Generates design artifacts | ✅ | ✅ | ❌ (general coding) | ❌ | **✅** |
@@ -186,7 +186,7 @@ The two empty-column crossings where OD lights up and others don't: **Vercel-dep
 
 - **Electron as a separate product architecture.** OpenDesign now ships thin
   desktop and packaged Electron hosts, including signing/update work, but the
-  product UI remains the same Next.js web app and daemon rather than a second
+  product UI remains the same Vite/TanStack web app and daemon rather than a second
   desktop-only implementation.
 - **SQLite for artifacts** (from [Open CoDesign][ocod] and [cc-switch][ccsw]). Plain files + JSONL history are reviewable in git, trivially portable, and match the "skills are files" ethos.
 - **Bundled model router** ([`pi-ai`][piai] from [Open CoDesign][ocod]). The user's code agent already routes. Two routers is worse than one.

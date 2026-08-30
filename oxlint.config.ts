@@ -42,7 +42,8 @@ export default defineConfig({
     "anti-slop/no-widen-then-assert": "error",
     // Warn-first adoption — violation counts at adoption time (pnpm lint):
     // ~9.3k / ~7.9k / ~2.6k / ~2k / ~2k / ~1.5k / ~600 / ~450 / ~230 / ~190.
-    // Promote each to "error" only after its fix batch lands.
+    // Less common rules still begin as warnings even when their baseline count
+    // is not listed here. Promote each only after its fix batch lands.
     "anti-slop/require-safety-comment-for-type-assertion": "warn",
     "anti-slop/no-runtime-typeof": "warn",
     "anti-slop/no-conditional-empty-object-spread": "warn",
@@ -53,5 +54,6 @@ export default defineConfig({
     "anti-slop/no-module-mocking": "warn",
     "anti-slop/no-shape-in-symbol-names": "warn",
     "anti-slop/no-unknown-returns": "warn",
+    "anti-slop/no-unknown-type-aliases": "warn",
   },
 });

@@ -3892,7 +3892,7 @@ export const ar: Dict = {
   'settings.memoryStarterFeedbackBody': '- السمة: داكنة افتراضيًا\n- نص المحتوى: ≥ 18px\n- كثافة المعلومات: تفضيل المساحات البيضاء، عناصر أقل لكل شاشة\n\nالسبب: إجهاد أقل للعين أثناء الجلسات الطويلة.\nمتى يُطبَّق: كلما أنشأت واجهة مستخدم أو صفحات ويب أو شرائح عرض.',
   'settings.memoryStarterProjectName': 'المشروع الحالي',
   'settings.memoryStarterProjectDesc': 'OpenDesign v0.5 — محرر تصميم يعمل بالمحادثة',
-  'settings.memoryStarterProjectBody': '- الهدف: إطلاق المحرر القائم على المحادثة هذا الربع\n- الأولويات: التصيير المتدفق، الوسائط المتعددة المحلية، الأولوية لوضع عدم الاتصال\n- المنصة التقنية: Next.js 16، خادم Express، SQLite\n\nمتى يُطبّق: في أي محادثة حول هذا المشروع.',
+  'settings.memoryStarterProjectBody': '- الهدف: إطلاق المحرر القائم على المحادثة هذا الربع\n- الأولويات: التصيير المتدفق، الوسائط المتعددة المحلية، الأولوية لوضع عدم الاتصال\n- المنصة التقنية: Vite + TanStack Router، خادم Express، SQLite\n\nمتى يُطبّق: في أي محادثة حول هذا المشروع.',
   'settings.memorySaveHint': 'لا يُحفَظ تلقائيًا — انقر إنشاء / حفظ للتطبيق.',
   'settings.memoryIndexSaveHint': 'لا تُحفَظ التعديلات على الفهرس تلقائيًا — انقر حفظ الفهرس للتطبيق.',
   'settings.memoryIndexUnsaved': 'تغييرات غير محفوظة',

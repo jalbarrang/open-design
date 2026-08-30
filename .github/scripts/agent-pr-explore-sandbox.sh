@@ -120,7 +120,7 @@ select_deterministic_verifier() {
   local touches_static_export=false
   while IFS= read -r changed_path; do
     case "$changed_path" in
-      vercel.json|apps/web/next.config.ts|apps/web/tests/runtime/app-route-export.test.ts)
+      vercel.json|apps/web/vite.config.ts|apps/web/tests/runtime/app-build-contract.test.ts)
         touches_static_export=true
         ;;
     esac
@@ -1121,9 +1121,9 @@ docker run -d \
         set +e
         (
           set -euo pipefail
-          rm -rf apps/web/out apps/web/.next
-          OD_WEB_OUTPUT_MODE=server sh -lc '"'"'OD_WEB_OUTPUT_MODE= pnpm --filter @open-design/web build && test -d apps/web/out'"'"'
-          test -f apps/web/out/index.html
+          rm -rf apps/web/dist/web
+          pnpm --filter @open-design/web build
+          test -f apps/web/dist/web/index.html
         ) > /artifacts/deterministic-verifier.log 2>&1
         verifier_status=$?
         set -e
@@ -1211,16 +1211,16 @@ This PR changes the web deployment/static-export path rather than an interactive
 ### 🔍 Concrete Evidence
 
 \`\`\`bash
-rm -rf apps/web/out apps/web/.next
-OD_WEB_OUTPUT_MODE=server sh -c 'OD_WEB_OUTPUT_MODE= pnpm --filter @open-design/web build && test -d apps/web/out'
-test -f apps/web/out/index.html
+rm -rf apps/web/dist/web
+pnpm --filter @open-design/web build
+test -f apps/web/dist/web/index.html
 \`\`\`
 
 Observed result:
 
 - ✅ verifier exit code: \`0\`
-- ✅ \`apps/web/out/\` was generated
-- ✅ \`apps/web/out/index.html\` exists
+- ✅ \`apps/web/dist/web/\` was generated
+- ✅ \`apps/web/dist/web/index.html\` exists
 - ✅ sandboxed app reached: \`${base_url}\`
 
 ### 🧱 E2E Coverage to Sediment

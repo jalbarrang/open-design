@@ -27,7 +27,7 @@ ARCHIVE_CONTAINER_ID=""
 
 for required_path in \
   "app/apps/daemon/dist/cli.js" \
-  "app/apps/web/out/index.html" \
+  "app/apps/web/dist/web/index.html" \
   "app/apps/daemon/node_modules/express" \
   "app/apps/daemon/node_modules/better-sqlite3" \
   "app/skills" \

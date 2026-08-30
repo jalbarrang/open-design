@@ -436,9 +436,9 @@ test('conversation listing batches latest run summaries for large projects', () 
           return target.prepare(sql);
         };
       }
-      // SAFETY: the proxy trap receives an arbitrary string/symbol key, so the
-      // record view only forwards the stored value to the proxy consumer.
-      return (target as Record<string | symbol, unknown>)[prop];
+      // SAFETY: Proxy keys are the same property-key domain accepted by a
+      // normal bracket lookup; this forwards the database member unchanged.
+      return target[prop as keyof Database.Database];
     },
   }) as Database.Database;
 

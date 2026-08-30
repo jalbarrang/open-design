@@ -1593,9 +1593,9 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
 
     // Tool execution context — built once per request. The image tool
     // writes into `<projectsRoot>/<projectId>/byok-<id>.png` and returns
-    // a relative URL via `/api/projects/:id/files/:filename`. The web's
-    // Next.js rewrites `/api/:path*` to the daemon, so the chat UI
-    // loads images same-origin through the standard project file
+    // a relative URL via `/api/projects/:id/files/:filename`. The web
+    // sidecar proxies `/api/*` to the daemon, so the chat UI loads
+    // images same-origin through the standard project file
     // route — no CSP / CORS exceptions needed.
     // User-configured BYOK default image model. Drop silently if the
     // client sent an id outside the provider's registry — the tool

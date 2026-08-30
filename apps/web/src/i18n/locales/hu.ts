@@ -3892,7 +3892,7 @@ export const hu: Dict = {
   'settings.memoryStarterFeedbackBody': '- Téma: alapértelmezetten sötét\n- Törzsszöveg: ≥ 18px\n- Információsűrűség: részesítsd előnyben az üres helyet, kevesebb elem képernyőnként\n\nMiért: kevesebb szemmegerőltetés hosszú munkamenetek során.\nMikor alkalmazandó: amikor felhasználói felületet, weboldalakat vagy diákat generálsz.',
   'settings.memoryStarterProjectName': 'Jelenlegi projekt',
   'settings.memoryStarterProjectDesc': 'OpenDesign v0.5 — csevegésvezérelt dizájnszerkesztő',
-  'settings.memoryStarterProjectBody': '- Cél: a csevegésvezérelt szerkesztő kiadása ebben a negyedévben\n- Prioritások: streaming renderelés, helyi multimodális, offline-first\n- Technológiai készlet: Next.js 16, Express daemon, SQLite\n\nMikor alkalmazandó: bármely, e projektről szóló beszélgetésben.',
+  'settings.memoryStarterProjectBody': '- Cél: a csevegésvezérelt szerkesztő kiadása ebben a negyedévben\n- Prioritások: streaming renderelés, helyi multimodális, offline-first\n- Technológiai készlet: Vite + TanStack Router, Express daemon, SQLite\n\nMikor alkalmazandó: bármely, e projektről szóló beszélgetésben.',
   'settings.memorySaveHint': 'Nem mentődik automatikusan — a Create / Save gombbal alkalmazhatod.',
   'settings.memoryIndexSaveHint': 'Az index módosításai nem mentődnek automatikusan — a Save index gombbal alkalmazhatod.',
   'settings.memoryIndexUnsaved': 'Nem mentett módosítások',

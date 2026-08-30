@@ -31,8 +31,7 @@
   daemonExe = lib.getExe cfg.package;
 
   # Static file server. caddy is the sweet spot: single binary, handles
-  # SPA-style fallback if any deep link bypasses the trailingSlash
-  # directories Next.js emits, and ~30MB is acceptable for an opt-in
+  # SPA-style fallback for Vite deep links, and ~30MB is acceptable for an opt-in
   # service. Users who want lighter can override
   # `services.open-design.webFrontend.package` and bring their own
   # server — though that disables the bundled service in favor of

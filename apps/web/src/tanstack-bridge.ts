@@ -9,7 +9,7 @@
  * coordinator tells it that the location changed.
  */
 
-type LocationNotifier = (pathname: string) => void;
+type LocationNotifier = (href: string) => void;
 
 let notifyLocation: LocationNotifier | null = null;
 
@@ -18,6 +18,6 @@ export function setActiveLocationNotifier(notifier: LocationNotifier | null): vo
 }
 
 /** Called by the navigation coordinator after every committed location change. */
-export function publishLocationToRouter(pathname: string): void {
-  notifyLocation?.(pathname);
+export function publishLocationToRouter(href: string): void {
+  notifyLocation?.(href);
 }

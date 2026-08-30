@@ -21,7 +21,7 @@ installWebObservability();
 // The product is a fully client-driven SPA — every component reads
 // localStorage, window.location, etc. — so the app tree is lazy-loaded on the
 // client only. This keeps the initial chunk small and gives the same
-// loading-shell behavior the old Next.js dynamic boundary provided.
+// loading-shell behavior while the main product chunk loads.
 const App = lazy(() => import('./App').then((m) => ({ default: m.App })));
 
 // Keeps the `od-loading-shell` class on the outer node: the white-screen

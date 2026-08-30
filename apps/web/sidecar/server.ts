@@ -1,4 +1,3 @@
-import { spawn, type ChildProcess } from "node:child_process";
 import {
   Agent as HttpAgent,
   createServer as createHttpServer,
@@ -8,12 +7,12 @@ import {
   type ServerResponse,
 } from "node:http";
 import { Agent as HttpsAgent, request as createHttpsRequest } from "node:https";
-import { existsSync, readFileSync } from "node:fs";
-import { readFile, realpath, rm, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { createConnection, createServer as createTcpServer, type AddressInfo, type Server as TcpServer } from "node:net";
-import { dirname, isAbsolute, join, relative } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
+import { stat } from "node:fs/promises";
+import { type AddressInfo } from "node:net";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { ViteDevServer } from "vite";
 
 import {
   SIDECAR_ENV,
@@ -33,54 +32,13 @@ if (process.env.OD_HOST != null && !/^[a-zA-Z0-9._\-:[\]@]+$/.test(process.env.O
   throw new Error(`OD_HOST contains invalid characters: ${process.env.OD_HOST}`);
 }
 const DAEMON_HOST = "127.0.0.1";
-const STANDALONE_BACKEND_HOST = "127.0.0.1";
 const DAEMON_PORT_ENV = SIDECAR_ENV.DAEMON_PORT;
 const WEB_DIST_DIR_ENV = SIDECAR_ENV.WEB_DIST_DIR;
 const WEB_PORT_ENV = SIDECAR_ENV.WEB_PORT;
 const TOOLS_DEV_PARENT_PID_ENV = SIDECAR_ENV.TOOLS_DEV_PARENT_PID;
-const WEB_OUTPUT_MODE_ENV = "OD_WEB_OUTPUT_MODE";
-const WEB_STANDALONE_ROOT_ENV = "OD_WEB_STANDALONE_ROOT";
-const STANDALONE_PARENT_PID_ENV = "OD_STANDALONE_PARENT_PID";
-const STANDALONE_STARTUP_TIMEOUT_ENV = "OD_STANDALONE_STARTUP_TIMEOUT_MS";
-// Synthesized for daemon-routed paths when no daemon origin is configured:
-// same plain-text errno shape as a dead-daemon proxy failure so the web app's
-// isDaemonProxyConnectionFailure recognizes it as an outage.
 const DAEMON_PROXY_UNAVAILABLE_MESSAGE =
   `connect ECONNREFUSED (${DAEMON_PORT_ENV} is not set; the web runtime has no daemon origin)`;
 const SHUTDOWN_TIMEOUT_MS = 3000;
-const STANDALONE_READINESS_POLL_MS = 150;
-const STANDALONE_TCP_READINESS_GRACE_MS = STANDALONE_READINESS_POLL_MS;
-const require = createRequire(import.meta.url);
-
-type NextApp = {
-  close?: () => Promise<void>;
-  getRequestHandler(): (request: IncomingMessage, response: ServerResponse) => Promise<void>;
-  prepare(): Promise<void>;
-};
-
-type NextBundlerOptions = {
-  turbopack?: boolean;
-  webpack?: boolean;
-};
-
-type StandaloneBackend = {
-  exitReason(): string | null;
-  isRunning(): boolean;
-  origin: string;
-  stop(): Promise<void>;
-};
-
-function createNextApp(options: { dev: boolean; dir: string } & NextBundlerOptions): NextApp {
-  const createNextServer = require("next") as (nextOptions: { dev: boolean; dir: string } & NextBundlerOptions) => NextApp;
-  return createNextServer(options);
-}
-
-export function resolveNextBundlerOptions(isDev: boolean): NextBundlerOptions {
-  if (!isDev) return {};
-  const configured = (process.env.OD_WEB_DEV_BUNDLER ?? "webpack").trim().toLowerCase();
-  if (configured === "turbopack" || configured === "turbo") return { turbopack: true };
-  return { webpack: true };
-}
 
 export type WebSidecarHandle = {
   status(): Promise<WebStatusSnapshot>;
@@ -117,105 +75,10 @@ function parsePort(value: string | undefined): number {
   return port;
 }
 
-function parsePositiveIntegerEnv(envName: string, defaultValue: number): number {
-  const value = process.env[envName];
-  if (value == null || value.trim().length === 0) return defaultValue;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`${envName} must be a positive integer`);
-  }
-  return parsed;
-}
-
-function resolveStandaloneStartupTimeoutMs(): number {
-  return parsePositiveIntegerEnv(STANDALONE_STARTUP_TIMEOUT_ENV, 35_000);
-}
-
-export function createStandaloneParentMonitorImport(parentPidEnv = STANDALONE_PARENT_PID_ENV): string {
-  const source = `
-const parentPid = Number(process.env[${JSON.stringify(parentPidEnv)}]);
-if (Number.isInteger(parentPid) && parentPid > 0) {
-  const isParentAlive = () => {
-    try {
-      process.kill(parentPid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  const timer = setInterval(() => {
-    if (process.ppid === parentPid && isParentAlive()) return;
-    process.exit(0);
-  }, 1000);
-  timer.unref?.();
-}
-`;
-  return `data:text/javascript,${encodeURIComponent(source)}`;
-}
-
-export function createStandaloneServerArgs(entryPath: string): string[] {
-  return ["--import", createStandaloneParentMonitorImport(), entryPath];
-}
-
-export function resolveStandaloneBackendOrigin(port: number): string {
-  return `http://${STANDALONE_BACKEND_HOST}:${port}`;
-}
-
-export function createStandaloneBackendEnv(options: {
-  baseEnv?: NodeJS.ProcessEnv;
-  parentPid?: number;
-  port: number;
-}): NodeJS.ProcessEnv {
-  return {
-    ...(options.baseEnv ?? process.env),
-    HOSTNAME: STANDALONE_BACKEND_HOST,
-    NODE_ENV: "production",
-    PORT: String(options.port),
-    [STANDALONE_PARENT_PID_ENV]: String(options.parentPid ?? process.pid),
-  };
-}
-
-function resolveWebDistDir(webRoot: string): string {
+function resolveWebStaticDir(webRoot: string): string {
   const configured = process.env[WEB_DIST_DIR_ENV];
-  if (configured == null || configured.length === 0) return join(webRoot, ".next");
+  if (configured == null || configured.trim().length === 0) return join(webRoot, "dist", "web");
   return isAbsolute(configured) ? configured : join(webRoot, configured);
-}
-
-function resolveConfiguredStandaloneRoot(): string | null {
-  const configured = process.env[WEB_STANDALONE_ROOT_ENV];
-  if (configured == null || configured.length === 0) return null;
-  return isAbsolute(configured) ? configured : join(process.cwd(), configured);
-}
-
-export function resolveStandaloneServerEntry(
-  webRoot: string | null = resolveWebRoot(),
-  standaloneRoot: string | null = resolveConfiguredStandaloneRoot(),
-): string | null {
-  const configuredRoot = standaloneRoot == null || standaloneRoot.length === 0
-    ? null
-    : isAbsolute(standaloneRoot)
-      ? standaloneRoot
-      : join(process.cwd(), standaloneRoot);
-  const candidates = [
-    ...(configuredRoot == null
-      ? []
-      : [
-        join(configuredRoot, "apps", "web", "server.js"),
-        join(configuredRoot, "server.js"),
-      ]),
-    ...(webRoot == null
-      ? []
-      : [
-        join(resolveWebDistDir(webRoot), "standalone", "apps", "web", "server.js"),
-        join(resolveWebDistDir(webRoot), "standalone", "server.js"),
-      ]),
-  ];
-
-  return candidates.find((candidate) => existsSync(candidate)) ?? null;
-}
-
-function shouldUseStandaloneOutput(runtime: SidecarRuntimeContext<SidecarStamp>): boolean {
-  return runtime.mode !== "dev" && process.env[WEB_OUTPUT_MODE_ENV] === "standalone";
 }
 
 function resolveDaemonOrigin(): string | null {
@@ -427,9 +290,9 @@ function isSameBrowserHostOrigin(options: {
  *
  * Invariant: a pooled idle socket must be destroyed strictly before either
  * upstream's server-side keep-alive window can close it — the daemon holds
- * kept-alive sockets for 120s (`apps/daemon/src/server.ts`) and a standalone
- * Next.js backend uses Node's 5s default — so the proxy should not pick up an
- * idle socket its upstream is concurrently closing. On a keep-alive Agent the
+ * kept-alive sockets for 120s (`apps/daemon/src/server.ts`) while a proxied
+ * development backend can use a shorter default — so the proxy should not
+ * pick up an idle socket its upstream is concurrently closing. On a keep-alive Agent the
  * `timeout` option destroys pooled sockets after that idle period; sockets
  * with an in-flight request only emit an (unobserved) `timeout` event, so
  * long-lived streams such as SSE are unaffected.
@@ -598,18 +461,8 @@ async function proxyHttpRequest(
   });
 }
 
-async function prepareNextApp(app: { prepare(): Promise<void> }, dir: string): Promise<void> {
-  const nextEnvPath = join(dir, "next-env.d.ts");
-  const previousNextEnv = await readFile(nextEnvPath, "utf8").catch(() => null);
-  await app.prepare();
-  if (previousNextEnv == null) {
-    await rm(nextEnvPath, { force: true }).catch(() => undefined);
-    return;
-  }
-  await writeFile(nextEnvPath, previousNextEnv, "utf8").catch(() => undefined);
-}
 
-async function listen(server: HttpServer | TcpServer, port: number, host = HOST): Promise<number> {
+async function listen(server: HttpServer, port: number, host = HOST): Promise<number> {
   await new Promise<void>((resolveListen, rejectListen) => {
     server.once("error", rejectListen);
     server.listen({ host, port }, () => {
@@ -620,288 +473,16 @@ async function listen(server: HttpServer | TcpServer, port: number, host = HOST)
 
   const address = server.address() as AddressInfo | string | null;
   if (address == null || typeof address === "string") {
-    throw new Error("failed to resolve Next.js server address");
+    throw new Error("failed to resolve web server address");
   }
   return address.port;
 }
 
-async function closeServer(server: HttpServer | TcpServer): Promise<void> {
+async function closeServer(server: HttpServer): Promise<void> {
   if (!server.listening) return;
   await new Promise<void>((resolveClose, rejectClose) => {
     server.close((error) => (error == null ? resolveClose() : rejectClose(error)));
   });
-}
-
-async function reserveTcpPort(host = HOST): Promise<number> {
-  const server = createTcpServer();
-  try {
-    return await listen(server, 0, host);
-  } finally {
-    await closeServer(server).catch(() => undefined);
-  }
-}
-
-async function waitForChildExit(child: ChildProcess): Promise<void> {
-  if (child.exitCode != null || child.signalCode != null) return;
-
-  await new Promise<void>((resolveExit) => {
-    child.once("exit", () => resolveExit());
-  });
-}
-
-async function stopStandaloneChild(child: ChildProcess): Promise<void> {
-  if (child.exitCode != null || child.signalCode != null) return;
-
-  child.kill("SIGTERM");
-  let timeout: NodeJS.Timeout | undefined;
-  try {
-    await Promise.race([
-      waitForChildExit(child),
-      new Promise<void>((resolveTimeout) => {
-        timeout = setTimeout(resolveTimeout, SHUTDOWN_TIMEOUT_MS);
-        timeout.unref();
-      }),
-    ]);
-  } finally {
-    if (timeout != null) clearTimeout(timeout);
-  }
-
-  if (child.exitCode == null && child.signalCode == null) {
-    child.kill("SIGKILL");
-    await waitForChildExit(child).catch(() => undefined);
-  }
-}
-
-type StandaloneBackendProbeResult = "http" | "tcp" | null;
-
-async function probeStandaloneBackend(origin: string): Promise<StandaloneBackendProbeResult> {
-  if (await probeStandaloneBackendPort(origin)) return "tcp";
-  if (await probeStandaloneBackendHttp(origin)) return "http";
-  return null;
-}
-
-async function probeStandaloneBackendHttp(origin: string): Promise<boolean> {
-  return await new Promise<boolean>((resolveProbe) => {
-    const request = createHttpRequest(new URL("/", origin), { method: "HEAD", timeout: 800 }, (response) => {
-      response.resume();
-      resolveProbe(true);
-    });
-    request.on("timeout", () => {
-      request.destroy();
-      resolveProbe(false);
-    });
-    request.on("error", () => resolveProbe(false));
-    request.end();
-  });
-}
-
-async function probeStandaloneBackendPort(origin: string): Promise<boolean> {
-  let parsed: URL;
-  try {
-    parsed = new URL(origin);
-  } catch {
-    return false;
-  }
-  const port = Number(parsed.port || defaultPortForProtocol(parsed.protocol));
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) return false;
-  const host = parsed.hostname.replace(/^\[(.*)\]$/, "$1");
-
-  return await new Promise<boolean>((resolveProbe) => {
-    const socket = createConnection({ host, port });
-    let settled = false;
-    const settle = (ready: boolean) => {
-      if (settled) return;
-      settled = true;
-      socket.destroy();
-      resolveProbe(ready);
-    };
-    socket.setTimeout(800, () => settle(false));
-    socket.once("connect", () => settle(true));
-    socket.once("error", () => settle(false));
-  });
-}
-
-function createStandaloneChildExitError(child: ChildProcess, startedAt: number): Error {
-  const elapsedMs = Date.now() - startedAt;
-  const likelyPortRace = elapsedMs <= 200;
-  return new Error(
-    `standalone Next.js server exited before readiness after ${elapsedMs}ms: code=${child.exitCode} signal=${child.signalCode}`
-    + (likelyPortRace
-      ? "; the reserved startup port may have been claimed before the child process bound it, retry the launch"
-      : ""),
-  );
-}
-
-function throwIfStandaloneChildExited(child: ChildProcess, startedAt: number): void {
-  if (child.exitCode == null && child.signalCode == null) return;
-  throw createStandaloneChildExitError(child, startedAt);
-}
-
-async function waitForStandaloneTcpReadinessGrace(child: ChildProcess): Promise<void> {
-  if (child.exitCode != null || child.signalCode != null) return;
-
-  await new Promise<void>((resolveWait) => {
-    let timeout: NodeJS.Timeout | undefined;
-    const finish = () => {
-      if (timeout != null) clearTimeout(timeout);
-      child.off("exit", finish);
-      resolveWait();
-    };
-    timeout = setTimeout(finish, STANDALONE_TCP_READINESS_GRACE_MS);
-    timeout.unref();
-    child.once("exit", finish);
-  });
-}
-
-async function waitForStandaloneBackendReady(
-  child: ChildProcess,
-  origin: string,
-  timeoutMs = resolveStandaloneStartupTimeoutMs(),
-): Promise<void> {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    throwIfStandaloneChildExited(child, startedAt);
-    const readiness = await probeStandaloneBackend(origin);
-    if (readiness != null) {
-      if (readiness === "tcp") {
-        await waitForStandaloneTcpReadinessGrace(child);
-      }
-      throwIfStandaloneChildExited(child, startedAt);
-      return;
-    }
-    await new Promise((resolveWait) => setTimeout(resolveWait, STANDALONE_READINESS_POLL_MS));
-  }
-
-  throw new Error(`timed out after ${timeoutMs}ms waiting for standalone Next.js server at ${origin}; override with ${STANDALONE_STARTUP_TIMEOUT_ENV}`);
-}
-
-async function waitForInProcessStandaloneBackendReady(
-  origin: string,
-  timeoutMs = resolveStandaloneStartupTimeoutMs(),
-): Promise<void> {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    if (await probeStandaloneBackend(origin)) return;
-    await new Promise((resolveWait) => setTimeout(resolveWait, STANDALONE_READINESS_POLL_MS));
-  }
-
-  throw new Error(`timed out after ${timeoutMs}ms waiting for in-process standalone Next.js server at ${origin}; override with ${STANDALONE_STARTUP_TIMEOUT_ENV}`);
-}
-
-function shouldStartStandaloneBackendInProcess(): boolean {
-  return process.env.ELECTRON_RUN_AS_NODE === "1" && process.versions.electron != null;
-}
-
-async function startStandaloneBackendInProcess(entryPath: string, port: number, origin: string): Promise<StandaloneBackend> {
-  Object.assign(process.env, createStandaloneBackendEnv({ port }));
-  console.log(`[open-design web] starting in-process standalone Next.js server from ${entryPath}`);
-  const restoreChdir = await installInProcessStandaloneChdirAlias(dirname(entryPath));
-  try {
-    await import(pathToFileURL(entryPath).href);
-  } finally {
-    restoreChdir();
-  }
-  await waitForInProcessStandaloneBackendReady(origin);
-
-  return {
-    exitReason() {
-      return null;
-    },
-    isRunning() {
-      return true;
-    },
-    origin,
-    async stop() {
-      // The standalone server shares this web sidecar process in packaged
-      // Electron-as-Node mode. Process shutdown is the close boundary.
-    },
-  };
-}
-
-async function installInProcessStandaloneChdirAlias(aliasRoot: string): Promise<() => void> {
-  if (process.platform !== "win32") return () => {};
-
-  const realRoot = await realpath(aliasRoot).catch(() => null);
-  if (realRoot == null || normalizeWindowsPath(realRoot) === normalizeWindowsPath(aliasRoot)) return () => {};
-
-  const originalChdir = process.chdir.bind(process);
-  process.chdir = ((directory: string): void => {
-    const mapped = mapWindowsPathIntoAlias(directory, realRoot, aliasRoot);
-    originalChdir(mapped ?? directory);
-  }) as typeof process.chdir;
-
-  return () => {
-    process.chdir = originalChdir as typeof process.chdir;
-  };
-}
-
-function mapWindowsPathIntoAlias(candidate: string, realRoot: string, aliasRoot: string): string | null {
-  const normalizedCandidate = normalizeWindowsPath(candidate);
-  const normalizedRealRoot = normalizeWindowsPath(realRoot);
-  if (normalizedCandidate !== normalizedRealRoot && !normalizedCandidate.startsWith(`${normalizedRealRoot}\\`)) return null;
-  return join(aliasRoot, relative(realRoot, candidate));
-}
-
-function normalizeWindowsPath(path: string): string {
-  return path.replaceAll("/", "\\").replace(/[\\]+$/, "").toLowerCase();
-}
-
-async function startStandaloneBackend(webRoot: string | null): Promise<StandaloneBackend> {
-  const entryPath = resolveStandaloneServerEntry(webRoot);
-  if (entryPath == null) {
-    throw new Error(
-      webRoot == null
-        ? `missing Next.js standalone server under ${WEB_STANDALONE_ROOT_ENV}; configure ${WEB_STANDALONE_ROOT_ENV} or install @open-design/web`
-        : `missing Next.js standalone server under ${resolveWebDistDir(webRoot)}; rebuild with ${WEB_OUTPUT_MODE_ENV}=standalone`,
-    );
-  }
-
-  const port = await reserveTcpPort(STANDALONE_BACKEND_HOST);
-  const origin = resolveStandaloneBackendOrigin(port);
-  if (shouldStartStandaloneBackendInProcess()) {
-    return await startStandaloneBackendInProcess(entryPath, port, origin);
-  }
-
-  console.log(`[open-design web] starting standalone Next.js server from ${entryPath}`);
-  const child = spawn(process.execPath, createStandaloneServerArgs(entryPath), {
-    cwd: dirname(entryPath),
-    env: createStandaloneBackendEnv({ port }),
-    stdio: ["ignore", "inherit", "inherit"],
-    ...(process.platform === "win32" ? { windowsHide: true } : {}),
-  });
-  await new Promise<void>((resolveSpawn, rejectSpawn) => {
-    child.once("error", rejectSpawn);
-    child.once("spawn", resolveSpawn);
-  });
-  let standaloneRunning = true;
-  let standaloneExitReason: string | null = null;
-  child.once("exit", (code, signal) => {
-    standaloneRunning = false;
-    standaloneExitReason = `code=${code ?? "null"} signal=${signal ?? "null"}`;
-    console.error(`[open-design web] standalone Next.js server exited ${standaloneExitReason}`);
-  });
-
-  try {
-    await waitForStandaloneBackendReady(child, origin);
-  } catch (error) {
-    await stopStandaloneChild(child).catch(() => undefined);
-    throw error;
-  }
-
-  return {
-    exitReason() {
-      return standaloneExitReason;
-    },
-    isRunning() {
-      return standaloneRunning && child.exitCode == null && child.signalCode == null;
-    },
-    origin,
-    async stop() {
-      await stopStandaloneChild(child);
-    },
-  };
 }
 
 async function settleShutdownTask(task: Promise<unknown> | undefined): Promise<void> {
@@ -1043,8 +624,8 @@ export function createDaemonProxyHandler(
     }
 
     // Daemon-routed pathnames must never fall through to the SPA shell: the
-    // Next.js catch-all answers every path with 200 text/html, which browser
-    // callers parse as JSON and crash on. With no daemon origin there is no
+    // static/Vite SPA fallback answers every path with 200 text/html, which
+    // browser callers parse as JSON and crash on. With no daemon origin there is no
     // proxy target, so answer as the connection-level outage it is.
     if (
       daemonOrigin == null &&
@@ -1063,58 +644,156 @@ export function createDaemonProxyHandler(
   };
 }
 
-async function startRegularNextSidecar(
+
+const CONTENT_TYPES = new Map([
+  [".css", "text/css; charset=utf-8"],
+  [".gif", "image/gif"],
+  [".html", "text/html; charset=utf-8"],
+  [".ico", "image/x-icon"],
+  [".jpeg", "image/jpeg"],
+  [".jpg", "image/jpeg"],
+  [".js", "text/javascript; charset=utf-8"],
+  [".json", "application/json; charset=utf-8"],
+  [".map", "application/json; charset=utf-8"],
+  [".mp3", "audio/mpeg"],
+  [".mp4", "video/mp4"],
+  [".ogg", "audio/ogg"],
+  [".png", "image/png"],
+  [".svg", "image/svg+xml"],
+  [".wasm", "application/wasm"],
+  [".webm", "video/webm"],
+  [".webp", "image/webp"],
+  [".woff", "font/woff"],
+  [".woff2", "font/woff2"],
+]);
+
+function resolveStaticRequestPath(staticDir: string, requestUrl: string | undefined): string | null {
+  if (requestUrl == null) return null;
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(new URL(requestUrl, `http://${HOST}`).pathname);
+  } catch {
+    return null;
+  }
+  if (pathname.includes("\0")) return null;
+  const candidate = resolve(staticDir, `.${pathname}`);
+  const boundary = `${resolve(staticDir)}${sep}`;
+  if (candidate !== resolve(staticDir) && !candidate.startsWith(boundary)) return null;
+  return candidate;
+}
+
+function cacheControlForStaticPath(filePath: string): string {
+  return filePath.includes(`${sep}assets${sep}`)
+    ? "public, max-age=31536000, immutable"
+    : "no-cache";
+}
+
+async function sendStaticFile(
+  filePath: string,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<boolean> {
+  const fileStat = await stat(filePath).catch(() => null);
+  if (fileStat == null || !fileStat.isFile()) return false;
+
+  response.statusCode = 200;
+  response.setHeader("content-type", CONTENT_TYPES.get(extname(filePath).toLowerCase()) ?? "application/octet-stream");
+  response.setHeader("content-length", String(fileStat.size));
+  response.setHeader("cache-control", cacheControlForStaticPath(filePath));
+  if (request.method === "HEAD") {
+    response.end();
+    return true;
+  }
+  await new Promise<void>((resolveStream, rejectStream) => {
+    const stream = createReadStream(filePath);
+    stream.once("error", rejectStream);
+    response.once("close", resolveStream);
+    stream.once("end", resolveStream);
+    stream.pipe(response);
+  });
+  return true;
+}
+
+function createStaticSpaHandler(staticDir: string) {
+  const indexPath = join(staticDir, "index.html");
+  if (!existsSync(indexPath)) {
+    throw new Error(`missing Vite web build at ${indexPath}; run pnpm --filter @open-design/web build`);
+  }
+
+  return async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
+    const requestedPath = resolveStaticRequestPath(staticDir, request.url);
+    if (requestedPath != null && await sendStaticFile(requestedPath, request, response)) return;
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      response.statusCode = 404;
+      response.end("not found");
+      return;
+    }
+    await sendStaticFile(indexPath, request, response);
+  };
+}
+
+function createViteMiddlewareHandler(vite: ViteDevServer) {
+  return async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
+    await new Promise<void>((resolveMiddleware, rejectMiddleware) => {
+      vite.middlewares(request, response, (error?: unknown) => {
+        if (error != null) {
+          rejectMiddleware(error);
+          return;
+        }
+        if (!response.writableEnded) {
+          response.statusCode = 404;
+          response.end("not found");
+        }
+        resolveMiddleware();
+      });
+    });
+  };
+}
+
+async function startViteDevSidecar(
   runtime: SidecarRuntimeContext<SidecarStamp>,
   webRoot: string,
 ): Promise<WebSidecarHandle> {
-  const dev = process.env.OD_WEB_PROD !== "1" && runtime.mode === "dev";
-  const app = createNextApp({ dev, dir: webRoot, ...resolveNextBundlerOptions(dev) });
-  await prepareNextApp(app, webRoot);
-
-  const daemonOrigin = resolveDaemonOrigin();
-  const handleRequest = app.getRequestHandler();
-  const httpServer = createHttpServer(createDaemonProxyHandler(daemonOrigin, handleRequest));
-
-  return await createWebSidecarHandle(runtime, httpServer, async () => {
-    await app.close?.();
+  let requestHandler: (request: IncomingMessage, response: ServerResponse) => void = (_request, response) => {
+    response.statusCode = 503;
+    response.end("Vite dev server is starting");
+  };
+  const httpServer = createHttpServer((request, response) => requestHandler(request, response));
+  const { createServer: createViteServer } = await import("vite");
+  const vite = await createViteServer({
+    root: webRoot,
+    appType: "spa",
+    configFile: join(webRoot, "vite.config.ts"),
+    server: {
+      middlewareMode: true,
+      hmr: { server: httpServer },
+    },
   });
-}
-
-async function startStandaloneNextSidecar(
-  runtime: SidecarRuntimeContext<SidecarStamp>,
-  webRoot: string | null,
-): Promise<WebSidecarHandle> {
-  const daemonOrigin = resolveDaemonOrigin();
-  const backend = await startStandaloneBackend(webRoot);
-  const httpServer = createHttpServer(createDaemonProxyHandler(daemonOrigin, async (request, response) => {
-    if (!backend.isRunning()) {
-      response.statusCode = 502;
-      response.end(`standalone Next.js server is not running${backend.exitReason() == null ? "" : ` (${backend.exitReason()})`}`);
-      return;
-    }
-    const target = resolveHttpProxyTarget(backend.origin, request.url);
-    if (target == null) {
-      response.statusCode = 400;
-      response.end("invalid request URL");
-      return;
-    }
-    await proxyHttpRequest(target, request, response);
-  }));
+  requestHandler = createDaemonProxyHandler(resolveDaemonOrigin(), createViteMiddlewareHandler(vite));
 
   try {
-    return await createWebSidecarHandle(runtime, httpServer, backend.stop, backend.isRunning);
+    return await createWebSidecarHandle(runtime, httpServer, async () => {
+      await vite.close();
+    });
   } catch (error) {
-    await backend.stop().catch(() => undefined);
+    await vite.close().catch(() => undefined);
     throw error;
   }
 }
 
-export async function startWebSidecar(runtime: SidecarRuntimeContext<SidecarStamp>): Promise<WebSidecarHandle> {
-  if (shouldUseStandaloneOutput(runtime)) {
-    const webRoot = resolveConfiguredStandaloneRoot() == null ? resolveWebRoot() : null;
-    return await startStandaloneNextSidecar(runtime, webRoot);
-  }
+async function startStaticSidecar(
+  runtime: SidecarRuntimeContext<SidecarStamp>,
+  webRoot: string,
+): Promise<WebSidecarHandle> {
+  const fallback = createStaticSpaHandler(resolveWebStaticDir(webRoot));
+  const httpServer = createHttpServer(createDaemonProxyHandler(resolveDaemonOrigin(), fallback));
+  return await createWebSidecarHandle(runtime, httpServer, () => undefined);
+}
 
+export async function startWebSidecar(runtime: SidecarRuntimeContext<SidecarStamp>): Promise<WebSidecarHandle> {
   const webRoot = resolveWebRoot();
-  return await startRegularNextSidecar(runtime, webRoot);
+  const dev = process.env.OD_WEB_PROD !== "1" && runtime.mode === "dev";
+  return dev
+    ? await startViteDevSidecar(runtime, webRoot)
+    : await startStaticSidecar(runtime, webRoot);
 }

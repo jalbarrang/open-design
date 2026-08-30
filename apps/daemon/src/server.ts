@@ -865,11 +865,10 @@ const DAEMON_RESOURCE_ROOT = resolveDaemonResourceRoot({
     process.env.OD_INSTALLATION_DIR,
   ],
 });
-// Built web app lives in `out/` — that's where Next.js writes the static
-// export configured in next.config.ts. The folder name used to be `dist/`
-// when this project shipped with Vite; the daemon serves whatever the
-// frontend toolchain emits, no further config needed.
-const STATIC_DIR = path.join(PROJECT_ROOT, 'apps', 'web', 'out');
+// Vite emits the client SPA under `dist/web/`. The sibling `dist/sidecar/`
+// directory is the independently compiled web runtime entry and must not be
+// exposed as static browser content.
+const STATIC_DIR = path.join(PROJECT_ROOT, 'apps', 'web', 'dist', 'web');
 // Baked plugin preview clips (scripts/bake-plugin-previews.mjs). Served at
 // PLUGIN_PREVIEWS_ROUTE; their manifest rewrites html plugins' previews to a
 // cheap poster + hover-play video in the home gallery.

@@ -1,8 +1,5 @@
-import { createRequire } from "node:module";
 import { open, readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-
-const require = createRequire(import.meta.url);
 
 /**
  * Linux AppImage cold-start prewarm (issue #5835).
@@ -101,52 +98,16 @@ export function resolveDaemonPrewarmTargets(options: {
 }
 
 /**
- * Web cold-start payload. In "server" output mode (always the case on Linux)
- * the web sidecar boots a Next server from the shipped web package, so the
- * cold set is the sidecar dist, the compiled `.next/server` route chunks, and
- * the Next framework's own server code. `next/dist/compiled` is deliberately
- * NOT prewarmed: at ~107 MB it dominates the read set while only a small
- * fraction is required during the status window — the rest is demand-loaded
- * on first paint, which has no hard timeout. In "standalone" mode the whole
- * self-contained bundle root is the payload. Missing pieces are skipped at
- * collection time, so stale targets never fail the prewarm.
+ * Web cold-start payload. Vite production serving only needs the compiled web
+ * sidecar during the timed status window; browser assets load after readiness.
  */
 export function resolveWebPrewarmTargets(options: {
   webSidecarEntry: string | null;
-  webStandaloneRoot: string | null;
-  resolveNextPackageRoot?: (webPackageRoot: string) => string | null;
 }): PrewarmTarget[] {
-  if (options.webStandaloneRoot != null && options.webStandaloneRoot.length > 0) {
-    return [{ kind: "dir", path: options.webStandaloneRoot }];
-  }
   if (options.webSidecarEntry == null || options.webSidecarEntry.length === 0) {
     return [];
   }
-  // <webPkg>/dist/sidecar/index.js -> sidecarDir = dist/sidecar, webPkg = ../..
-  const sidecarDir = dirname(options.webSidecarEntry);
-  const webPackageRoot = dirname(dirname(sidecarDir));
-  const targets: PrewarmTarget[] = [
-    { kind: "dir", path: sidecarDir },
-    { kind: "dir", path: join(webPackageRoot, ".next", "server") },
-  ];
-  const resolveNext =
-    options.resolveNextPackageRoot ?? defaultResolveNextPackageRoot;
-  const nextRoot = resolveNext(webPackageRoot);
-  if (nextRoot != null) {
-    targets.push({ kind: "dir", path: join(nextRoot, "dist", "server") });
-  }
-  return targets;
-}
-
-function defaultResolveNextPackageRoot(webPackageRoot: string): string | null {
-  try {
-    const packageJsonPath = require.resolve("next/package.json", {
-      paths: [webPackageRoot],
-    });
-    return dirname(packageJsonPath);
-  } catch {
-    return null;
-  }
+  return [{ kind: "dir", path: dirname(options.webSidecarEntry) }];
 }
 
 /**

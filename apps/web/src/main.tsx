@@ -40,9 +40,9 @@ declare module '@tanstack/react-router' {
 // Mirror every coordinator-committed location into the router's memory
 // history so matched-route state (and future loader/preload work) stays
 // current. Memory history never writes to `window.history` itself.
-setActiveLocationNotifier((pathname) => {
-  if (router.history.location.pathname !== pathname) {
-    router.history.push(pathname);
+setActiveLocationNotifier((href) => {
+  if (router.history.location.href !== href) {
+    router.history.push(href);
   }
 });
 

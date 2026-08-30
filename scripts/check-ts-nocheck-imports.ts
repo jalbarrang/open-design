@@ -95,10 +95,11 @@ export function hasLeadingTsNocheck(source: string): boolean {
  * - A JS-flavored specifier resolves only to the source extensions NodeNext
  *   emits it from: `./x.js` from `.ts`/`.tsx`/`.js`/`.jsx`, `./x.mjs` from
  *   `.mts`/`.mjs`, `./x.cjs` from `.cts`/`.cjs`, `./x.jsx` from `.tsx`/`.jsx`.
- * - An explicit `.ts`/`.tsx`/`.mts`/`.cts` or a non-code asset extension
- *   (`.json`, `.css`, ...) must exist verbatim.
- * - An extensionless specifier resolves to a source file or a directory
- *   `index.*` barrel.
+ * - An explicit source file or non-code asset (`.json`, `.css`, ...) resolves
+ *   verbatim when it exists.
+ * - A source specifier without an emitted JS extension resolves to a source
+ *   file or directory `index.*` barrel, including dotted basenames such as
+ *   `./routes/projects.index`.
  */
 export function resolvesRelativeSpecifier(fromDirectory: string, specifier: string): boolean {
   const target = path.resolve(fromDirectory, specifier);
@@ -109,11 +110,11 @@ export function resolvesRelativeSpecifier(fromDirectory: string, specifier: stri
       return candidates.some((extension) => existsSync(base + extension));
     }
   }
-  if (path.extname(specifier) !== "") {
-    // Explicit .ts/.tsx/.mts/.cts source or a non-code asset (.json/.css/...).
-    return existsSync(target);
-  }
-  // Extensionless: a source file or a directory index barrel.
+  if (existsSync(target)) return true;
+
+  // TypeScript permits extensionless source imports whose basename contains a
+  // dot. `path.extname('./routes/projects.index')` is therefore not enough to
+  // distinguish an asset extension from an extensionless module specifier.
   return (
     moduleResolutionExtensions.some((extension) => existsSync(target + extension)) ||
     moduleResolutionExtensions.some((extension) => existsSync(path.join(target, `index${extension}`)))

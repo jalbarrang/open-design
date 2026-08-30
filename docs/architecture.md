@@ -26,8 +26,9 @@ starting desktop.
 
 When ports are not supplied, `tools-dev` chooses available daemon and web
 ports. `--daemon-port` and `--web-port` make them explicit. The web sidecar
-receives the selected daemon port and rewrites `/api/*`, `/artifacts/*`, and
-`/frames/*` to the sibling Express process. Ports are transport details; they
+receives the selected daemon port, embeds Vite middleware in development, and
+proxies `/api/*`, `/artifacts/*`, and `/frames/*` to the sibling Express
+process. Ports are transport details; they
 do not define process identity, namespaces, or daemon data roots.
 
 ### Packaged desktop and packaged headless
@@ -43,7 +44,7 @@ or channel identity behavior.
 
 ### Container and daemon-served production
 
-The production daemon can serve the static Next.js export from `apps/web/out`
+The production daemon can serve the Vite static SPA from `apps/web/dist/web`
 and the `/api/*` surface from one origin. The repository Docker Compose file
 uses that shape as one service. Its published host port is configurable; the
 container's documented default remains `7456`.
@@ -59,9 +60,9 @@ browser or Electron renderer
           │
           │ same-origin HTTP + SSE
           ▼
-Next.js web app ────────────────┐
+Vite web app ───────────────────┐
           │                     │ static UI / preview state
-          │ /api/* rewrites     │
+          │ sidecar proxy       │
           ▼                     │
 Express daemon ◄────────────────┘
    │       │        │
@@ -80,7 +81,10 @@ the same capabilities.
 
 ### 3.1 Web app (`apps/web`)
 
-The web app is a Next.js 16 App Router application using React 18. It owns:
+The web app is a Vite application using React 18 and TanStack Router. File
+routes under `apps/web/src/routes/` generate the typed route tree; the legacy
+`Route` union remains the navigation coordinator while its guarded history
+flow is migrated incrementally. It owns:
 
 - project, chat, file-workspace, preview, Settings, marketplace, and creation
   workflows;

@@ -138,20 +138,8 @@ export function hasUrlModeBridge(source: string | null | undefined): boolean {
   return /<script\b[^>]*\bsrc\s*=\s*["'][^"']*\bod-direct-edit\.js\b[^"']*["'][^>]*>/i.test(source);
 }
 
-/**
- * Read the `forceInline` opt-out from a URL search string or an existing
- * URLSearchParams. Accepts `1`, `true`, `yes`, `on` (case-insensitive).
- * Anything else — including `0`, `false`, an unrelated value, or a
- * missing parameter — returns false.
- */
-export function parseForceInline(search: string | URLSearchParams | null | undefined): boolean {
-  if (!search) return false;
-  const params = typeof search === 'string' ? new URLSearchParams(search) : search;
-  const value = params.get('forceInline');
-  if (value === null) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
-}
+// Compatibility export for callers that already consume render-mode helpers.
+export { parseForceInline } from '../app-search';
 
 /**
  * Return true when the HTML source contains patterns that fail under the

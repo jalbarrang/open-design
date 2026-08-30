@@ -131,7 +131,7 @@ in {
 
   webFrontend = {
     # The OpenDesign web frontend is a static SPA built by
-    # `apps/web` → `apps/web/out/`. The daemon is a separate Express
+    # `apps/web` → `apps/web/dist/web/`. The daemon is a separate Express
     # process that serves the JSON API at `/api/*`. The SPA is built
     # with `OD_DAEMON_URL=""`, so the bundled JS issues relative
     # `/api/*`, `/artifacts/*`, and `/frames/*` requests and expects
@@ -144,7 +144,7 @@ in {
     # `nix run`-style convenience without configuring nginx/caddy by
     # hand.
     #
-    # If you already serve the static export through your own reverse
+    # If you already serve the static SPA through your own reverse
     # proxy, leave `webFrontend.enable = false`, point your server's
     # document root at `${cfg.webFrontend.package}`, and replicate the
     # reverse-proxy rules (with SSE-safe streaming on `/api/*`).
@@ -152,7 +152,7 @@ in {
       type = lib.types.bool;
       default = false;
       description = ''
-        Run a lightweight static file server for the Next.js export.
+        Run a lightweight static file server for the Vite SPA.
         Independent of the daemon service: enable either or both.
       '';
     };
@@ -238,7 +238,7 @@ in {
         flakePackages.web or (throw
           "open-design: no web package available for ${pkgs.stdenv.hostPlatform.system}; set services.open-design.webFrontend.package explicitly");
       defaultText = lib.literalExpression "open-design.packages.\${pkgs.stdenv.hostPlatform.system}.web";
-      description = "Built static export to serve (Next.js out/ tree).";
+      description = "Built Vite static SPA to serve.";
     };
   };
 }

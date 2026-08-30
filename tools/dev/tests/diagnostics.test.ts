@@ -54,27 +54,24 @@ describe("tools-dev diagnostics", () => {
     assert.match(message, /corepack pnpm install --frozen-lockfile/);
   });
 
-  it("detects missing Next.js package resolution during web startup", () => {
+  it("detects missing Vite package resolution during web startup", () => {
     const diagnostics = detectLogDiagnostics([
-      "Turbopack build failed with 1 errors:",
-      "./apps/web/app",
-      "Error: Next.js inferred your workspace root, but it may not be correct.",
-      "We couldn't find the Next.js package (next/package.json) from the project directory: /repo/apps/web/app",
+      "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'vite' imported from /repo/apps/web/dist/sidecar/server.js",
     ]);
 
     assert.equal(diagnostics.length, 1);
-    assert.match(diagnostics[0].message, /Next\.js package is not resolvable/);
-    assert.match(diagnostics[0].recommendation, /apps\/web\/node_modules\/next/);
+    assert.match(diagnostics[0].message, /Vite package is not resolvable/);
+    assert.match(diagnostics[0].recommendation, /apps\/web\/node_modules\/vite/);
     assert.match(diagnostics[0].recommendation, /pnpm install --frozen-lockfile/);
   });
 
-  it("detects missing Next.js package resolution when details change", () => {
+  it("detects the double-quoted Node resolver variant", () => {
     const diagnostics = detectLogDiagnostics([
-      "Error: We couldn't find the Next.js package from the project directory: /repo/apps/web/app",
+      'Cannot find package "vite" imported from /repo/apps/web/sidecar/server.ts',
     ]);
 
     assert.equal(diagnostics.length, 1);
-    assert.match(diagnostics[0].message, /Next\.js package is not resolvable/);
+    assert.match(diagnostics[0].message, /Vite package is not resolvable/);
   });
 
   it("does not report diagnostics for unrelated logs", () => {

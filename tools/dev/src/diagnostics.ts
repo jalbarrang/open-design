@@ -18,7 +18,7 @@ const SUPPORTED_NODE_MAJOR = 26;
 const SUPPORTED_NODE_RANGE = "Node ~26";
 const NATIVE_ADDON_ABI_MISMATCH_PATTERN = /was compiled against a different Node\.js version[\s\S]*?NODE_MODULE_VERSION\s+\d+[\s\S]*?requires\s+NODE_MODULE_VERSION\s+\d+/i;
 const NODE_MODULE_VERSION_PATTERN = /NODE_MODULE_VERSION\s+\d+[\s\S]*?NODE_MODULE_VERSION\s+\d+/i;
-const NEXT_PACKAGE_RESOLUTION_PATTERN = /couldn't find the Next\.js package.*from the project directory:/i;
+const VITE_PACKAGE_RESOLUTION_PATTERN = /Cannot find package ['"]vite['"] imported from/i;
 
 function currentNodeRuntime(): NodeRuntimeDiagnosticInput {
   return {
@@ -91,15 +91,15 @@ export function detectLogDiagnostics(
     });
   }
 
-  if (NEXT_PACKAGE_RESOLUTION_PATTERN.test(logText)) {
+  if (VITE_PACKAGE_RESOLUTION_PATTERN.test(logText)) {
     diagnostics.push({
-      message: "Detected that the Next.js package is not resolvable during web startup.",
+      message: "Detected that the Vite package is not resolvable during web startup.",
       recommendation: [
-        "Refresh the workspace install so apps/web/node_modules/next points at the pnpm-managed Next.js package:",
+        "Refresh the workspace install so apps/web/node_modules/vite points at the pnpm-managed Vite package:",
         "  pnpm install --frozen-lockfile",
         "If it still fails, inspect the package link:",
-        "  ls -la apps/web/node_modules/next",
-        "  node -p \"require.resolve('next/package.json', { paths: [process.cwd() + '/apps/web/app'] })\"",
+        "  ls -la apps/web/node_modules/vite",
+        "  node -p \"require.resolve('vite/package.json', { paths: [process.cwd() + '/apps/web'] })\"",
       ].join("\n"),
     });
   }

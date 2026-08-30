@@ -63,7 +63,7 @@ export default defineConfig({
   resolve: {
     // The shared components package ships a `development` condition pointing
     // at its TypeScript source; importing source keeps one React instance and
-    // lets Vite transpile it (replaces Next.js `transpilePackages`).
+    // lets Vite transpile shared component source during development.
     conditions: ['development'],
   },
   server: {

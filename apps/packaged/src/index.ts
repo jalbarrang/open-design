@@ -260,8 +260,6 @@ async function main(): Promise<void> {
     // for the windowless counterpart that passes `false`.
     requireDesktopAuth: true,
     webSidecarEntry: activeConfig.webSidecarEntry,
-    webStandaloneRoot: activeConfig.webStandaloneRoot,
-    webOutputMode: activeConfig.webOutputMode,
     // Surface each sidecar boot phase on the splash status line so a slow
     // cold start (Defender scans, native module loads) never reads as a hang.
     // Both the "spawning" and "ready" edges are mapped so the step counter
