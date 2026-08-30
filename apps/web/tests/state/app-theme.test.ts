@@ -132,16 +132,17 @@ describe('app theme — document', () => {
 });
 
 describe('app theme — pre-hydration script', () => {
-  const layoutPath = resolve(
+  const indexHtmlPath = resolve(
     dirname(fileURLToPath(import.meta.url)),
-    '../../app/layout.tsx',
+    '../../index.html',
   );
 
   function runThemeInitScript(): void {
-    const source = readFileSync(layoutPath, 'utf8');
-    const match = /const themeInitScript = `([^`]*)`;/.exec(source);
-    if (!match?.[1]) throw new Error('themeInitScript not found in app/layout.tsx');
-    // eslint-disable-next-line no-new-func
+    const source = readFileSync(indexHtmlPath, 'utf8');
+    // The pre-hydration script is the only plain <script> block in
+    // index.html (the entry is `<script type="module">`).
+    const match = /<script>\n([\s\S]*?)\n\s*<\/script>/.exec(source);
+    if (!match?.[1]) throw new Error('pre-hydration theme script not found in index.html');
     new Function(match[1])();
   }
 

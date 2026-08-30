@@ -11,7 +11,6 @@ import {
   type StrategyTaskTypeV2,
 } from '../plugins/strategy-v2.js';
 import type { ChatSessionMode } from '../api/chat.js';
-import type { ProjectMetadata } from '../api/projects.js';
 import type { OdNextDeviceFrameContextV2 } from './od-next-device-frame.js';
 import { serializeOdNextRequestTurnV1 } from './od-next-prompt-bundle.js';
 import type {
@@ -69,7 +68,10 @@ export interface OdNextStrategyStableRequestContextV2 {
   agentId?: string | null | undefined;
   sessionMode?: ChatSessionMode | undefined;
   locale?: string | undefined;
-  metadata?: ProjectMetadata | undefined;
+  // A daemon-owned metadata bag: the daemon's local project metadata type is
+  // looser than the contracts `ProjectMetadata`, so this boundary only
+  // promises "an object" and the strategy filters keys for the prompt.
+  metadata?: object | undefined;
   template?: {
     id?: string | undefined;
     name: string;
@@ -422,7 +424,7 @@ function stableJson(value: unknown): string {
   }, 2) ?? 'null';
 }
 
-function planningMetadata(metadata: ProjectMetadata): Record<string, unknown> {
+function planningMetadata<T extends object>(metadata: T): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(metadata).filter(([key]) => !OMITTED_PROJECT_METADATA_KEYS.has(key)),
   );

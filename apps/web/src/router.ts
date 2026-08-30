@@ -5,6 +5,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { LIBRARY_UI_VISIBLE } from './features/libraryUi';
+import { publishLocationToRouter } from './tanstack-bridge';
 
 // Entry-shell sub-views. The home/project landing renders one of three
 // columns and each sub-view now owns a top-level path so the browser
@@ -338,6 +339,9 @@ function repairHistoryTraversal(
 }
 
 function notifyRouteSubscribers(): void {
+  // Keep the TanStack Router instance (memory history) in sync with the
+  // location the coordinator accepted. See `src/tanstack-bridge.ts`.
+  publishLocationToRouter(acceptedHistoryLocation?.pathname ?? window.location.pathname);
   for (const subscriber of [...routeSubscribers]) subscriber();
 }
 
