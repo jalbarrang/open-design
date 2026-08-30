@@ -363,21 +363,21 @@ def self_check() -> None:
             ),
             encoding="utf-8",
         )
-        autofix = handoff_dir(root, "autofix", "nix-pnpm-deps")
+        autofix = handoff_dir(root, "autofix", "repo-docs")
         autofix.mkdir(parents=True)
-        (autofix / "patch.diff").write_text("diff --git a/nix/pnpm-deps.nix b/nix/pnpm-deps.nix\n", encoding="utf-8")
+        (autofix / "patch.diff").write_text("diff --git a/docs/example.md b/docs/example.md\n", encoding="utf-8")
         (autofix / "metadata.json").write_text(
             json.dumps(
                 {
                     "schema_version": SCHEMA_VERSION,
                     "kind": "autofix",
-                    "id": "nix-pnpm-deps",
+                    "id": "repo-docs",
                     "pr_number": 12,
                     "head_sha": "a" * 40,
                     "base_sha": "b" * 40,
                     "run_id": 34,
-                    "allowed_paths": ["nix/pnpm-deps.nix"],
-                    "commit_message": "chore(nix): refresh pnpm deps hash",
+                    "allowed_paths": ["docs/example.md"],
+                    "commit_message": "docs: update example",
                 }
             ),
             encoding="utf-8",
@@ -422,7 +422,7 @@ def self_check() -> None:
         assert artifact_name("report", "visual-pr") == "handoff-report-visual-pr"
         assert artifact_name("convergence", "ci-results") == "handoff-convergence-ci-results"
         assert validate_entry("comment", comment)["marker"] == marker
-        assert validate_entry("autofix", autofix)["allowed_paths"] == ["nix/pnpm-deps.nix"]
+        assert validate_entry("autofix", autofix)["allowed_paths"] == ["docs/example.md"]
         assert validate_entry("report", report)["artifact_pattern"] == "visual-pr-capture-12-34-*"
         assert validate_entry("convergence", convergence)["policy"] == "ci-v1"
         assert len(candidate_entry_dirs(root, "comment")) == 1
