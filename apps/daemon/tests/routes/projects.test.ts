@@ -541,20 +541,19 @@ describe('GET /api/projects/:id resolvedDir', () => {
     expect(writeResp.status).toBe(200);
 
     const rawResp = await fetch(
-      `${baseUrl}/api/projects/${projectId}/raw/nested/demo/index.html?workspaceId=ws-cover&workspaceMemberId=wm-cover`,
-      {
-      headers: { Origin: 'null' },
-      },
+      `${baseUrl}/api/projects/${projectId}/raw/nested/demo/index.html`,
+      { headers: { Origin: 'null' } },
     );
     expect(rawResp.status).toBe(200);
     expect(rawResp.headers.get('content-type')).toContain('text/html');
     expect(rawResp.headers.get('access-control-allow-origin')).toBe('*');
     const html = await rawResp.text();
     expect(html).toContain('<h1>nested ok</h1>');
-    expect(html).toContain(
-      `/api/projects/${projectId}/raw/fonts/inter.woff2?workspaceId=ws-cover&workspaceMemberId=wm-cover`,
-    );
-    expect(html).not.toContain('../../fonts/inter.woff2');
+    // The relative href is served as authored. It used to be rewritten to an
+    // absolute /raw/ URL so the workspace query params could ride along; with
+    // the team serving model gone the browser resolves `../../fonts/...`
+    // against the document URL and lands on the same route by itself.
+    expect(html).toContain('../../fonts/inter.woff2');
   });
   it('rejects non-boolean skipDiscoveryBrief on POST /api/projects', async () => {
     const projectId = `proj-skip-discovery-bad-${Date.now()}`;
