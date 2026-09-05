@@ -120,14 +120,11 @@ describe("workflow scope planner", () => {
     }
   });
 
-  test("routes Terminal exact sources and release orchestration to scene validation", () => {
+  test("routes Terminal exact sources to scene validation", () => {
     for (const file of [
       "apps/closure/src/index.ts",
       "packages/standalone/src/store.ts",
       "shells/terminal/src/cli.ts",
-      ".github/scripts/pack.py",
-      ".github/scripts/release.py",
-      ".github/workflows/release-exact.yml",
     ]) {
       expect(plan("pr", [file]), file).toMatchObject({
         scopes: { terminal_scene_required: true, workspace_validation_required: true },

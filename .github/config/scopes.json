@@ -69,13 +69,10 @@
       "exclude": ["match://daemon-runtime-definition", "prefix://apps/daemon/src/sidecar/"]
     },
     "medium-exempt": {
-      "prefixes": ["nix/"],
       "exact": [
-        ".gitignore", ".editorconfig", "flake.nix", "flake.lock",
-        ".github/workflows/landing-page-ci.yml", ".github/workflows/landing-page-staging.yml",
-        ".github/workflows/landing-page-production.yml", ".github/workflows/blog-indexing-on-deploy.yml",
+        ".gitignore", ".editorconfig",
         ".github/workflows/autofix.atom.yml", ".github/workflows/comment.atom.yml",
-        ".github/workflows/report.atom.yml", ".github/workflows/docker-image.yml", ".github/workflows/nix.yml"
+        ".github/workflows/report.atom.yml"
       ],
       "regexes": ["\\.(?:md|mdx|txt)$"],
       "exclude": ["match://certain-surface"]
@@ -160,8 +157,7 @@
     {
       "id": "terminal-scene-sources",
       "match": {
-        "prefixes": ["apps/closure/", "packages/standalone/", "shells/terminal/"],
-        "exact": [".github/scripts/pack.py", ".github/scripts/release.py", ".github/workflows/release-exact.yml"]
+        "prefixes": ["apps/closure/", "packages/standalone/", "shells/terminal/"]
       },
       "effects": ["terminal_scene_required", "workspace_validation_required"], "confidence": "certain"
     },
@@ -178,7 +174,7 @@
       "id": "ui-p0-surface",
       "match": {
         "prefixes": ["apps/web/", "apps/daemon/", "packages/release/", "packages/components/", "packages/contracts/", "packages/host/", "packages/platform/", "packages/sidecar/", "packages/sidecar-proto/", "e2e/ui/", "e2e/lib/", "e2e/resources/", "e2e/scripts/", ".github/actions/setup-playwright/", ".github/actions/setup-workspace/"],
-        "exact": ["e2e/package.json", "e2e/playwright.config.ts", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".github/workflows/ci.yml", ".github/workflows/ui-extended-main.yml"],
+        "exact": ["e2e/package.json", "e2e/playwright.config.ts", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".github/workflows/ci.yml"],
         "exclude": ["match://daemon-core"]
       },
       "effects": ["ui_p0_validation_required"], "confidence": "medium"
@@ -187,7 +183,7 @@
       "id": "visual-surface",
       "match": {
         "prefixes": ["apps/web/", "e2e/lib/playwright/", ".github/actions/setup-playwright/", ".github/actions/setup-workspace/"],
-        "exact": ["e2e/package.json", "e2e/playwright.visual.config.ts", "e2e/scripts/playwright.ts", "e2e/scripts/visual-report.ts", "pnpm-lock.yaml", ".github/scripts/handoff.py", ".github/workflows/ci.yml", ".github/workflows/comment.atom.yml", ".github/workflows/report.atom.yml", ".github/workflows/visual-baseline.yml"],
+        "exact": ["e2e/package.json", "e2e/playwright.visual.config.ts", "e2e/scripts/playwright.ts", "e2e/scripts/visual-report.ts", "pnpm-lock.yaml", ".github/scripts/handoff.py", ".github/workflows/ci.yml", ".github/workflows/comment.atom.yml", ".github/workflows/report.atom.yml"],
         "regexes": ["^e2e/ui/visual-[^/]+\\.test\\.ts$"]
       },
       "effects": ["visual_validation_required"], "confidence": "medium"
@@ -206,7 +202,7 @@
     },
     {
       "id": "ci-rerun-infra-cancel-surface",
-      "match": { "exact": [".github/workflows/rerun.atom.yml", ".github/scripts/rerun_infra_cancel.py", "e2e/tests/packaged-smoke-workflow.test.ts"] },
+      "match": { "exact": [".github/workflows/rerun.atom.yml", ".github/scripts/rerun_infra_cancel.py"] },
       "effects": ["web_tests_required", "workspace_validation_required"], "confidence": "medium"
     },
     {

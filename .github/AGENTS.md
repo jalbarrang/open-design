@@ -15,8 +15,7 @@ Before changing GitHub automation, read the current versions of:
 - `.github/scripts/runners.py`, `.github/scripts/scopes.py`, and `.github/scripts/convergence.py`
 - `.github/workflows/convergence.atom.yml` and `.github/scripts/lib/r2.py` when changing reusable workload results
 - `specs/current/ci.md` when changing scope rules, confidence tiers, or planner invariants
-- `e2e/tests/packaged-smoke-workflow.test.ts`
-- `scripts/approve-fork-pr-workflows.ts` and `e2e/tests/scripts/approve-fork-pr-workflows.test.ts` when touching fork PR approval behavior
+- `e2e/tests/scripts/scopes.test.ts` and `e2e/tests/scripts/convergence.test.ts`
 
 If the change affects cross-workflow behavior, update the topology tests instead of relying only on workflow YAML review.
 
@@ -29,7 +28,6 @@ Business layer:
 - Business workflows decide what happened and what should be requested next.
 - `ci.yml` is the main low-privilege PR, merge-queue, and manual validation gate (application merge bar only).
 - `ci.yml` should resolve runners, compose scope and convergence decisions in its Linux `plan` job, run validation, and produce typed handoff artifacts.
-- Packaging checks are standalone and outside the merge gate: `nix.yml` (flake check) and `docker-image.yml` (image validate + publish). Do not re-attach them to `Validate workspace`.
 - Business workflows should not perform trusted writes to PR comments or branches when a capability workflow can do it.
 
 Atomic capability layer:
@@ -49,7 +47,6 @@ Default rule: do not add a new domain-specific follow-on workflow such as `foo.c
 - `.github/workflows/` contains GitHub Actions workflow entrypoints.
 - `.github/actions/` contains reusable composite actions for workflow setup steps.
 - `.github/scripts/` contains workflow-owned scripts and contracts that are not general repo developer commands.
-- `.github/scripts/release/` contains release workflow implementation helpers. Keep release-only helpers there and CI handoff helpers at `.github/scripts/`.
 - Root `scripts/` remains for repo-level developer checks, product scripts, and guard/test logic. Do not move workflow-only handoff glue there just to make it look more general.
 
 New workflow-owned helpers should usually live under `.github/scripts/`. Prefer TypeScript for project-owned scripts in general, but Python is acceptable for small GitHub runner glue when stdlib portability and low setup cost matter. Keep such exceptions narrow and covered by `pnpm guard` policy.
@@ -128,12 +125,6 @@ Rules:
 - Validate PR state, draft state, head SHA, and base SHA before secret use and again before comment upsert when practical.
 - Keep report type dispatch explicit. If multiple report types grow, add a clear handler boundary instead of burying branching in shell fragments.
 
-## Fork PR approval
-
-`fork-pr-workflow-approval.yml` and `scripts/approve-fork-pr-workflows.ts` are a separate security boundary. They may approve low-risk fork PR `pull_request` runs, but must not approve trusted `workflow_run` capability workflows.
-
-Keep `.github/workflows/ci.yml` as the only approved workflow path unless a maintainer explicitly expands the allowlist. `comment.atom.yml`, `autofix.atom.yml`, `report.atom.yml`, release workflows, deployment workflows, and any workflow with trusted secrets or write permissions must stay outside fork auto-approval.
-
 ## Common iteration flow
 
 1. Classify the change.
@@ -144,11 +135,11 @@ Keep `.github/workflows/ci.yml` as the only approved workflow path unless a main
    - New naming, paths, or metadata: update `.github/scripts/handoff.py`.
 2. Update scope routing in `.github/config/scopes.json`, then run `python3 .github/scripts/scopes.py validate`.
 3. Declare workload input closure, execution class, product contract, and explicit reuse opt-in in `.github/config/convergence.json`; use `"*"` until a narrower set has high-confidence evidence.
-4. Update topology coverage in `e2e/tests/packaged-smoke-workflow.test.ts` or the relevant script test.
+4. Update topology coverage in the relevant script test under `e2e/tests/scripts/`.
 5. Run the focused checks:
    - `python3 .github/scripts/handoff.py self-check`
    - `actionlint -color`
-   - `pnpm --filter @open-design/e2e test tests/packaged-smoke-workflow.test.ts`
+   - `pnpm --filter @open-design/e2e test tests/scripts`
 6. Run repo-level checks before handing off:
    - `pnpm guard`
    - `pnpm typecheck`
