@@ -154,7 +154,6 @@ describe('buildStructuredMainRunObservationV1', () => {
         status: 'ok',
         project_id: 'project-1',
         run_id: 'run-1',
-        workspace_id: null,
         redacted: false,
         truncated: false,
         stored_in_open_design: true,

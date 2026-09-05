@@ -211,7 +211,6 @@ function manifestBase(
     status: 'unavailable' as const,
     project_id: opts.projectId || null,
     run_id: opts.runId,
-    workspace_id: null,
     ...(source.sizeBytes !== undefined ? { size_bytes: source.sizeBytes } : {}),
     mime_type: source.mime,
     ...(extension ? { extension } : {}),

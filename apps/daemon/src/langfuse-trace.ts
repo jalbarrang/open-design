@@ -205,7 +205,6 @@ export interface TraceSafeObjectManifestBase {
   reason?: string;
   project_id: string | null;
   run_id: string;
-  workspace_id: string | null;
   size_bytes?: number;
   sha256?: string;
   mime_type?: string;
@@ -1489,7 +1488,6 @@ const SAFE_QUALITY_MANIFEST_KEYS = new Set([
   'reason',
   'project_id',
   'run_id',
-  'workspace_id',
   'size_bytes',
   'sha256',
   'mime_type',
