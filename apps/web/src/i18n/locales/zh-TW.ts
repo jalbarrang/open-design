@@ -4126,7 +4126,7 @@ export const zhTW: Dict = {
   "settings.memoryStarterProjectDesc":
     "OpenDesign v0.5 — 聊天驅動的設計編輯器",
   "settings.memoryStarterProjectBody":
-    "- 目標：本季交付聊天驅動的編輯體驗\n- 優先級：串流渲染、本地多模態、離線優先\n- 技術棧：Next.js 16、Express daemon、SQLite\n\n何時適用：與本專案相關的所有對話。",
+    "- 目標：本季交付聊天驅動的編輯體驗\n- 優先級：串流渲染、本地多模態、離線優先\n- 技術棧：Vite + TanStack Router、Express daemon、SQLite\n\n何時適用：與本專案相關的所有對話。",
   "settings.memorySaveHint": "不會自動儲存 — 點擊「建立」/「儲存」才會生效。",
   "settings.memoryIndexSaveHint":
     "索引不會自動儲存 — 改完後點擊「儲存索引」才會生效。",

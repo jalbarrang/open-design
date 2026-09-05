@@ -27,9 +27,7 @@ function fakeConfig(): PackagedConfig {
     resourceRoot: join("C:", "Program Files", "Open Design", "resources", "open-design"),
     telemetryRelayUrl: null,
     updateMetadataUrl: null,
-    webOutputMode: "server",
     webSidecarEntry: null,
-    webStandaloneRoot: null,
   };
 }
 
@@ -68,8 +66,6 @@ describe("resolvePackagedNamespacePaths", () => {
       posthogKey: null,
       posthogHost: null,
       webSidecarEntry: null,
-      webStandaloneRoot: null,
-      webOutputMode: "server",
     };
 
     expect(() => resolvePackagedNamespacePaths(config, "../release")).toThrow(/namespace/);

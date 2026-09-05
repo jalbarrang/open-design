@@ -4,13 +4,15 @@
  * Cross-platform command-invocation construction. Turns a requested
  * `{ command, args, env }` into the concrete `{ command, args }` (plus the
  * Windows-only `windowsVerbatimArguments` flag) that `child_process.spawn` /
- * `execFile` must receive so `.bat` / `.cmd` shims and Corepack-only package
- * managers launch correctly on every platform.
+ * `execFile` must receive so `.bat` / `.cmd` shims and PATH- or Corepack-resolved
+ * package managers launch correctly on every platform.
  *
  * Consumed by the `process` module's spawn helpers; owns no process lifecycle
  * itself.
  */
 import { extname } from "node:path";
+
+import { resolveExecutableOnPath } from "./toolchain.js";
 
 export type CommandInvocation = {
   args: string[];
@@ -90,13 +92,25 @@ export function createCommandInvocation({ args = [], command, env = process.env 
 }
 
 /**
- * Build the invocation for re-entering the repo-pinned package manager. Prefers
- * `npm_execpath` (routing Node-loadable managers through `process.execPath`),
- * and otherwise falls back to `corepack pnpm …` so Corepack-only setups without
- * a global `pnpm` on PATH still work. See #2438.
+ * Build the invocation for re-entering the repo-pinned package manager, in
+ * descending order of certainty:
+ *
+ * 1. `npm_execpath` — the manager that launched us, routed through
+ *    `process.execPath` when it is a Node-loadable script.
+ * 2. A `pnpm` found on PATH.
+ * 3. `corepack pnpm …` as the last resort.
+ *
+ * Corepack used to be step 2 and there was no PATH probe (see #2438), which
+ * held while every supported Node shipped it. Node 25 dropped Corepack from the
+ * distribution, so on this repo's pinned Node 26 that fallback spawns straight
+ * into `ENOENT` unless the user installed it separately. Probing for a real
+ * `pnpm` first keeps Corepack-only setups working — native Windows PowerShell,
+ * most of all — without making everyone else depend on a binary Node no longer
+ * ships. When neither is on PATH, the `corepack pnpm …` shape is still the
+ * clearest thing to fail with.
  *
  * @param args - Arguments to pass to the package manager.
- * @param env - Environment to read `npm_execpath` / `ComSpec` from (defaults to `process.env`).
+ * @param env - Environment to read `npm_execpath` / `PATH` / `PATHEXT` / `ComSpec` from (defaults to `process.env`).
  * @returns The `{ command, args }` invocation that runs the package manager.
  */
 export function createPackageManagerInvocation(args: string[], env: NodeJS.ProcessEnv = process.env): CommandInvocation {
@@ -107,12 +121,10 @@ export function createPackageManagerInvocation(args: string[], env: NodeJS.Proce
     }
     return createCommandInvocation({ args, command: execPath, env });
   }
-  // No `npm_execpath` — common on Corepack-only setups (e.g. native Windows
-  // PowerShell where `corepack pnpm` works but no standalone `pnpm` lives on
-  // PATH). Route nested invocations through `corepack pnpm …` instead of
-  // assuming a global `pnpm` binary: `corepack pnpm …` runs the repo-pinned
-  // package manager out of the box, while a bare `pnpm` only resolves when a
-  // separate global install or a `corepack enable` shim is present. See #2438.
+  const pnpmPath = resolveExecutableOnPath("pnpm", env);
+  if (pnpmPath) {
+    return createCommandInvocation({ args, command: pnpmPath, env });
+  }
   if (process.platform === "win32") {
     return buildCmdShimInvocation("corepack", ["pnpm", ...args], env);
   }

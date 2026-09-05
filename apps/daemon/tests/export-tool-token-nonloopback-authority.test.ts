@@ -26,10 +26,13 @@ const png = Buffer.from(
 type StartedServer = Pick<StartServerResult, 'server' | 'shutdown' | 'url'>;
 
 function isStartedServer(value: unknown): value is StartedServer {
-  return typeof value === 'object' && value !== null
-    && typeof Reflect.get(value, 'server') === 'object'
-    && typeof Reflect.get(value, 'shutdown') === 'function'
-    && typeof Reflect.get(value, 'url') === 'string';
+  if (typeof value !== 'object' || value === null) return false;
+  // SAFETY: this is the boundary parse for an arbitrary thrown/returned
+  // server result; property probing below establishes the StartedServer shape.
+  const record = value as Record<string, unknown>;
+  return typeof record.server === 'object' && record.server !== null
+    && typeof record.shutdown === 'function'
+    && typeof record.url === 'string';
 }
 
 async function reachableNonLoopbackIpv4(): Promise<string> {
@@ -325,10 +328,12 @@ describe('od export non-loopback run-scoped authority', () => {
       );
       return { code: 0, stdout, stderr };
     } catch (error) {
-      const failure = typeof error === 'object' && error !== null ? error : {};
-      const code = Reflect.get(failure, 'code');
-      const stdout = Reflect.get(failure, 'stdout');
-      const stderr = Reflect.get(failure, 'stderr');
+      // SAFETY: spawn failures are arbitrary thrown values; reading the
+      // conventional error fields through a record view is the parse here.
+      const failure = (typeof error === 'object' && error !== null ? error : {}) as Record<string, unknown>;
+      const code = failure.code;
+      const stdout = failure.stdout;
+      const stderr = failure.stderr;
       return {
         code: typeof code === 'number' ? code : 1,
         stdout: typeof stdout === 'string' ? stdout : '',

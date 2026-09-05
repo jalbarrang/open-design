@@ -63,8 +63,8 @@ const OUTPUT_FILES = [
   "apps/daemon/dist/sidecar/index.js",
   "apps/web/dist/sidecar/index.js",
   "apps/web/dist/sidecar/index.d.ts",
-  "apps/web/.next/standalone/apps/web/server.js",
-  "apps/web/.next/static/chunk.js",
+  "apps/web/dist/web/index.html",
+  "apps/web/dist/web/assets/chunk.js",
   "apps/desktop/dist/main/index.js",
   "apps/desktop/dist/main/index.d.ts",
   "apps/packaged/dist/index.mjs",
@@ -85,16 +85,6 @@ async function writeOutputs(root: string, value: string): Promise<void> {
   for (const file of OUTPUT_FILES) {
     await mkdir(join(root, file, ".."), { recursive: true });
     await writeFile(join(root, file), `${value}\n`, "utf8");
-  }
-}
-
-async function writeStandalonePeerDeps(root: string): Promise<void> {
-  const pnpmRoot = join(root, "apps/web/.next/standalone/node_modules/.pnpm");
-  for (const directory of ["react@18.3.1", "react-dom@18.3.1_react@18.3.1", "styled-jsx@5.1.6_react@18.3.1"]) {
-    const packageName = directory.split("@")[0]!;
-    const packageRoot = join(pnpmRoot, directory, "node_modules", packageName);
-    await mkdir(packageRoot, { recursive: true });
-    await writeFile(join(packageRoot, "package.json"), `${JSON.stringify({ name: packageName }, null, 2)}\n`, "utf8");
   }
 }
 
@@ -129,7 +119,7 @@ function createConfig(root: string, cacheRoot: string): ToolPackConfig {
     signed: false,
     silent: true,
     to: "dir",
-    webOutputMode: "standalone",
+    webOutputMode: "server",
     workspaceRoot: root,
   };
 }
@@ -184,24 +174,23 @@ describe("ensureWorkspaceBuildArtifacts", () => {
     }
   });
 
-  it("hoists standalone web peer deps with Windows-compatible directory links", async () => {
-    const root = await mkdtemp(join(tmpdir(), "open-design-workspace-build-peer-deps-"));
+  it("caches and materializes the Vite static web output", async () => {
+    const root = await mkdtemp(join(tmpdir(), "open-design-workspace-build-web-static-"));
     const cache = new ToolPackCache(join(root, ".cache"));
     const config = createConfig(root, cache.root);
 
     try {
       await writeWorkspace(root);
       await ensureWorkspaceBuildArtifacts(config, cache, async () => {
-        await writeOutputs(root, "build");
-        await writeStandalonePeerDeps(root);
+        await writeOutputs(root, "vite-build");
+      });
+      await rm(join(root, "apps/web/dist/web"), { force: true, recursive: true });
+      await ensureWorkspaceBuildArtifacts(config, cache, async () => {
+        throw new Error("cache hit should materialize the Vite output");
       });
 
-      expect(await readFile(join(root, "apps/web/.next/standalone/apps/web/node_modules/react/package.json"), "utf8"))
-        .toContain('"name": "react"');
-      expect(await readFile(join(root, "apps/web/.next/standalone/apps/web/node_modules/react-dom/package.json"), "utf8"))
-        .toContain('"name": "react-dom"');
-      expect(await readFile(join(root, "apps/web/.next/standalone/apps/web/node_modules/styled-jsx/package.json"), "utf8"))
-        .toContain('"name": "styled-jsx"');
+      expect(await readFile(join(root, "apps/web/dist/web/index.html"), "utf8")).toBe("vite-build\n");
+      expect(await readFile(join(root, "apps/web/dist/web/assets/chunk.js"), "utf8")).toBe("vite-build\n");
     } finally {
       await rm(root, { force: true, recursive: true });
     }

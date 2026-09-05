@@ -24,7 +24,7 @@ import {
 } from "@open-design/launcher-proto";
 import { releaseChannelFromNamespace, releaseChannelFromVersion } from "@open-design/release";
 
-import type { PackagedConfig, PackagedWebOutputMode, RawPackagedConfig } from "./config.js";
+import type { PackagedConfig, RawPackagedConfig } from "./config.js";
 import type { PackagedNamespacePaths } from "./paths.js";
 
 type LauncherPayloadManifest = {
@@ -266,16 +266,6 @@ async function resolveWindowsElectronNodeCommand(versionPaths: LauncherVersionPa
     : join(aliasRoot, basename(executablePath));
 }
 
-async function resolveWindowsWebStandaloneRoot(
-  versionPaths: LauncherVersionPaths,
-  platform: LauncherPayloadManifest["platform"],
-  webStandaloneRoot: string | null,
-): Promise<string | null> {
-  return platform === "win32"
-    ? await resolveWindowsPayloadDirectoryAlias(versionPaths, "ws", webStandaloneRoot)
-    : webStandaloneRoot;
-}
-
 async function resolvePayloadConfig(
   config: PackagedConfig,
   versionPaths: LauncherVersionPaths,
@@ -298,9 +288,6 @@ async function resolvePayloadConfig(
   const packagedConfigPath = join(resourcesPath, "open-design-config.json");
   if (!(await pathExists(packagedConfigPath))) return null;
   const raw = await readJsonFile<RawPackagedConfig>(packagedConfigPath);
-  const webOutputMode = raw.webOutputMode === "standalone" || raw.webOutputMode === "server"
-    ? raw.webOutputMode
-    : config.webOutputMode;
   const resourceRoot = raw.resourceRoot == null || raw.resourceRoot.length === 0
     ? join(resourcesPath, "open-design")
     : raw.resourceRoot;
@@ -315,14 +302,6 @@ async function resolvePayloadConfig(
       await resolveOptionalVersionEntry(versionPaths.versionRoot, manifest.entry.executable),
     )
     : null;
-  const rawWebStandaloneRoot = raw.webStandaloneRoot == null || raw.webStandaloneRoot.length === 0
-    ? webOutputMode === "standalone" ? join(resourcesPath, "open-design-web-standalone") : null
-    : raw.webStandaloneRoot;
-  const webStandaloneRoot = await resolveWindowsWebStandaloneRoot(
-    versionPaths,
-    manifest.platform,
-    rawWebStandaloneRoot,
-  );
   return {
     config: {
       ...config,
@@ -331,9 +310,7 @@ async function resolvePayloadConfig(
       nodeCommand,
       resourceRoot,
       telemetryRelayUrl: raw.telemetryRelayUrl?.trim() || config.telemetryRelayUrl,
-      webOutputMode: webOutputMode as PackagedWebOutputMode,
       webSidecarEntry: await resolveOptionalPayloadEntry(resourcesPath, raw.webSidecarEntryRelative),
-      webStandaloneRoot,
     },
     desktopExecutablePath,
     electronNodeCommand,

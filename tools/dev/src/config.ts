@@ -56,8 +56,6 @@ export type ToolDevConfig = {
       packageJsonPath: string;
     };
     web: ToolDevAppConfig & {
-      nextDistDir: string;
-      nextTsconfigPath: string;
       sidecarEntryPath: string;
     };
   };
@@ -189,8 +187,6 @@ export function resolveToolDevConfig(options: ToolDevOptions = {}): ToolDevConfi
       },
       web: {
         ...web,
-        nextDistDir: resolveAppRuntimePath({ app: APP_KEYS.WEB, namespaceRoot, fileName: "next", contract: OPEN_DESIGN_SIDECAR_CONTRACT }),
-        nextTsconfigPath: resolveAppRuntimePath({ app: APP_KEYS.WEB, namespaceRoot, fileName: "tsconfig.json", contract: OPEN_DESIGN_SIDECAR_CONTRACT }),
         sidecarEntryPath: path.join(WORKSPACE_ROOT, "apps/web/sidecar/index.ts"),
       },
     },

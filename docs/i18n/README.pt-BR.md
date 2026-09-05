@@ -328,7 +328,7 @@ pnpm tools-dev run web
 
 Abra a URL impressa por `tools-dev`; as portas de desenvolvimento são alocadas dinamicamente sem flags explícitos.
 
-Node `~26`, pnpm `10.33.x`. Usuários de Windows, veja [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Início rápido completo, variáveis de ambiente, Nix flake e fluxo de build empacotado → [`QUICKSTART.pt-BR.md`](QUICKSTART.pt-BR.md).
+Node `~26`, pnpm `10.33.x`. Usuários de Windows, veja [`docs/windows-troubleshooting.md`](../../docs/windows-troubleshooting.md). Início rápido completo, variáveis de ambiente, fluxo de build empacotado → [`QUICKSTART.pt-BR.md`](QUICKSTART.pt-BR.md).
 
 ### Um fluxo de trabalho completo — do briefing ao artefato
 

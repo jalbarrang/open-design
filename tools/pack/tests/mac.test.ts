@@ -153,6 +153,12 @@ describe("seedPackagedAppConfig", () => {
 });
 
 describe("copyResourceTree", () => {
+  // Alone this finishes in well under a second; inside the full 40-file run it
+  // takes ~25s. `copyResourceTree` shells out to a nested `pnpm pack` for every
+  // bundled workspace package, and those child processes contend with every
+  // other packaging suite for the pnpm store lock and the CPU. The file-wide
+  // 20s in vitest.config.ts is right for the rest of the suite, so only this
+  // one gets the longer budget.
   it("does not embed the build machine Node launcher into mac resources", async () => {
     const root = await mkdtemp(join(tmpdir(), "open-design-tools-pack-mac-"));
     try {
@@ -199,7 +205,7 @@ describe("copyResourceTree", () => {
     } finally {
       await rm(root, { force: true, recursive: true });
     }
-  });
+  }, 90_000);
 });
 
 describe("copyMacPrebundleRuntimeDependencies", () => {

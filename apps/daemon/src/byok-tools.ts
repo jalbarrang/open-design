@@ -734,9 +734,8 @@ export async function executeGenerateImage(
   const filename = `byok-${id}.png`;
   await writeFile(path.join(dir, filename), bytes);
 
-  // Return a relative URL through the project file serving route. The
-  // web's Next.js rewrites `/api/:path*` to the daemon (see
-  // apps/web/next.config.ts), so the chat UI loads the image
+  // Return a relative URL through the project file serving route. The web
+  // sidecar proxies `/api/*` to the daemon, so the chat UI loads the image
   // same-origin — satisfying the strict CSP (`img-src 'self' data:
   // blob:`) without any CORS plumbing.
   return {

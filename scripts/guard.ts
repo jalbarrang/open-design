@@ -136,8 +136,7 @@ const residualAllowedExactPaths = new Set([
 
 const residualAllowedPathPrefixes = [
   "apps/daemon/dist/",
-  "apps/web/.next/",
-  "apps/web/out/",
+  "apps/web/dist/",
   "generated/",
   "e2e/playwright-report/",
   "e2e/reports/html/",
@@ -512,6 +511,10 @@ function expectedTestPath(repositoryPath: string): string {
 }
 
 function isAllowedScopedTestPath(repositoryPath: string): boolean {
+  // The anti-slop plugin is vendored source. Keep its upstream test layout so
+  // future vendor refreshes remain reviewable rather than rewriting imports.
+  if (repositoryPath.startsWith("tools/oxlint/anti-slop/")) return true;
+
   const [scope, project, directory] = repositoryPath.split("/");
   return testLayoutScopedDirectories.includes(scope ?? "") && project != null && directory === "tests";
 }
@@ -1023,6 +1026,7 @@ const toolsRootAllowlist = new Map<string, "directory" | "file">([
   // Windows shim experiment from PR #683 and is not an active repo boundary.
   ["AGENTS.md", "file"],
   ["dev", "directory"],
+  ["oxlint", "directory"],
   ["pack", "directory"],
   ["release", "directory"],
   ["serve", "directory"],
@@ -1039,7 +1043,7 @@ async function checkToolsLayout(): Promise<boolean> {
     const repositoryPath = `tools/${entry.name}${entry.isDirectory() ? "/" : ""}`;
 
     if (expected == null) {
-      violations.push(`${repositoryPath} -> tools/ top-level entries are allowlisted; expected only AGENTS.md, dev/, pack/, release/, and serve/`);
+      violations.push(`${repositoryPath} -> tools/ top-level entries are allowlisted; expected only AGENTS.md, dev/, oxlint/, pack/, release/, and serve/`);
       continue;
     }
 

@@ -120,14 +120,11 @@ describe("workflow scope planner", () => {
     }
   });
 
-  test("routes Terminal exact sources and release orchestration to scene validation", () => {
+  test("routes Terminal exact sources to scene validation", () => {
     for (const file of [
       "apps/closure/src/index.ts",
       "packages/standalone/src/store.ts",
       "shells/terminal/src/cli.ts",
-      ".github/scripts/pack.py",
-      ".github/scripts/release.py",
-      ".github/workflows/release-exact.yml",
     ]) {
       expect(plan("pr", [file]), file).toMatchObject({
         scopes: { terminal_scene_required: true, workspace_validation_required: true },
@@ -171,11 +168,14 @@ describe("workflow scope planner", () => {
     expect(plan("full")).toMatchObject({ enabled: { windows_tools_pack_payload_tests: true } });
   });
 
-  test("preserves the four-domain runtime-definition shadow candidate", () => {
+  test("preserves the runtime-definition shadow candidate declared in scopes.json", () => {
     const candidate = plan("pr", ["apps/daemon/src/runtimes/defs/codex.ts"]);
     expect(candidate.trace.uiP0Shadow.mode).toBe("candidate");
+    // Mirrors `uiP0Shadow.matrixNames`, which `scopes.py validate` already
+    // constrains to real ui_p0 matrix names. Keep the two in step when a shard
+    // is added or retired.
     expect(candidate.trace.uiP0Shadow.matrix.map((entry) => entry.name)).toEqual([
-      "entry-settings", "project-workspace", "project-collab", "project-runtime",
+      "entry-settings", "project-workspace", "project-runtime",
     ]);
     expect(plan("pr", ["apps/daemon/src/server.ts"]).trace.uiP0Shadow.mode).toBe("full-fallback");
   });

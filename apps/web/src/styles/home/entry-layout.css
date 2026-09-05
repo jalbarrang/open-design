@@ -6450,7 +6450,7 @@ button.entry-nav-rail__menu-credits-row:active:not(:disabled) {
 .ds-top-scope-chip.is-active .ds-top-scope-count { color: var(--accent); }
 
 /* ── Design-systems layout fallback ──────────────────────────────────
-   The DesignSystemsTab styling lives in a CSS Module. Next.js dev Fast
+   The DesignSystemsTab styling lives in a CSS Module. Vite Fast
    Refresh can occasionally desync that module's hashed class names after
    an HMR cycle, dropping the two-column grid and the row logo size cap
    (the logo then renders at its full intrinsic size). These rules key off

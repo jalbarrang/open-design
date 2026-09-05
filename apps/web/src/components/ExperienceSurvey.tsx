@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Variants } from 'motion/react';
 import { Button } from '@open-design/components';
+import { useAppSearch } from '../app-search-context';
 import { useT } from '../i18n';
 import styles from './ExperienceSurvey.module.css';
 import {
@@ -111,6 +112,7 @@ export function ExperienceSurvey({
   onDismiss,
 }: Props) {
   const t = useT();
+  const { survey } = useAppSearch();
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState<Step>('recommendation');
   const [picked, setPicked] = useState<number | null>(null);
@@ -146,14 +148,12 @@ export function ExperienceSurvey({
     };
     globals.__odExperienceSurvey = { open: () => setVisible(true) };
     // `?survey=preview` opens it without a console round-trip, so a design
-    // review can just follow a link.
-    if (new URLSearchParams(window.location.search).get('survey') === 'preview') {
-      setVisible(true);
-    }
+    // review can just follow a link. The root route validates the value.
+    if (survey === 'preview') setVisible(true);
     return () => {
       delete globals.__odExperienceSurvey;
     };
-  }, []);
+  }, [survey]);
 
   // Arm on a delivered artifact. The delay gives the user a beat to look at
   // what the run just produced before anything else asks for attention. Once

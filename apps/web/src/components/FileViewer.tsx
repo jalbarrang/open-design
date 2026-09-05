@@ -34,6 +34,7 @@ import {
   type TrackingDeployProvider,
 } from '@open-design/contracts/analytics';
 import { useAnalytics } from '../analytics/provider';
+import { useAppSearch } from '../app-search-context';
 import { exportErrorCode } from '../analytics/export-error-code';
 import { deployErrorCode } from '../analytics/deploy-error-code';
 import {
@@ -181,7 +182,6 @@ import {
   htmlNeedsPoweredPreview,
   htmlNeedsRedirectGuard,
   htmlNeedsSandboxShim,
-  parseForceInline,
   shouldUrlLoadHtmlPreview,
   type UrlLoadDecision,
 } from './file-viewer-render-mode';
@@ -8126,13 +8126,9 @@ function HtmlViewer({
   const templateDescriptionId = useId();
   const imageExportTitleId = useId();
   const pptxExportTitleId = useId();
-  // Opt back into the legacy inline-asset srcDoc path via `?forceInline=1`
-  // on the host page. Lets users escape-hatch around the URL-load default
-  // for non-deck HTML that depends on the in-iframe localStorage shim.
-  const forceInline = useMemo(
-    () => (typeof window === 'undefined' ? false : parseForceInline(window.location.search)),
-    [],
-  );
+  // Opt back into the inline-asset srcDoc path via `?forceInline=1` on the
+  // host page. The root route validates this shareable state before exposing it.
+  const { forceInline = false } = useAppSearch();
   const [activeCommentTarget, setActiveCommentTarget] = useState<PreviewCommentSnapshot | null>(null);
   const [hoveredCommentTarget, setHoveredCommentTarget] = useState<PreviewCommentSnapshot | null>(null);
   // True while the pointer is physically over the floating hover card. The card

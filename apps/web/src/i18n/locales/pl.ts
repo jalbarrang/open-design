@@ -3892,7 +3892,7 @@ export const pl: Dict = {
   'settings.memoryStarterFeedbackBody': '- Motyw: domyślnie ciemny\n- Tekst główny: ≥ 18px\n- Gęstość informacji: preferuj przestrzeń, mniej elementów na ekranie\n\nDlaczego: mniejsze zmęczenie wzroku podczas długich sesji.\nKiedy stosować: zawsze, gdy generujesz interfejs, strony internetowe lub slajdy.',
   'settings.memoryStarterProjectName': 'Bieżący projekt',
   'settings.memoryStarterProjectDesc': 'OpenDesign v0.5 — edytor projektów sterowany czatem',
-  'settings.memoryStarterProjectBody': '- Cel: wydać edytor sterowany czatem w tym kwartale\n- Priorytety: renderowanie strumieniowe, lokalna multimodalność, tryb offline-first\n- Stos: Next.js 16, demon Express, SQLite\n\nKiedy stosować: w każdej rozmowie dotyczącej tego projektu.',
+  'settings.memoryStarterProjectBody': '- Cel: wydać edytor sterowany czatem w tym kwartale\n- Priorytety: renderowanie strumieniowe, lokalna multimodalność, tryb offline-first\n- Stos: Vite + TanStack Router, demon Express, SQLite\n\nKiedy stosować: w każdej rozmowie dotyczącej tego projektu.',
   'settings.memorySaveHint': 'Nie zapisano automatycznie — kliknij Utwórz / Zapisz, aby zastosować.',
   'settings.memoryIndexSaveHint': 'Zmiany w indeksie nie są zapisywane automatycznie — kliknij Zapisz indeks, aby zastosować.',
   'settings.memoryIndexUnsaved': 'Niezapisane zmiany',

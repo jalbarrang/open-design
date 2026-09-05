@@ -85,16 +85,16 @@ function fakeConfig(workspaceRoot: string): ToolPackConfig {
     signed: false,
     silent: true,
     to: "all",
-    webOutputMode: "standalone",
+    webOutputMode: "server",
     workspaceRoot,
   };
 }
 
 async function setupChunksDir(rootDir: string, mapNames: string[]): Promise<string> {
-  const chunksDir = join(rootDir, "apps", "web", ".next", "static");
+  const chunksDir = join(rootDir, "apps", "web", "dist", "web", "assets");
   await mkdir(join(chunksDir, "chunks"), { recursive: true });
   // Always create a .js file paired with each .map so the layout matches what
-  // Next.js actually emits — otherwise a future helper change that filters by
+  // Vite emits — otherwise a future helper change that filters by
   // pairing would silently no-op the test.
   for (const name of mapNames) {
     const baseName = name.replace(/\.map$/, "");
@@ -145,12 +145,11 @@ describe("processWebSourcemaps", () => {
     expect(preservedJs).toContain("fake bundle");
   });
 
-  it("strips .map files in nested subdirectories under .next/static", async () => {
+  it("strips .map files in nested Vite asset subdirectories", async () => {
     const chunksDir = await setupChunksDir(tempRoot, []);
-    // Next.js puts some bundles under `.next/static/css` and `.next/static/media`
-    // even though the JS chunks live in `.next/static/chunks`. The strip walker
-    // must recurse — otherwise we'd leak CSS-source-style maps if Next ever
-    // emits them under those paths.
+    // Asset plugins can put bundles under `dist/web/assets/media` while the JS
+    // chunks live at the asset root. The strip walker must recurse — otherwise
+    // we'd leak source maps emitted by those plugins.
     const nestedDir = join(chunksDir, "media");
     await mkdir(nestedDir, { recursive: true });
     await writeFile(join(nestedDir, "x.js"), "/* */", "utf8");

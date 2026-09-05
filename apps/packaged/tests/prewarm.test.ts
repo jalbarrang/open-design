@@ -136,49 +136,17 @@ describe('resolveDaemonPrewarmTargets', () => {
 });
 
 describe('resolveWebPrewarmTargets', () => {
-  const entry = '/res/app/node_modules/@open-design/web/dist/sidecar/index.js';
-
-  it('covers the web sidecar, Next server chunks and framework server code in server mode', () => {
-    // next/dist/compiled (~107 MB) is intentionally excluded: only a small
-    // fraction of it is required during the status window, and the rest is
-    // demand-loaded on first paint, which has no hard timeout.
+  it('prewarms only the compiled Vite web sidecar needed for readiness', () => {
     const targets = resolveWebPrewarmTargets({
-      webSidecarEntry: entry,
-      webStandaloneRoot: null,
-      resolveNextPackageRoot: () => '/res/app/node_modules/next',
+      webSidecarEntry: '/res/app/node_modules/@open-design/web/dist/sidecar/index.js',
     });
     expect(targets).toEqual([
       { kind: 'dir', path: '/res/app/node_modules/@open-design/web/dist/sidecar' },
-      { kind: 'dir', path: '/res/app/node_modules/@open-design/web/.next/server' },
-      { kind: 'dir', path: '/res/app/node_modules/next/dist/server' },
-    ]);
-  });
-
-  it('falls back to the standalone bundle root in standalone mode', () => {
-    const targets = resolveWebPrewarmTargets({
-      webSidecarEntry: entry,
-      webStandaloneRoot: '/res/open-design-web-standalone',
-      resolveNextPackageRoot: () => '/res/app/node_modules/next',
-    });
-    expect(targets).toEqual([{ kind: 'dir', path: '/res/open-design-web-standalone' }]);
-  });
-
-  it('skips the Next framework dirs when next cannot be resolved', () => {
-    const targets = resolveWebPrewarmTargets({
-      webSidecarEntry: entry,
-      webStandaloneRoot: null,
-      resolveNextPackageRoot: () => null,
-    });
-    expect(targets).toEqual([
-      { kind: 'dir', path: '/res/app/node_modules/@open-design/web/dist/sidecar' },
-      { kind: 'dir', path: '/res/app/node_modules/@open-design/web/.next/server' },
     ]);
   });
 
   it('returns no targets when the web sidecar entry is unknown', () => {
-    expect(
-      resolveWebPrewarmTargets({ webSidecarEntry: null, webStandaloneRoot: null }),
-    ).toEqual([]);
+    expect(resolveWebPrewarmTargets({ webSidecarEntry: null })).toEqual([]);
   });
 });
 

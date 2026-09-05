@@ -3892,7 +3892,7 @@ export const de: Dict = {
   'settings.memoryStarterFeedbackBody': '- Theme: standardmäßig dunkel\n- Fließtext: ≥ 18px\n- Informationsdichte: Weißraum bevorzugen, weniger Elemente pro Bildschirm\n\nWarum: weniger Augenbelastung bei langen Sitzungen.\nWann anwenden: immer wenn du UI, Webseiten oder Folien generierst.',
   'settings.memoryStarterProjectName': 'Aktuelles Projekt',
   'settings.memoryStarterProjectDesc': 'OpenDesign v0.5 – chatgesteuerter Design-Editor',
-  'settings.memoryStarterProjectBody': '- Ziel: den chatgesteuerten Editor in diesem Quartal ausliefern\n- Prioritäten: Streaming-Rendering, lokal multimodal, Offline-First\n- Stack: Next.js 16, Express-Daemon, SQLite\n\nWann anwenden: in jeder Konversation über dieses Projekt.',
+  'settings.memoryStarterProjectBody': '- Ziel: den chatgesteuerten Editor in diesem Quartal ausliefern\n- Prioritäten: Streaming-Rendering, lokal multimodal, Offline-First\n- Stack: Vite + TanStack Router, Express-Daemon, SQLite\n\nWann anwenden: in jeder Konversation über dieses Projekt.',
   'settings.memorySaveHint': 'Nicht automatisch gespeichert – auf Erstellen / Speichern klicken, um zu übernehmen.',
   'settings.memoryIndexSaveHint': 'Änderungen am Index werden nicht automatisch gespeichert – auf Index speichern klicken, um zu übernehmen.',
   'settings.memoryIndexUnsaved': 'Nicht gespeicherte Änderungen',

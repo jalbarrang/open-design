@@ -64,6 +64,7 @@ test("collectRelativeSpecifiers ignores external specifiers and string literals 
 test("resolvesRelativeSpecifier maps .js specifiers to their real sibling and follows directory barrels", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "od-tsnocheck-"));
   await writeFile(path.join(root, "sibling.ts"), "export const a = 1;", "utf8");
+  await writeFile(path.join(root, "route.index.tsx"), "export const Route = {};", "utf8");
   await mkdir(path.join(root, "domain"), { recursive: true });
   await writeFile(path.join(root, "domain", "index.ts"), "export const b = 2;", "utf8");
   await writeFile(path.join(root, "data.json"), "{}", "utf8");
@@ -74,6 +75,8 @@ test("resolvesRelativeSpecifier maps .js specifiers to their real sibling and fo
   assert.equal(resolvesRelativeSpecifier(root, "./domain/index.js"), true);
   // extensionless directory import resolves via index.*
   assert.equal(resolvesRelativeSpecifier(root, "./domain"), true);
+  // a dotted basename is still extensionless when a source extension follows it.
+  assert.equal(resolvesRelativeSpecifier(root, "./route.index"), true);
   // asset import must exist verbatim.
   assert.equal(resolvesRelativeSpecifier(root, "./data.json"), true);
   // a barrel-move casualty: the flat file no longer exists.

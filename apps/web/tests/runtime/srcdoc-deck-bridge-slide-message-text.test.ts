@@ -12,7 +12,7 @@ function extractDeckBridgeScript(srcdoc: string): string {
   return match[1];
 }
 
-function installQueuedTimers(win: object) {
+function installQueuedTimers(win: { setTimeout?: unknown; clearTimeout?: unknown }) {
   const callbacks: Array<() => void> = [];
   Object.defineProperty(win, 'setTimeout', {
     configurable: true,

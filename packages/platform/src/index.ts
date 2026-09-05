@@ -9,10 +9,10 @@
  * - `proxy-env`  — system proxy discovery and proxy-aware env merging.
  * - `fs`         — filesystem containment, atomic copy, removal, log tails.
  * - `http`       — HTTP readiness polling.
- * - `toolchain`  — user-level toolchain bin discovery.
+ * - `toolchain`  — user-level toolchain bin discovery and PATH executable lookup.
  *
- * The set of names exported here is intentionally identical to the pre-split
- * public surface; importers see no change.
+ * The split itself changed no names, so importers saw nothing move; anything
+ * exported beyond that baseline is a deliberate later addition.
  */
 
 export type { CommandInvocation, CommandInvocationRequest } from "./command.js";
@@ -65,4 +65,4 @@ export type { HttpWaitOptions } from "./http.js";
 export { waitForHttpOk } from "./http.js";
 
 export type { WellKnownUserToolchainOptions } from "./toolchain.js";
-export { wellKnownUserToolchainBins } from "./toolchain.js";
+export { resolveExecutableOnPath, wellKnownUserToolchainBins } from "./toolchain.js";

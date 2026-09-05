@@ -9,6 +9,7 @@ import {
   createCommandInvocation,
   createPackageManagerInvocation,
   createProcessStampArgs,
+  resolveExecutableOnPath,
   mergeProxyAwareEnv,
   matchesStampedProcess,
   parseMacosScutilProxyOutput,
@@ -761,10 +762,51 @@ describe("createPackageManagerInvocation", () => {
     ]);
   });
 
-  it("returns corepack pnpm invocation on POSIX without npm_execpath", () => {
+  it("prefers a pnpm found on PATH over corepack when npm_execpath is unset", () => {
+    setPlatform("linux");
+    const bin = mkdtempSync(join(tmpdir(), "od-pm-bin-"));
+    try {
+      const pnpmPath = join(bin, "pnpm");
+      writeFileSync(pnpmPath, "#!/bin/sh\nexec pnpm \"$@\"\n");
+      chmodSync(pnpmPath, 0o755);
+      const invocation = createPackageManagerInvocation(["install"], { PATH: bin } as NodeJS.ProcessEnv);
+      expect(invocation).toEqual({ args: ["install"], command: pnpmPath });
+    } finally {
+      rmSync(bin, { force: true, recursive: true });
+    }
+  });
+
+  // Node 25 dropped the bundled corepack, so this shape is now the last resort
+  // rather than the default — it must still be what we fail with when nothing
+  // else resolves.
+  it("falls back to corepack pnpm on POSIX when neither npm_execpath nor pnpm resolves", () => {
     setPlatform("linux");
     const invocation = createPackageManagerInvocation(["install"], {} as NodeJS.ProcessEnv);
     expect(invocation).toEqual({ args: ["pnpm", "install"], command: "corepack" });
+  });
+
+  it("wraps a PATH-resolved pnpm.cmd through cmd.exe on Windows", () => {
+    setPlatform("win32");
+    const bin = mkdtempSync(join(tmpdir(), "od-pm-bin-"));
+    try {
+      const pnpmPath = join(bin, "pnpm.cmd");
+      writeFileSync(pnpmPath, "@echo off\r\n");
+      const invocation = createPackageManagerInvocation(["install"], {
+        ComSpec: "cmd.exe",
+        PATH: bin,
+        PATHEXT: ".COM;.EXE;.BAT;.CMD",
+      } as NodeJS.ProcessEnv);
+      expect(invocation.command).toBe("cmd.exe");
+      expect(invocation.windowsVerbatimArguments).toBe(true);
+      // The suffix carries PATHEXT's casing rather than the file's, which is
+      // exactly what real Windows produces (uppercase PATHEXT, lowercase
+      // pnpm.cmd on disk) and spawns fine on a case-insensitive filesystem.
+      // tmpdir paths carry no characters that trigger cmd quoting, so the shim
+      // line is the plain path plus args.
+      expect(invocation.args).toEqual(["/d", "/s", "/c", `"${join(bin, "pnpm.CMD")} install"`]);
+    } finally {
+      rmSync(bin, { force: true, recursive: true });
+    }
   });
 
   it("wraps corepack pnpm through cmd.exe with verbatim arguments on Windows", () => {
@@ -780,6 +822,67 @@ describe("createPackageManagerInvocation", () => {
       "/c",
       '"corepack pnpm --filter @open-design/desktop build"',
     ]);
+  });
+});
+
+describe("resolveExecutableOnPath", () => {
+  const originalPlatform = process.platform;
+  function setPlatform(value: NodeJS.Platform): void {
+    Object.defineProperty(process, "platform", { configurable: true, value });
+  }
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { configurable: true, value: originalPlatform });
+  });
+
+  it("returns the first PATH entry holding an executable file on POSIX", () => {
+    setPlatform("linux");
+    const early = mkdtempSync(join(tmpdir(), "od-path-a-"));
+    const late = mkdtempSync(join(tmpdir(), "od-path-b-"));
+    try {
+      for (const dir of [early, late]) {
+        const tool = join(dir, "tool");
+        writeFileSync(tool, "#!/bin/sh\n");
+        chmodSync(tool, 0o755);
+      }
+      expect(resolveExecutableOnPath("tool", { PATH: [early, late].join(":") })).toBe(join(early, "tool"));
+    } finally {
+      rmSync(early, { force: true, recursive: true });
+      rmSync(late, { force: true, recursive: true });
+    }
+  });
+
+  it("skips a non-executable match on POSIX", () => {
+    setPlatform("linux");
+    const dir = mkdtempSync(join(tmpdir(), "od-path-noexec-"));
+    try {
+      writeFileSync(join(dir, "tool"), "not executable\n");
+      chmodSync(join(dir, "tool"), 0o644);
+      expect(resolveExecutableOnPath("tool", { PATH: dir })).toBeNull();
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  // Windows resolves a bare name only through PATHEXT, so the extension-less
+  // POSIX sibling that pnpm also ships must not match there.
+  it("matches only PATHEXT suffixes on Windows", () => {
+    setPlatform("win32");
+    const dir = mkdtempSync(join(tmpdir(), "od-path-win-"));
+    try {
+      writeFileSync(join(dir, "tool"), "posix sibling\n");
+      writeFileSync(join(dir, "tool.cmd"), "@echo off\r\n");
+      const env = { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+      // Suffix casing comes from PATHEXT, not from the directory entry.
+      expect(resolveExecutableOnPath("tool", env)).toBe(join(dir, "tool.CMD"));
+      expect(resolveExecutableOnPath("missing", env)).toBeNull();
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  it("returns null when PATH is absent", () => {
+    setPlatform("linux");
+    expect(resolveExecutableOnPath("pnpm", {})).toBeNull();
   });
 });
 

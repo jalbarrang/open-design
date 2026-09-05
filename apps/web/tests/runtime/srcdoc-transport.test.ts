@@ -19,6 +19,36 @@ function extractShellScript(shellHtml: string): string {
   return match[1];
 }
 
+type ActivateSandboxWindow = {
+  addEventListener(_type: string, listener: (ev: { data: unknown }) => void): void;
+  parent?: { postMessage: () => void };
+  __listener?: (ev: { data: unknown }) => void;
+};
+
+// Runs the transport shell in a fresh vm sandbox that records document.write
+// output, then returns the activate listener the shell registered on window.
+function runShellAndCaptureActivateListener(script: string, writes: string[]): (ev: { data: unknown }) => void {
+  const win: ActivateSandboxWindow = {
+    addEventListener(_t, listener) {
+      win.__listener = listener;
+    },
+  };
+  win.parent = { postMessage: () => {} };
+  const sandbox: Record<string, unknown> = {
+    document: {
+      open: () => {},
+      write: (chunk: string) => writes.push(chunk),
+      close: () => {},
+    },
+    window: win,
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(script, sandbox);
+  const listener = win.__listener;
+  if (!listener) throw new Error('transport shell did not register an activate listener');
+  return listener;
+}
+
 interface RunShellResult {
   parentMessages: unknown[];
   runScheduledCallbacks: () => void;
@@ -146,23 +176,7 @@ describe('buildLazySrcdocTransport (#2253)', () => {
     // (Re-running with our own probe to inspect document mock.)
     const script = extractShellScript(shell);
     const writes: string[] = [];
-    const win: Record<string, unknown> = {
-      addEventListener(_t: string, listener: (ev: { data: unknown }) => void) {
-        (win as { __listener: typeof listener }).__listener = listener;
-      },
-    };
-    win.parent = { postMessage: () => {} };
-    const sandbox: Record<string, unknown> = {
-      document: {
-        open: () => {},
-        write: (chunk: string) => writes.push(chunk),
-        close: () => {},
-      },
-      window: win,
-    };
-    vm.createContext(sandbox);
-    vm.runInContext(script, sandbox);
-    const listener = (win as { __listener: (ev: { data: unknown }) => void }).__listener;
+    const listener = runShellAndCaptureActivateListener(script, writes);
     listener({
       data: {
         type: 'od:srcdoc-transport-activate',
@@ -177,23 +191,7 @@ describe('buildLazySrcdocTransport (#2253)', () => {
     const shell = buildLazySrcdocTransport();
     const script = extractShellScript(shell);
     const writes: string[] = [];
-    const win: Record<string, unknown> = {
-      addEventListener(_t: string, listener: (ev: { data: unknown }) => void) {
-        (win as { __listener: typeof listener }).__listener = listener;
-      },
-    };
-    win.parent = { postMessage: () => {} };
-    const sandbox: Record<string, unknown> = {
-      document: {
-        open: () => {},
-        write: (chunk: string) => writes.push(chunk),
-        close: () => {},
-      },
-      window: win,
-    };
-    vm.createContext(sandbox);
-    vm.runInContext(script, sandbox);
-    const listener = (win as { __listener: (ev: { data: unknown }) => void }).__listener;
+    const listener = runShellAndCaptureActivateListener(script, writes);
     listener({ data: { type: 'od:srcdoc-transport-activate', html: '<p>stale</p>' } });
     expect(writes).toEqual([]);
   });
@@ -202,23 +200,7 @@ describe('buildLazySrcdocTransport (#2253)', () => {
     const shell = buildLazySrcdocTransport();
     const script = extractShellScript(shell);
     const writes: string[] = [];
-    const win: Record<string, unknown> = {
-      addEventListener(_t: string, listener: (ev: { data: unknown }) => void) {
-        (win as { __listener: typeof listener }).__listener = listener;
-      },
-    };
-    win.parent = { postMessage: () => {} };
-    const sandbox: Record<string, unknown> = {
-      document: {
-        open: () => {},
-        write: (chunk: string) => writes.push(chunk),
-        close: () => {},
-      },
-      window: win,
-    };
-    vm.createContext(sandbox);
-    vm.runInContext(script, sandbox);
-    const listener = (win as { __listener: (ev: { data: unknown }) => void }).__listener;
+    const listener = runShellAndCaptureActivateListener(script, writes);
     listener({ data: { type: 'od:srcdoc-transport-activate' } });
     listener({ data: { type: 'od:srcdoc-transport-activate', html: 123 } });
     listener({ data: null });

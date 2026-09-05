@@ -116,7 +116,7 @@ export type ToolPackConfig = {
   posthogHost?: string;
   /**
    * Personal API key (`phx_...`) used by the @posthog/cli sourcemap helper to
-   * upload browser sourcemaps to PostHog after `next build` and before the
+   * upload browser sourcemaps to PostHog after `vite build` and before the
    * web bundle is copied into the Electron package. Sourced from
    * `POSTHOG_CLI_API_KEY` (or the legacy `POSTHOG_PERSONAL_API_KEY` alias)
    * in CI; when missing (local packaging by a contributor, fork builds, PRs)
@@ -175,13 +175,12 @@ function defaultNamespaceForAppVersion(platform: ToolPackPlatform, appVersion: s
   return releaseNamespace(channel, platform);
 }
 
-function resolveToolPackWebOutputMode(platform: ToolPackPlatform, value: string | undefined): ToolPackWebOutputMode {
-  // Standalone web output is wired for desktop packaged platforms; Linux stays on
-  // the existing server output until its AppImage resource path is optimized.
-  if (platform === "linux") return "server";
-  if (value == null || value.length === 0) return "standalone";
-  if (value === "server" || value === "standalone") return value;
-  throw new Error(`unsupported OD_WEB_OUTPUT_MODE value: ${value}`);
+function resolveToolPackWebOutputMode(_platform: ToolPackPlatform, value: string | undefined): ToolPackWebOutputMode {
+  // `server` is retained as the packaged-config compatibility label, but the
+  // implementation is now one Vite static SPA served by the web sidecar on
+  // every platform. Next.js standalone output is no longer buildable.
+  if (value == null || value.length === 0 || value === "server") return "server";
+  throw new Error(`unsupported OD_WEB_OUTPUT_MODE value after the Vite migration: ${value}`);
 }
 
 function resolveToolPackPosthogKey(value: string | undefined): string | undefined {

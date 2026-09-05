@@ -2,9 +2,9 @@
 //
 // Why this exists
 // ---------------
-// `apps/web/next.config.ts` sets `productionBrowserSourceMaps: true`, so
-// every `next build` invoked from tools-pack also produces `.js.map` files
-// alongside the minified chunks. That gives us two requirements:
+// `apps/web/vite.config.ts` enables browser sourcemaps, so every `vite build`
+// invoked from tools-pack produces `.js.map` files alongside the minified
+// chunks. That gives us two requirements:
 //
 //   1. Send the maps to PostHog so the Error tracking page can symbolicate
 //      stack frames (otherwise users see `fO / fz / s4` instead of real
@@ -31,10 +31,9 @@
 //
 // Scope
 // -----
-// Only the packaged (mac/win/linux Electron) path is covered here. The OSS
-// `od` CLI distribution path serves `apps/web/out/_next/static/chunks/`
-// directly and is not currently used by any release artifact; it can be
-// added later if the OSS audience reports symbolication needs.
+// The same Vite static tree is packaged by Electron and served by the daemon
+// for the `od` distribution, so processing this directory covers every
+// current release shape.
 
 import { existsSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
@@ -65,10 +64,7 @@ interface SourcemapCliEnv {
 }
 
 function resolveBrowserChunksDir(workspaceRoot: string): string {
-  // Both `output: 'standalone'` (mac/win) and the implicit server output
-  // (linux) write browser chunks to `.next/static`. Static-export mode
-  // (`apps/web/out/_next/static`) is not used by any release artifact.
-  return join(workspaceRoot, "apps", "web", ".next", "static");
+  return join(workspaceRoot, "apps", "web", "dist", "web", "assets");
 }
 
 async function findMapFiles(dir: string): Promise<string[]> {

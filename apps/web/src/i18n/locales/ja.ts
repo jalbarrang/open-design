@@ -3892,7 +3892,7 @@ export const ja: Dict = {
   'settings.memoryStarterFeedbackBody': '- テーマ: デフォルトはダーク\n- 本文テキスト: 18px以上\n- 情報密度: 余白を優先し、画面あたりの項目を少なく\n\n理由: 長時間の作業中の目の疲れを軽減するため。\n適用タイミング: UI、Webページ、スライドを生成するとき。',
   'settings.memoryStarterProjectName': '現在のプロジェクト',
   'settings.memoryStarterProjectDesc': 'OpenDesign v0.5 — チャット駆動のデザインエディター',
-  'settings.memoryStarterProjectBody': '- 目標: 今四半期にチャット駆動エディターをリリースする\n- 優先事項: ストリーミングレンダリング、ローカルマルチモーダル、オフラインファースト\n- スタック: Next.js 16、Express デーモン、SQLite\n\n適用するタイミング: このプロジェクトに関するあらゆる会話で。',
+  'settings.memoryStarterProjectBody': '- 目標: 今四半期にチャット駆動エディターをリリースする\n- 優先事項: ストリーミングレンダリング、ローカルマルチモーダル、オフラインファースト\n- スタック: Vite + TanStack Router、Express デーモン、SQLite\n\n適用するタイミング: このプロジェクトに関するあらゆる会話で。',
   'settings.memorySaveHint': '自動保存されません — 適用するには「作成」/「保存」をクリックしてください。',
   'settings.memoryIndexSaveHint': 'インデックスへの編集は自動保存されません — 適用するには「インデックスを保存」をクリックしてください。',
   'settings.memoryIndexUnsaved': '未保存の変更',

@@ -3964,7 +3964,7 @@ export const ko: Dict = {
   'settings.memoryStarterFeedbackBody': '- 테마: 기본값은 다크 모드\n- 본문 텍스트: 18px 이상\n- 정보 밀도: 여백을 우선하고 화면당 항목 수를 줄임\n\n이유: 긴 작업 세션 동안 눈의 피로를 줄입니다.\n적용 시점: UI, 웹 페이지, 슬라이드를 생성할 때마다.',
   'settings.memoryStarterProjectName': '현재 프로젝트',
   'settings.memoryStarterProjectDesc': 'OpenDesign v0.5 — 채팅 기반 디자인 편집기',
-  'settings.memoryStarterProjectBody': '- 목표: 이번 분기에 채팅 기반 에디터 출시\n- 우선순위: 스트리밍 렌더링, 로컬 멀티모달, 오프라인 우선\n- 스택: Next.js 16, Express 데몬, SQLite\n\n적용 시점: 이 프로젝트에 관한 모든 대화에서.',
+  'settings.memoryStarterProjectBody': '- 목표: 이번 분기에 채팅 기반 에디터 출시\n- 우선순위: 스트리밍 렌더링, 로컬 멀티모달, 오프라인 우선\n- 스택: Vite + TanStack Router, Express 데몬, SQLite\n\n적용 시점: 이 프로젝트에 관한 모든 대화에서.',
   'settings.memorySaveHint': '자동 저장되지 않습니다 — 적용하려면 만들기 / 저장을 클릭하세요.',
   'settings.memoryIndexSaveHint': '인덱스 편집 내용은 자동 저장되지 않습니다 — 적용하려면 인덱스 저장을 클릭하세요.',
   'settings.memoryIndexUnsaved': '저장되지 않은 변경 사항',

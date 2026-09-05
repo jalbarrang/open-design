@@ -3892,7 +3892,7 @@ export const ptBR: Dict = {
   'settings.memoryStarterFeedbackBody': '- Tema: escuro por padrão\n- Texto do corpo: ≥ 18px\n- Densidade de informação: prefira espaços em branco, menos itens por tela\n\nPor quê: menos cansaço visual em sessões longas.\nQuando aplicar: sempre que você gerar UI, páginas web ou slides.',
   'settings.memoryStarterProjectName': 'Projeto atual',
   'settings.memoryStarterProjectDesc': 'OpenDesign v0.5 — editor de design conduzido por chat',
-  'settings.memoryStarterProjectBody': '- Objetivo: lançar o editor orientado por chat neste trimestre\n- Prioridades: renderização em streaming, multimodal local, offline-first\n- Stack: Next.js 16, daemon Express, SQLite\n\nQuando aplicar: em qualquer conversa sobre este projeto.',
+  'settings.memoryStarterProjectBody': '- Objetivo: lançar o editor orientado por chat neste trimestre\n- Prioridades: renderização em streaming, multimodal local, offline-first\n- Stack: Vite + TanStack Router, daemon Express, SQLite\n\nQuando aplicar: em qualquer conversa sobre este projeto.',
   'settings.memorySaveHint': 'Não salvo automaticamente — clique em Criar / Salvar para aplicar.',
   'settings.memoryIndexSaveHint': 'As edições no índice não são salvas automaticamente — clique em Salvar índice para aplicar.',
   'settings.memoryIndexUnsaved': 'Alterações não salvas',

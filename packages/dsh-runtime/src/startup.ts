@@ -34,5 +34,10 @@ export function apply(ctx: Context): void {
       else if (options.probe) mode = 'probe';
       ctx.provide(OPEN_DESIGN_STARTUP_SERVICE, { mode });
     });
-  parseCmdline(ctx, program);
+  // SAFETY: dsh-cmdline's d.ts resolves a different commander major than the
+  // one this package pins (its `Command.error` API requires >=9). The
+  // structural option contract parsed here is version-independent; this
+  // assertion records that cross-major seam explicitly instead of leaving it
+  // to hoisting order.
+  parseCmdline(ctx, program as unknown as Parameters<typeof parseCmdline>[1]);
 }

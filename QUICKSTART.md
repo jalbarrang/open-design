@@ -209,7 +209,7 @@ pnpm typecheck                 # workspace typecheck
 
 `tools-dev` automatically loads workspace env files before resolving ports, namespaces, and child process environments. Default precedence is `.env.development.local`, then `.env.local`, then `.env.development`, then `.env`; env files override ambient shell exports so project-local config wins. Use `--no-env-file` to disable loading or repeat `--env-file <path>` to use explicit env files instead.
 
-During local development, `tools-dev` starts the daemon first, passes its port into `apps/web`, and `apps/web/next.config.ts` rewrites `/api/*`, `/artifacts/*`, and `/frames/*` to that daemon port so the App Router app can talk to the sibling Express process without CORS setup.
+During local development, `tools-dev` starts the daemon first, passes its port into `apps/web`, and the web sidecar embeds Vite middleware while proxying `/api/*`, `/artifacts/*`, and `/frames/*` to that daemon port. The browser stays on one origin without CORS setup.
 
 ## Media generation / agent dispatcher checks
 
@@ -241,7 +241,7 @@ ls -la "$OD_BIN"
 
 `OD_DAEMON_URL` must be a real daemon port such as `http://127.0.0.1:7457`, not `http://127.0.0.1:0`. The `:0` value is only an internal "pick a free port" launch hint and should not leak into agent sessions.
 
-For the daemon-only production mode, the daemon serves the static Next.js export itself at `http://localhost:7456`, so no reverse proxy is involved.
+For the daemon-only production mode, the daemon serves the Vite static SPA itself at `http://localhost:7456`, so no reverse proxy is involved.
 
 If you place nginx in front of the daemon, keep SSE routes unbuffered and uncompressed. A common failure is the browser console showing `net::ERR_INCOMPLETE_CHUNKED_ENCODING 200 (OK)` after 80-90 seconds because nginx `gzip on` buffers chunked SSE responses even when the daemon sends `X-Accel-Buffering: no`.
 
@@ -302,17 +302,19 @@ open-design/
 │   │       └── design-systems/    # DESIGN.md loader and services
 │   │   ├── sidecar/           # tools-dev daemon sidecar wrapper
 │   │   └── tests/             # daemon package tests
-│   ├── web/                   # Next.js 16 App Router + React client
-│       ├── app/               # App Router entrypoints
+│   ├── web/                   # Vite + TanStack Router + React client
+│       ├── index.html         # Vite HTML entry
 │       ├── src/               # React + TypeScript client/runtime modules
+│       │   ├── main.tsx       # providers + generated TanStack router mount
+│       │   ├── routes/        # typed file routes; generates routeTree.gen.ts
 │       │   ├── App.tsx        # orchestrates mode / skill / DS pickers + send
 │       │   ├── providers/     # daemon + BYOK API transports
 │       │   ├── prompts/       # system, discovery, directions, deck framework
 │       │   ├── artifacts/     # text-artifact parsing + artifact manifests
 │       │   ├── runtime/       # iframe srcdoc, markdown, export helpers
 │       │   └── state/         # localStorage + daemon-backed project state
-│       ├── sidecar/           # tools-dev web sidecar wrapper
-│       └── next.config.ts     # tools-dev rewrites + prod apps/web/out export config
+│       ├── sidecar/           # Vite dev/static web server + daemon proxy
+│       └── vite.config.ts     # route generation, proxy, and dist/web build config
 │   └── desktop/               # Electron runtime, launched/inspected by tools-dev
 ├── packages/
 │   ├── contracts/             # shared web/daemon app contracts
@@ -351,7 +353,7 @@ open-design/
 
 This Quickstart is the runnable seed of the spec in [`docs/`](docs/). The spec describes where this grows (see [`docs/roadmap.md`](docs/roadmap.md)). Highlights:
 
-- `docs/architecture.md` describes the shipped stack: Next.js 16 App Router in front, local daemon behind it, and `apps/web/next.config.ts` rewrites in dev to keep the browser talking to the same `/api` surface.
+- `docs/architecture.md` describes the shipped stack: Vite + TanStack Router in front, the local daemon behind it, and the web sidecar proxy keeping the browser on the same `/api` surface.
 - `docs/skills-protocol.md` describes the current `SKILL.md`/`od:` frontmatter and the split between functional skills and rendering templates. The parser and normalization source of truth is `apps/daemon/src/skills.ts`.
 - `docs/agent-adapters.md` describes the adapter contract. Runtime-specific launch, argument, model, and stream settings live in `apps/daemon/src/runtimes/defs/`, with registration in `apps/daemon/src/runtimes/registry.ts`; `apps/daemon/src/agents.ts` is a compatibility export surface.
 - `docs/modes.md` distinguishes the six New Project tabs from the seven normalized registry modes (`prototype`, `deck`, `template`, `design-system`, `image`, `video`, and `audio`).

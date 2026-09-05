@@ -87,15 +87,14 @@ export async function openNewProjectModal(page: Page): Promise<void> {
  * Puts the entry shell on its `projects` view.
  *
  * Prefer a real navigation over synthetic `history.pushState` + `popstate`.
- * Next.js App Router patches History in dev; a foreign pushState can leave
- * `window.location` on `/` while the custom client router never commits
- * `/projects`, which is exactly the CI signature that times out waiting for
- * `/\/projects$/`. `page.goto` is the same path every other projects-entry
+ * The app's guarded history coordinator publishes accepted locations to the
+ * TanStack Router memory history; bypassing it can leave the URL and rendered
+ * route out of sync. `page.goto` is the same path every other projects-entry
  * helper already uses (`openNewProjectFromProjectsView`, entry-chrome).
  *
- * `apps/web` mounts `src/App` through `dynamic(..., { ssr: false })`, so
- * `domcontentloaded` resolves while the DOM still holds the boot shell —
- * wait that out with `T.long` before asserting the destination.
+ * `apps/web` lazy-loads `src/App`, so `domcontentloaded` can resolve while the
+ * DOM still holds the boot shell — wait that out with `T.long` before
+ * asserting the destination.
  */
 async function openProjectsEntryView(page: Page): Promise<void> {
   const alreadyThere = /\/projects\/?$/.test(new URL(page.url()).pathname);

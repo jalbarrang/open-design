@@ -3892,7 +3892,7 @@ export const tr: Dict = {
   'settings.memoryStarterFeedbackBody': '- Tema: varsayılan olarak koyu\n- Gövde metni: ≥ 18px\n- Bilgi yoğunluğu: boşluğu tercih edin, ekran başına daha az öğe\n\nNeden: uzun oturumlarda daha az göz yorgunluğu.\nNe zaman uygulanır: ne zaman UI, web sayfaları veya slaytlar oluştursanız.',
   'settings.memoryStarterProjectName': 'Mevcut proje',
   'settings.memoryStarterProjectDesc': 'OpenDesign v0.5 — sohbet odaklı tasarım editörü',
-  'settings.memoryStarterProjectBody': '- Hedef: sohbet odaklı düzenleyiciyi bu çeyrekte yayınlamak\n- Öncelikler: akış tabanlı render, yerel çok modlu, offline-first\n- Stack: Next.js 16, Express daemon, SQLite\n\nNe zaman uygulanır: bu projeyle ilgili her konuşmada.',
+  'settings.memoryStarterProjectBody': '- Hedef: sohbet odaklı düzenleyiciyi bu çeyrekte yayınlamak\n- Öncelikler: akış tabanlı render, yerel çok modlu, offline-first\n- Stack: Vite + TanStack Router, Express daemon, SQLite\n\nNe zaman uygulanır: bu projeyle ilgili her konuşmada.',
   'settings.memorySaveHint': 'Otomatik kaydedilmez — uygulamak için Oluştur / Kaydet\'e tıklayın.',
   'settings.memoryIndexSaveHint': 'Dizindeki düzenlemeler otomatik kaydedilmez — uygulamak için Dizini kaydet\'e tıklayın.',
   'settings.memoryIndexUnsaved': 'Kaydedilmemiş değişiklikler',

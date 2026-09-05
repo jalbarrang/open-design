@@ -86,7 +86,7 @@ RUN apk add --no-cache tini poppler-utils bash git && \
 
 WORKDIR /app
 COPY --from=build --chown=open-design:open-design /app/deploy/daemon ./apps/daemon
-COPY --from=build --chown=open-design:open-design /app/apps/web/out ./apps/web/out
+COPY --from=build --chown=open-design:open-design /app/apps/web/dist/web ./apps/web/dist/web
 COPY --from=build --chown=open-design:open-design /app/skills ./skills
 COPY --from=build --chown=open-design:open-design /app/design-systems ./design-systems
 COPY --from=build --chown=open-design:open-design /app/craft ./craft

@@ -239,8 +239,8 @@ export function isPathLikeChatHref(href: string | null | undefined): boolean {
   }
 }
 
-// Same-origin prefixes the daemon serves directly (see `apps/web/next.config.ts`
-// rewrites and the daemon's static mounts). Opening these in a new window
+// Same-origin prefixes the web sidecar proxies to the daemon. Opening these
+// in a new window
 // shows actual content, so they are neither file links nor SPA routes.
 function isDaemonServedPath(path: string): boolean {
   return (

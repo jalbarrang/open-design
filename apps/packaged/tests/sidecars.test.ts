@@ -1044,7 +1044,7 @@ describe('waitForStatus child-exit fast-fail', () => {
  * proxy kept forwarding to the dead port until the app was relaunched.
  *
  * The supervisor respawns it, but a sidecar that crashes during boot
- * must not respawn forever: each attempt spends a full Next.js boot.
+ * must not respawn forever: each attempt starts the full web runtime.
  */
 describe('createRestartPolicy', () => {
   it('allows up to maxRestarts inside the window and refuses the next one', () => {

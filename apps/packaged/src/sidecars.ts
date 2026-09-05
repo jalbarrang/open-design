@@ -38,7 +38,6 @@ import {
   type StopProcessesOptions,
 } from "@open-design/platform";
 
-import type { PackagedWebOutputMode } from "./config.js";
 import type { PackagedNamespacePaths } from "./paths.js";
 import {
   prewarmPackagedFiles,
@@ -1030,8 +1029,6 @@ export async function startPackagedSidecars(
      */
     requireDesktopAuth: boolean;
     webSidecarEntry: string | null;
-    webStandaloneRoot: string | null;
-    webOutputMode: PackagedWebOutputMode;
     /**
      * Boot-progress hook, fired at each sidecar bring-up boundary: the
      * `"-spawning"` edge just before a child is spawned, and the `"-ready"`
@@ -1103,15 +1100,11 @@ export async function startPackagedSidecars(
       runtime,
     });
     children.push(daemon);
-    // The web prewarm overlaps the daemon's boot wait: its read set (web
-    // sidecar dist, .next/server chunks, Next framework code) is disjoint
-    // from the daemon's already-warm working set, so the FUSE server stays
-    // busy on sequential reads while the daemon does CPU/SQLite work.
+    // The web prewarm overlaps the daemon's boot wait. Its compiled sidecar
+    // is disjoint from the daemon's already-warm working set, so the FUSE
+    // server stays busy while the daemon does CPU/SQLite work.
     const webPrewarm = prewarmPackagedFiles(
-      resolveWebPrewarmTargets({
-        webSidecarEntry,
-        webStandaloneRoot: options.webStandaloneRoot,
-      }),
+      resolveWebPrewarmTargets({ webSidecarEntry }),
       { log: prewarmLog },
     );
     const daemonStatus = await waitForStatus<DaemonStatusSnapshot>(
@@ -1148,8 +1141,6 @@ export async function startPackagedSidecars(
         env: {
           [SIDECAR_ENV.DAEMON_PORT]: daemonPort,
           [SIDECAR_ENV.WEB_PORT]: "0",
-          ...(options.webStandaloneRoot == null ? {} : { OD_WEB_STANDALONE_ROOT: options.webStandaloneRoot }),
-          OD_WEB_OUTPUT_MODE: options.webOutputMode,
           PORT: "0",
         },
         electronNodeCommand: options.electronNodeCommand,

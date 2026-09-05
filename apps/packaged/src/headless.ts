@@ -58,8 +58,6 @@ function resolveHeadlessConfig(): PackagedConfig {
     posthogKey: process.env.POSTHOG_KEY?.trim() || null,
     posthogHost: process.env.POSTHOG_HOST?.trim() || null,
     webSidecarEntry: null,
-    webStandaloneRoot: null,
-    webOutputMode: "server",
   };
 }
 

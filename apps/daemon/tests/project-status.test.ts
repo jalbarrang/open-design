@@ -436,7 +436,9 @@ test('conversation listing batches latest run summaries for large projects', () 
           return target.prepare(sql);
         };
       }
-      return Reflect.get(target, prop, receiver);
+      // SAFETY: Proxy keys are the same property-key domain accepted by a
+      // normal bracket lookup; this forwards the database member unchanged.
+      return target[prop as keyof Database.Database];
     },
   }) as Database.Database;
 

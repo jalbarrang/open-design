@@ -1,6 +1,6 @@
 // Browser-side identity bookkeeping for PostHog product analytics. Designed
 // so it stays SSR-safe: every entry point guards window/localStorage access
-// and falls back to a deterministic-enough fake id under jsdom and Next.js
+// and falls back to a deterministic-enough fake id under jsdom and build-time
 // pre-render. The daemon mirrors these values via the x-od-analytics-*
 // headers (see @open-design/contracts/analytics).
 

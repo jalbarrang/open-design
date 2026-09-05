@@ -5,6 +5,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { LIBRARY_UI_VISIBLE } from './features/libraryUi';
+import { publishLocationToRouter } from './tanstack-bridge';
 
 // Entry-shell sub-views. The home/project landing renders one of three
 // columns and each sub-view now owns a top-level path so the browser
@@ -245,6 +246,7 @@ let guardedNavigationSequence = 0;
 
 interface AcceptedHistoryLocation {
   pathname: string;
+  search: string;
   index: number;
 }
 
@@ -300,14 +302,22 @@ function readHistoryIndex(): number {
 }
 
 function readHistoryLocation(): AcceptedHistoryLocation {
-  return { pathname: window.location.pathname, index: readHistoryIndex() };
+  return {
+    pathname: window.location.pathname,
+    search: window.location.search,
+    index: readHistoryIndex(),
+  };
 }
 
 function isSameHistoryLocation(
   left: AcceptedHistoryLocation | null,
   right: AcceptedHistoryLocation,
 ): boolean {
-  return left?.pathname === right.pathname && left.index === right.index;
+  return (
+    left?.pathname === right.pathname
+    && left.search === right.search
+    && left.index === right.index
+  );
 }
 
 function repairHistoryTraversal(
@@ -333,11 +343,19 @@ function repairHistoryTraversal(
 
   // A foreign/deep-link entry may not carry a distinct odIndex. Preserve the
   // accepted route without recursively dispatching another popstate.
-  window.history.pushState({ odIndex: previous.index }, '', previous.pathname);
+  window.history.pushState(
+    { odIndex: previous.index },
+    '',
+    `${previous.pathname}${previous.search}`,
+  );
   acceptedHistoryLocation = previous;
 }
 
 function notifyRouteSubscribers(): void {
+  // Keep the TanStack Router instance (memory history) in sync with the
+  // location the coordinator accepted. See `src/tanstack-bridge.ts`.
+  const location = acceptedHistoryLocation ?? readHistoryLocation();
+  publishLocationToRouter(`${location.pathname}${location.search}`);
   for (const subscriber of [...routeSubscribers]) subscriber();
 }
 

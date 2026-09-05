@@ -29,6 +29,10 @@ describe('/api/version', () => {
         packaged: expect.any(Boolean),
         platform: expect.any(String),
         arch: expect.any(String),
+        // Runtime capabilities ride along on this payload rather than a
+        // dedicated endpoint (see the route comment in server.ts). The value
+        // depends on which daemon answers, so only the shape is asserted here.
+        capabilities: { slideRenderer: expect.any(Boolean) },
       },
     });
   });

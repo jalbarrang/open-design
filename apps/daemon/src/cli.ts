@@ -7898,7 +7898,7 @@ Common options:
 //   - --headless: implies --no-open, never tries to launch a browser.
 //                 The default `od` (no subcommand) keeps its
 //                 desktop-friendly behaviour for back-compat.
-//   - --serve-web: same as --headless but allows the Next.js bundle to
+//   - --serve-web: same as --headless but allows the Vite SPA to
 //                  serve over the existing port. v1 doesn't bundle a
 //                  separate web port; the flag is reserved so downstream
 //                  packaged callers can branch on it.

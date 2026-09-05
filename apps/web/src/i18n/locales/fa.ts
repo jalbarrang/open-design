@@ -3892,7 +3892,7 @@ export const fa: Dict = {
   'settings.memoryStarterFeedbackBody': '- تم: به‌طور پیش‌فرض تیره\n- متن بدنه: ≥ ۱۸px\n- چگالی اطلاعات: فضای خالی را ترجیح بده، آیتم‌های کمتر در هر صفحه\n\nچرا: خستگی چشم کمتر در جلسات طولانی.\nزمان اعمال: هرگاه UI، صفحات وب یا اسلاید تولید می‌کنی.',
   'settings.memoryStarterProjectName': 'پروژهٔ فعلی',
   'settings.memoryStarterProjectDesc': 'OpenDesign v0.5 — ویرایشگر طراحی مبتنی بر گفتگو',
-  'settings.memoryStarterProjectBody': '- هدف: عرضهٔ ویرایشگر مبتنی بر گفت‌وگو در این فصل\n- اولویت‌ها: رندر جریانی، چندرسانه‌ای محلی، آفلاین-اول\n- پشته: Next.js 16، دیمن Express، SQLite\n\nزمان اعمال: در هر گفت‌وگویی دربارهٔ این پروژه.',
+  'settings.memoryStarterProjectBody': '- هدف: عرضهٔ ویرایشگر مبتنی بر گفت‌وگو در این فصل\n- اولویت‌ها: رندر جریانی، چندرسانه‌ای محلی، آفلاین-اول\n- پشته: Vite + TanStack Router، دیمن Express، SQLite\n\nزمان اعمال: در هر گفت‌وگویی دربارهٔ این پروژه.',
   'settings.memorySaveHint': 'به‌طور خودکار ذخیره نمی‌شود — برای اعمال روی Create / Save کلیک کنید.',
   'settings.memoryIndexSaveHint': 'ویرایش‌های فهرست به‌طور خودکار ذخیره نمی‌شوند — برای اعمال روی Save index کلیک کنید.',
   'settings.memoryIndexUnsaved': 'تغییرات ذخیره‌نشده',

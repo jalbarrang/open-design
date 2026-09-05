@@ -128,9 +128,6 @@ async function validateWinPackagedAppRuntime(appRoot: string): Promise<string | 
 }
 
 async function buildWorkspaceArtifacts(config: ToolPackConfig): Promise<void> {
-  const webNextEnvPath = join(config.workspaceRoot, "apps", "web", "next-env.d.ts");
-  const previousWebNextEnv = await readFile(webNextEnvPath, "utf8").catch(() => null);
-
   await runPnpm(config, ["--filter", "@open-design/release", "build"]);
   await runPnpm(config, ["--filter", "@open-design/contracts", "build"]);
   await runPnpm(config, ["--filter", "@open-design/registry-protocol", "build"]);
@@ -146,17 +143,12 @@ async function buildWorkspaceArtifacts(config: ToolPackConfig): Promise<void> {
   await runPnpm(config, ["--filter", "@open-design/dsh-runtime", "build"]);
   await runPnpm(config, ["--filter", "@open-design/components", "build"]);
   await runPnpm(config, ["--filter", "@open-design/daemon", "build"]);
-  try {
-    await runPnpm(config, ["--filter", "@open-design/web", "build"], { OD_WEB_OUTPUT_MODE: config.webOutputMode });
-    await runPnpm(config, ["--filter", "@open-design/web", "build:sidecar"]);
-    // Inject chunk IDs + upload browser sourcemaps to PostHog, then strip
-    // .map files before any packaging step copies the web output into the
-    // Electron resources. See `tools/pack/src/web-sourcemaps.ts`.
-    await processWebSourcemaps(config);
-  } finally {
-    if (previousWebNextEnv == null) await rm(webNextEnvPath, { force: true });
-    else await writeFile(webNextEnvPath, previousWebNextEnv, "utf8");
-  }
+  await runPnpm(config, ["--filter", "@open-design/web", "build"]);
+  await runPnpm(config, ["--filter", "@open-design/web", "build:sidecar"]);
+  // Inject chunk IDs + upload browser sourcemaps to PostHog, then strip
+  // .map files before any packaging step copies the web output into the
+  // Electron resources. See `tools/pack/src/web-sourcemaps.ts`.
+  await processWebSourcemaps(config);
   await runPnpm(config, ["--filter", "@open-design/desktop", "build"]);
   await runPnpm(config, ["--filter", "@open-design/packaged", "build"]);
 }
