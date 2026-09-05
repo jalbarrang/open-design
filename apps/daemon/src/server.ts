@@ -3295,6 +3295,7 @@ export async function startServer({
     listConversations,
     updateConversation,
     deleteConversation,
+    getMessage,
     listMessages,
     upsertMessage,
     listPreviewComments,
