@@ -4,13 +4,14 @@
  * User-level toolchain bin discovery. Single source of truth for the CLI
  * install locations a GUI-launched daemon must search even under a stripped
  * PATH — npm/pnpm/bun/cargo/deno/go/pyenv prefixes, version-manager shims
- * (asdf, volta, mise, nvm, fnm), and per-version Node install roots. Pure path
- * assembly plus best-effort directory probing; no process, command, or proxy
+ * (asdf, volta, mise, nvm, fnm), and per-version Node install roots — plus the
+ * PATH lookup that turns a bare CLI name into a concrete executable. Pure path
+ * assembly plus best-effort filesystem probing; no process, command, or proxy
  * concerns.
  */
-import { existsSync, readdirSync } from "node:fs";
+import { accessSync, constants, existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { delimiter, isAbsolute, join } from "node:path";
 
 export type WellKnownUserToolchainOptions = {
   // Override homedir() so callers in sandboxed tests or namespaced launches
@@ -297,4 +298,54 @@ function parseVersionLikeDirName(name: string): SemverParts | null {
   const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(name);
   if (!match) return null;
   return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+/**
+ * Resolve a bare executable name against a PATH-style search list, mirroring
+ * what the OS loader does before a spawn. On Windows every `PATHEXT` suffix is
+ * tried in order (a bare name matches nothing there); on POSIX the candidate
+ * must be a file with the execute bit set.
+ *
+ * Callers use this to answer "does this CLI actually exist here?" before
+ * committing to an invocation, so a missing binary surfaces as a considered
+ * fallback rather than a bare `ENOENT` from `spawn`.
+ *
+ * @param name - The executable name to look up, without a directory or extension.
+ * @param env - Environment to read `PATH` / `Path` and `PATHEXT` from (defaults to `process.env`).
+ * @returns The absolute path to the first match, or `null` when the name is not on PATH.
+ */
+export function resolveExecutableOnPath(name: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  const rawPath = env.PATH ?? env.Path;
+  if (typeof rawPath !== "string" || rawPath.length === 0) return null;
+  const suffixes = executableSuffixes(env);
+  for (const dir of rawPath.split(delimiter)) {
+    if (dir.length === 0) continue;
+    for (const suffix of suffixes) {
+      const candidate = join(dir, `${name}${suffix}`);
+      if (isExecutableFile(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+// Windows resolves a bare name only through PATHEXT, so an empty suffix would
+// match the extension-less POSIX shell script pnpm also ships. Every other
+// platform ignores extensions entirely.
+function executableSuffixes(env: NodeJS.ProcessEnv): string[] {
+  if (process.platform !== "win32") return [""];
+  const raw = env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD";
+  return raw.split(";").filter((suffix) => suffix.length > 0);
+}
+
+/** @internal Report whether `candidate` is a regular file the current user may execute. */
+function isExecutableFile(candidate: string): boolean {
+  try {
+    if (!statSync(candidate).isFile()) return false;
+    // Windows has no execute bit; PATHEXT membership is the executability test.
+    if (process.platform === "win32") return true;
+    accessSync(candidate, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
