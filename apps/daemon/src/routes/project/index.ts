@@ -41,6 +41,11 @@ import {
   listInstalledPlugins,
   resolvePluginSnapshot,
 } from '../../plugins/index.js';
+import {
+  createProjectExampleBinding,
+  digestExampleSkillManifest,
+  InvalidProjectExampleBindingError,
+} from '../../plugins/example-binding.js';
 import { automaticScenarioTaskProfile } from '../../plugins/scenario-binding.js';
 import { createAutomaticProjectStrategyBinding } from '../../plugins/strategy-binding.js';
 import { connectorService } from '../../connectors/service.js';
@@ -68,7 +73,7 @@ import {
   prependAfterDoctype,
 } from '@open-design/contracts/runtime/html-injection-points';
 
-export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {}
+export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation' | 'pluginScope'> {}
 
 function projectDetailResolvedDir(
   projectsRoot: string,
@@ -1677,6 +1682,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             Object.entries(metadata).filter(([key]) => (
               key !== 'scenarioBinding'
               && key !== 'strategyBinding'
+              && key !== 'exampleBinding'
             )),
           ) as typeof metadata
         : null;
@@ -1750,6 +1756,81 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           'automaticStrategyTaskProfile is invalid',
         );
       }
+      // An official example card picked under a task type. It is a reference,
+      // not a strategy: the project keeps its automatic OD Next route and the
+      // example's SKILL.md travels as a user-selected Skill at run start. It
+      // therefore deliberately does NOT participate in `explicitPlugin` — the
+      // whole point is to stop pinning an executable plugin.
+      //
+      // Fail closed like `automaticStrategyTaskProfile` above: a present but
+      // unusable reference is a 400, never a silent drop, because a dropped
+      // reference produces a run that looks correct and quietly lost the
+      // example the user picked.
+      const rawExampleReference = req.body?.exampleReference;
+      let exampleBinding: ProjectMetadata['exampleBinding'] | null = null;
+      if (rawExampleReference !== undefined) {
+        const exampleReference =
+          rawExampleReference && typeof rawExampleReference === 'object'
+          && !Array.isArray(rawExampleReference)
+            ? rawExampleReference as Record<string, unknown>
+            : null;
+        const examplePluginId = typeof exampleReference?.pluginId === 'string'
+          ? exampleReference.pluginId.trim()
+          : '';
+        const exampleSource = typeof exampleReference?.source === 'string'
+          ? exampleReference.source.trim()
+          : '';
+        if (!examplePluginId || !exampleSource) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'exampleReference is invalid');
+        }
+        // Contradictory claims. `pluginId`/`appliedPluginSnapshotId` say "run
+        // this plugin as the strategy"; `exampleReference` says "keep the
+        // automatic route and carry this example as reference material". A
+        // request asserting both has no single correct reading, and guessing
+        // one would silently decide the route for the user.
+        if (explicitPlugin) {
+          return sendApiError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'exampleReference cannot be combined with pluginId or appliedPluginSnapshotId',
+          );
+        }
+        // Re-resolve server-side through the same local lookup
+        // `/api/plugins/:id/apply-local` uses, then read the example's bytes
+        // from the record's own path. The request body contributes an identity
+        // claim only; it never contributes content.
+        const resolvedExample = await ctx.pluginScope?.getLocalPluginBySource?.(
+          examplePluginId,
+          exampleSource,
+        ) ?? null;
+        const resolvedExampleRecord = resolvedExample as
+          { id?: unknown; source?: unknown; fsPath?: unknown } | null;
+        if (
+          !resolvedExampleRecord
+          || resolvedExampleRecord.id !== examplePluginId
+          || resolvedExampleRecord.source !== exampleSource
+          || typeof resolvedExampleRecord.fsPath !== 'string'
+          || !resolvedExampleRecord.fsPath
+        ) {
+          return sendApiError(res, 404, 'PLUGIN_NOT_FOUND', 'example plugin not found');
+        }
+        try {
+          exampleBinding = createProjectExampleBinding({
+            pluginId: examplePluginId,
+            pluginSource: exampleSource,
+            manifestSourceDigest: await digestExampleSkillManifest(
+              resolvedExampleRecord.fsPath,
+            ),
+            boundAt: now,
+          });
+        } catch (error) {
+          if (error instanceof InvalidProjectExampleBindingError) {
+            return sendApiError(res, 400, 'BAD_REQUEST', error.message);
+          }
+          throw error;
+        }
+      }
       // An automatic OD Next route pins no scenario plugin at all; the
       // strategy binding is what records the daemon's choice.
       const automaticStrategyBinding = requestedAutomaticStrategyTaskProfile
@@ -1769,8 +1850,14 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           'automaticStrategyTaskProfile does not match this automatic Design route',
         );
       }
-      const projectMetadata = automaticStrategyBinding
-        ? { ...(baseProjectMetadata ?? {}), strategyBinding: automaticStrategyBinding }
+      const projectMetadata = automaticStrategyBinding || exampleBinding
+        ? {
+            ...(baseProjectMetadata ?? {}),
+            ...(automaticStrategyBinding
+              ? { strategyBinding: automaticStrategyBinding }
+              : {}),
+            ...(exampleBinding ? { exampleBinding } : {}),
+          }
         : baseProjectMetadata;
       let project;
       try {
@@ -2212,6 +2299,14 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             'metadata cannot be cleared while strategyBinding is daemon-owned',
           );
         }
+        if (existing?.metadata?.exampleBinding) {
+          return sendApiError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'metadata cannot be cleared while exampleBinding is daemon-owned',
+          );
+        }
         if (existing?.metadata?.baseDir) {
           return sendApiError(
             res,
@@ -2242,6 +2337,13 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             !== JSON.stringify(existingMeta?.strategyBinding)
         ) {
           return sendApiError(res, 400, 'BAD_REQUEST', 'strategyBinding is daemon-owned');
+        }
+        if (
+          'exampleBinding' in patch.metadata
+          && JSON.stringify(patch.metadata.exampleBinding)
+            !== JSON.stringify(existingMeta?.exampleBinding)
+        ) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'exampleBinding is daemon-owned');
         }
         if ('fromTrustedPicker' in patch.metadata
             && patch.metadata.fromTrustedPicker !== existingMeta?.fromTrustedPicker) {
@@ -2331,6 +2433,12 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           patch.metadata = {
             ...patch.metadata,
             strategyBinding: existingMeta.strategyBinding,
+          };
+        }
+        if (existingMeta?.exampleBinding) {
+          patch.metadata = {
+            ...patch.metadata,
+            exampleBinding: existingMeta.exampleBinding,
           };
         }
       }

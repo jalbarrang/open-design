@@ -119,6 +119,7 @@ export interface ServerContext {
   research: any;
   mcp: any;
   plugins: any;
+  pluginScope: any;
   resources: ResourceDeps;
   routines: RoutineDeps;
   projectPreviewScopes: ProjectPreviewScopeDeps;
