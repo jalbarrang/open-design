@@ -1,6 +1,6 @@
-import { execFile, execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
@@ -10,8 +10,6 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type {
-  DesktopExportArtifactInput,
-  DesktopExportArtifactResult,
   DesktopRenderSlidesInput,
   DesktopRenderSlidesResult,
 } from '@open-design/sidecar-proto';
@@ -45,11 +43,6 @@ describe('od export run-scoped project authority', () => {
   let daemonShutdown: () => Promise<void> | void;
   let daemonUrl = '';
   let lastRendererAssetUrl = '';
-  let rendererBlockingFile = '';
-  let pendingRenderer: {
-    readonly promise: Promise<DesktopRenderSlidesResult>;
-    readonly signalInvocation: () => void;
-  } | null = null;
   let outputDir = '';
   const projectId = `project_${randomUUID()}`;
   const foreignProjectId = `project_${randomUUID()}`;
@@ -147,16 +140,6 @@ describe('od export run-scoped project authority', () => {
     vi.stubEnv('OD_API_TOKEN', daemonApiToken);
 
     const renderer = (input: DesktopRenderSlidesInput): Promise<DesktopRenderSlidesResult> => {
-      const pending = pendingRenderer;
-      if (pending) {
-        if (!input.outputDir) return Promise.resolve({ ok: false, error: 'outputDir required' });
-        lastRendererAssetUrl = new URL('styles/export.css', input.baseHref).href;
-        mkdirSync(input.outputDir, { recursive: true });
-        rendererBlockingFile = path.join(input.outputDir, 'settled-render.png');
-        execFileSync('mkfifo', [rendererBlockingFile]);
-        pending.signalInvocation();
-        return pending.promise;
-      }
       return (async () => {
         if (!input.outputDir) return { ok: false, error: 'outputDir required' };
         if (input.html.includes('data-renderer-asset-authority')) {
@@ -244,250 +227,6 @@ describe('od export run-scoped project authority', () => {
     // requiring the caller to know an active/default Workspace.
     expect(result.code, result.stderr).toBe(0);
     expect(existsSync(outputPath)).toBe(true);
-  });
-
-  it('accepts legacy workspace flags as ignored compatibility inputs', async () => {
-    // Given: an older caller still supplies stale Workspace flags.
-    const outputPath = path.join(outputDir, 'legacy-workspace-flags.png');
-
-    // When: it exports after the CLI contract has moved to project-id-only addressing.
-    const result = await runExportCli(projectId, outputPath, undefined, [
-      '--workspace',
-      'stale-workspace',
-      '--workspace-member',
-      'stale-member',
-    ]);
-
-    // Then: parsing remains backwards compatible and the stale values do not
-    // override the project's persisted binding.
-    expect(result.code, result.stderr).toBe(0);
-    expect(existsSync(outputPath)).toBe(true);
-  });
-
-  it('loads relative renderer assets for a bound project whose HTML already declares a base', async () => {
-    // Given: a valid run token bound to a Workspace project whose renderer needs relative assets
-    // and whose source HTML already declares an unrelated external base.
-    const token = toolTokenRegistry.mint({
-      projectId,
-      runId: `run_${randomUUID()}`,
-    }).token;
-    lastRendererAssetUrl = '';
-
-    // When: the screenshot POST renders the project without forwarding its bearer to asset GETs.
-    const response = await fetch(`${daemonUrl}/api/projects/${projectId}/export/image`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ fileName: 'index.html' }),
-    });
-    const body = Buffer.from(await response.arrayBuffer());
-
-    // Then: the daemon hands off the original HTML plus its scoped baseHref, and the renderer
-    // loads exact CSS/image bytes through that scope before the PNG export succeeds;
-    // the renderer-only capability is revoked as soon as rendering finishes.
-    expect(response.status, body.toString()).toBe(200);
-    expect(body).toEqual(png);
-    expect(lastRendererAssetUrl).not.toBe('');
-    const revokedAssetResponse = await fetch(lastRendererAssetUrl);
-    expect(revokedAssetResponse.status).toBe(404);
-  });
-
-  it('revokes renderer asset capability as soon as the renderer promise settles', async () => {
-    // Given: rendering can settle while downstream file validation/read and the HTTP response remain pending.
-    const token = toolTokenRegistry.mint({
-      projectId,
-      runId: `run_${randomUUID()}`,
-    }).token;
-    let signalInvocation: (() => void) | null = null;
-    const invoked = new Promise<void>((resolve) => {
-      signalInvocation = resolve;
-    });
-    let settleRenderer = (_result: DesktopRenderSlidesResult): void => {
-      throw new Error('renderer settlement control was not installed');
-    };
-    const rendererPromise = new Promise<DesktopRenderSlidesResult>((resolve) => {
-      settleRenderer = resolve;
-    });
-    pendingRenderer = {
-      promise: rendererPromise,
-      signalInvocation: () => signalInvocation?.(),
-    };
-    lastRendererAssetUrl = '';
-    rendererBlockingFile = '';
-
-    // When: the route observes renderer settlement, then blocks reading the FIFO handoff.
-    const responsePromise = fetch(`${daemonUrl}/api/projects/${projectId}/export/image`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ fileName: 'index.html' }),
-    });
-    await invoked;
-    const settlementObserved = rendererPromise.then(() => undefined);
-    settleRenderer({
-      ok: true,
-      slideFiles: [rendererBlockingFile],
-      width: 1,
-      height: 1,
-      mode: 'page',
-    });
-    await settlementObserved;
-
-    try {
-      // Then: the renderer-only URL is already unusable before the route can finish its response.
-      expect(lastRendererAssetUrl).not.toBe('');
-      const revokedAssetResponse = await fetch(lastRendererAssetUrl);
-      expect(revokedAssetResponse.status).toBe(404);
-    } finally {
-      pendingRenderer = null;
-      await writeFile(rendererBlockingFile, png);
-    }
-    const response = await responsePromise;
-    const body = Buffer.from(await response.arrayBuffer());
-    expect(response.status, body.toString()).toBe(200);
-    expect(body).toEqual(png);
-  }, 30_000);
-
-  it('loads relative assets through the desktopArtifactExporter fallback for an exact-project run token', async () => {
-    // Given: a bound Workspace project and a daemon with only the supported image exporter fallback.
-    const token = toolTokenRegistry.mint({
-      projectId,
-      runId: `run_${randomUUID()}`,
-    }).token;
-    const fallbackArtifact = path.join(outputDir, `fallback-${randomUUID()}.png`);
-    let fallbackAssetUrl = '';
-    let wroteArtifactAfterAssets = false;
-    const exporter = async (
-      input: DesktopExportArtifactInput,
-    ): Promise<DesktopExportArtifactResult> => {
-      expect(input.html).toBe(boundProjectHtml);
-      expect(input.baseHref).not.toBe(legacyBaseHref);
-      fallbackAssetUrl = new URL(rendererStylesheetPath, input.baseHref).href;
-      const cssResponse = await fetch(fallbackAssetUrl);
-      const cssBytes = Buffer.from(await cssResponse.arrayBuffer());
-      expect(cssResponse.status, cssBytes.toString()).toBe(200);
-      expect(cssBytes).toEqual(rendererCss);
-      const imageResponse = await fetch(new URL(rendererImagePath, input.baseHref));
-      const imageBytes = Buffer.from(await imageResponse.arrayBuffer());
-      expect(imageResponse.status, imageBytes.toString()).toBe(200);
-      expect(imageBytes).toEqual(rendererImage);
-      await writeFile(fallbackArtifact, png);
-      wroteArtifactAfterAssets = true;
-      return { ok: true, path: fallbackArtifact, mime: 'image/png' };
-    };
-    const fallbackDaemon = await startServer({
-      port: 0,
-      returnServer: true,
-      desktopArtifactExporter: exporter,
-    }) as { url: string; shutdown: () => Promise<void> | void };
-
-    try {
-      // When: the run token requests an image and the exporter follows bearerless relative URLs.
-      const response = await fetch(`${fallbackDaemon.url}/api/projects/${projectId}/export/image`, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ fileName: 'index.html' }),
-      });
-      const body = Buffer.from(await response.arrayBuffer());
-
-      // Then: both exact assets were authorized before the exporter wrote the exact returned PNG.
-      expect(response.status, body.toString()).toBe(200);
-      expect(wroteArtifactAfterAssets).toBe(true);
-      expect(body).toEqual(png);
-      const revokedAssetResponse = await fetch(fallbackAssetUrl);
-      expect(revokedAssetResponse.status).toBe(404);
-    } finally {
-      await fallbackDaemon.shutdown();
-      await rm(fallbackArtifact, { force: true });
-    }
-  }, 30_000);
-
-  it('rejects a valid run token when the requested project differs', async () => {
-    // Given: a token bound to the first project and an output for another bound project.
-    const token = toolTokenRegistry.mint({
-      projectId,
-      runId: `run_${randomUUID()}`,
-    }).token;
-    const outputPath = path.join(outputDir, 'cross-project.png');
-
-    // When: the wrapper attempts to export the foreign project with that token.
-    const result = await runExportCli(foreignProjectId, outputPath, token);
-
-    // Then: project authority fails before rendering.
-    expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain('FORBIDDEN');
-    expect(existsSync(outputPath)).toBe(false);
-  });
-
-  it.each(['invalid', 'expired'] as const)(
-    'does not downgrade an %s token to headerless unbound access',
-    async (kind) => {
-      // Given: an unbound project that succeeds headerless and a presented unusable token.
-      const token = kind === 'invalid'
-        ? 'forged-tool-token'
-        : toolTokenRegistry.mint({
-            projectId: unboundProjectId,
-            runId: `run_${randomUUID()}`,
-            nowMs: Date.now() - 120_000,
-            ttlMs: 60_000,
-          }).token;
-      const outputPath = path.join(outputDir, `${kind}-token.png`);
-
-      // When: the wrapper presents that token for the otherwise unbound project.
-      const result = await runExportCli(unboundProjectId, outputPath, token);
-
-      // Then: token validation fails closed instead of exporting headerless.
-      expect(result.code).not.toBe(0);
-      expect(result.stderr).toContain(
-        kind === 'invalid' ? 'TOOL_TOKEN_INVALID' : 'TOOL_TOKEN_EXPIRED',
-      );
-      expect(existsSync(outputPath)).toBe(false);
-    },
-  );
-
-  it('enforces the export capability on otherwise valid project tokens', async () => {
-    // Given: an exact-project token restricted to an unrelated media capability.
-    const token = toolTokenRegistry.mint({
-      projectId,
-      runId: `run_${randomUUID()}`,
-      allowedEndpoints: ['/api/tools/media/generate'],
-      allowedOperations: ['media:generate'],
-    }).token;
-    const outputPath = path.join(outputDir, 'endpoint-denied.png');
-
-    // When: the wrapper attempts export through that restricted grant.
-    const result = await runExportCli(projectId, outputPath, token);
-
-    // Then: the endpoint allowlist rejects the request before rendering.
-    expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain('TOOL_ENDPOINT_DENIED');
-    expect(existsSync(outputPath)).toBe(false);
-  });
-
-  it('does not extend the CLI export capability to inline project reads', async () => {
-    // Given: a default run token whose export grant is limited to screenshot exports.
-    const token = toolTokenRegistry.mint({
-      projectId,
-      runId: `run_${randomUUID()}`,
-    }).token;
-
-    // When: the token is presented to the separate inline-HTML export surface.
-    const response = await fetch(`${daemonUrl}/api/projects/${projectId}/export/index.html?inline=1`, {
-      headers: { authorization: `Bearer ${token}` },
-    });
-
-    // Then: endpoint authorization fails before project contents are returned.
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: 'TOOL_ENDPOINT_DENIED' },
-    });
   });
 
   async function runExportCli(

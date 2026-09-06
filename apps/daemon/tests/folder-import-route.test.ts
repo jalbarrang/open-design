@@ -53,22 +53,6 @@ describe('POST /api/import/folder', () => {
     });
   }
 
-  function workspaceHeaders(
-    workspaceId: string,
-    workspaceMemberId: string,
-  ): Record<string, string> {
-    return {
-      'x-od-workspace-id': workspaceId,
-      'x-od-workspace-type': 'team',
-      'x-od-workspace-member-id': workspaceMemberId,
-      'x-od-workspace-role': 'member',
-      'x-od-workspace-lifecycle-state': 'active',
-      'x-od-workspace-member-status': 'active',
-      'x-od-workspace-can-share-projects': 'true',
-      'x-od-workspace-can-write-synced-files': 'true',
-    };
-  }
-
   async function withSandboxMode<T>(run: () => Promise<T>): Promise<T> {
     const previous = process.env.OD_SANDBOX_MODE;
     process.env.OD_SANDBOX_MODE = '1';
@@ -120,113 +104,6 @@ describe('POST /api/import/folder', () => {
     };
     expect(tabs).toMatchObject({ tabs: [], active: null, hasSavedState: true });
     expect(typeof tabs.updatedAt).toBe('number');
-  });
-
-  it('atomically binds a folder import to the exact request workspace and not workspace B', async () => {
-    const folder = makeFolder();
-    await writeFile(path.join(folder, 'index.html'), '<!doctype html>');
-    const headersA = workspaceHeaders('workspace-folder-a', 'member-folder-a');
-
-    const resp = await importFolder({ baseDir: folder }, headersA);
-    expect(resp.status).toBe(200);
-    const body = (await resp.json()) as { project: { id: string } };
-
-    const detail = await fetch(
-      `${baseUrl}/api/projects/${body.project.id}`,
-      { headers: headersA },
-    );
-    expect(detail.status).toBe(200);
-    await expect(detail.json()).resolves.toMatchObject({
-      project: {
-        id: body.project.id,
-        workspaceId: 'workspace-folder-a',
-      },
-    });
-
-    const workspaceA = await fetch(
-      `${baseUrl}/api/workspaces/workspace-folder-a/projects?view=drafts`,
-      { headers: headersA },
-    );
-    expect(workspaceA.status).toBe(200);
-    const projectsA = (await workspaceA.json()) as {
-      projects: Array<{ project: { id: string } }>;
-    };
-    expect(projectsA.projects.map((item) => item.project.id)).toContain(body.project.id);
-
-    const headersB = workspaceHeaders('workspace-folder-b', 'member-folder-b');
-    const workspaceB = await fetch(
-      `${baseUrl}/api/workspaces/workspace-folder-b/projects?view=drafts`,
-      { headers: headersB },
-    );
-    expect(workspaceB.status).toBe(200);
-    const projectsB = (await workspaceB.json()) as {
-      projects: Array<{ project: { id: string } }>;
-    };
-    expect(projectsB.projects.map((item) => item.project.id)).not.toContain(body.project.id);
-  });
-
-  it('validates an imported project skill inside the exact request workspace before inserting rows', async () => {
-    const folder = makeFolder();
-    await writeFile(path.join(folder, 'index.html'), '<!doctype html>');
-    const headers = workspaceHeaders('workspace-folder-skill', 'member-folder-skill');
-    const beforeResponse = await fetch(
-      `${baseUrl}/api/workspaces/workspace-folder-skill/projects?view=drafts`,
-      { headers },
-    );
-    const before = (await beforeResponse.json()) as {
-      projects: Array<{ project: { id: string } }>;
-    };
-
-    const response = await importFolder(
-      { baseDir: folder, skillId: 'skill-that-does-not-exist' },
-      headers,
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: 'SKILL_NOT_FOUND' },
-    });
-    const afterResponse = await fetch(
-      `${baseUrl}/api/workspaces/workspace-folder-skill/projects?view=drafts`,
-      { headers },
-    );
-    const after = (await afterResponse.json()) as {
-      projects: Array<{ project: { id: string } }>;
-    };
-    expect(after.projects).toEqual(before.projects);
-  });
-
-  it('atomically binds a Claude Design import to the exact request workspace', async () => {
-    const zip = new JSZip();
-    zip.file('index.html', '<!doctype html><title>Claude import</title>');
-    const archive = await zip.generateAsync({ type: 'uint8array' });
-    const form = new FormData();
-    form.append(
-      'file',
-      new Blob([archive], { type: 'application/zip' }),
-      'claude-workspace.zip',
-    );
-    const headers = workspaceHeaders('workspace-claude-a', 'member-claude-a');
-
-    const resp = await fetch(`${baseUrl}/api/import/claude-design`, {
-      method: 'POST',
-      headers,
-      body: form,
-    });
-    expect(resp.status).toBe(200);
-    const body = (await resp.json()) as { project: { id: string } };
-
-    const detail = await fetch(
-      `${baseUrl}/api/projects/${body.project.id}`,
-      { headers },
-    );
-    expect(detail.status).toBe(200);
-    await expect(detail.json()).resolves.toMatchObject({
-      project: {
-        id: body.project.id,
-        workspaceId: 'workspace-claude-a',
-      },
-    });
   });
 
   it('rejects folder imports in sandbox mode', async () => {

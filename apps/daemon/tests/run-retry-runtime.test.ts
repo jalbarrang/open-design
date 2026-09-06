@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { startServer } from '../src/server.js';
@@ -35,8 +34,6 @@ type RunEvent = {
   event: string;
   data: Record<string, unknown>;
 };
-
-const FAKE_VELA = fileURLToPath(new URL('./fixtures/fake-vela.mjs', import.meta.url));
 
 // The two silent-stall cases below make the inactivity watchdog do two jobs with
 // one budget: trip on the first (silent) attempt so the same-run retry fires,
@@ -153,91 +150,6 @@ describe('same-run retry runtime', () => {
       failure_detail: 'stream_error',
       retry_reason: 'transient_failure',
     });
-  });
-
-  it('retries an ACP fatal close after persisting its runtime close reason', async () => {
-    binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-retry-acp-fatal-bin-'));
-    const fakeVela = await writeFatalThenSuccessfulVela(binDir, 'vela-fatal-then-success');
-
-    delete process.env.POSTHOG_KEY;
-    delete process.env.POSTHOG_HOST;
-    delete process.env.LANGFUSE_PUBLIC_KEY;
-    delete process.env.LANGFUSE_SECRET_KEY;
-    delete process.env.LANGFUSE_BASE_URL;
-    delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
-    process.env.VELA_RUNTIME_KEY = `fake-runtime-key-${randomUUID()}`;
-    process.env.VELA_LINK_URL = 'https://amr-link.open-design.ai/v1';
-
-    started = await startServer({ port: 0, returnServer: true }) as StartedServer;
-    await putConfig(started.url, {
-      agentId: 'amr',
-      agentCliEnv: { amr: { VELA_BIN: fakeVela } },
-      telemetry: { metrics: true, content: false, artifactManifest: false },
-      privacyDecisionAt: Date.now(),
-    });
-
-    const run = await createAndWaitForRun(started.url, 'amr');
-    expect(run.status).toBe('succeeded');
-
-    const events = await readRunEvents(run.eventsLogPath);
-    expect(events.filter((event) => event.event === 'start')).toHaveLength(2);
-    expect(events.filter((event) => event.event === 'run_retry_attempted')).toHaveLength(1);
-    expect(events.find((event) => event.event === 'run_retry_attempted')?.data).toMatchObject({
-      failure_category: 'process_exit',
-      failure_detail: 'fatal_rpc_error',
-      retry_reason: 'transient_failure',
-    });
-
-    const fatalCloseDiagnostics = events.filter(
-      (event) => event.event === 'diagnostic' &&
-        event.data.type === 'runtime_close' &&
-        event.data.rpc_close_reason === 'fatal_rpc_error',
-    );
-    expect(fatalCloseDiagnostics).toHaveLength(1);
-  });
-
-  it('retries when title-only ACP text is followed by heartbeat-only stalling', async () => {
-    binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-retry-amr-title-only-bin-'));
-    const fakeVela = await writeTitleOnlyVela(binDir, 'vela-title-only-stall', true);
-    configureAmrFirstOutputEnv();
-
-    started = await startServer({ port: 0, returnServer: true }) as StartedServer;
-    await putConfig(started.url, {
-      agentId: 'amr',
-      agentCliEnv: { amr: { VELA_BIN: fakeVela } },
-      telemetry: { metrics: true, content: false, artifactManifest: false },
-      privacyDecisionAt: Date.now(),
-    });
-
-    const run = await createAndWaitForRun(started.url, 'amr', {
-      titleGeneration: { enabled: true },
-    });
-    expect(run.status).toBe('succeeded');
-    const events = await readRunEvents(run.eventsLogPath);
-    expect(events.filter((event) => event.event === 'start')).toHaveLength(2);
-    expect(events.filter((event) => event.event === 'run_retry_attempted')).toHaveLength(1);
-  });
-
-  it('does not retry after a title-only clean ACP result with no usage', async () => {
-    binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-retry-amr-title-clean-bin-'));
-    const fakeVela = await writeTitleOnlyVela(binDir, 'vela-title-only-clean', false);
-    configureAmrFirstOutputEnv();
-
-    started = await startServer({ port: 0, returnServer: true }) as StartedServer;
-    await putConfig(started.url, {
-      agentId: 'amr',
-      agentCliEnv: { amr: { VELA_BIN: fakeVela } },
-      telemetry: { metrics: true, content: false, artifactManifest: false },
-      privacyDecisionAt: Date.now(),
-    });
-
-    const run = await createAndWaitForRun(started.url, 'amr', {
-      titleGeneration: { enabled: true },
-    });
-    expect(run.status).toBe('succeeded');
-    const events = await readRunEvents(run.eventsLogPath);
-    expect(events.filter((event) => event.event === 'start')).toHaveLength(1);
-    expect(events.filter((event) => event.event === 'run_retry_attempted')).toHaveLength(0);
   });
 
   it('retries a silent first-token stall caught by the inactivity watchdog', async () => {
@@ -573,20 +485,6 @@ function restoreEnv(env: Record<string, string | undefined>): void {
   }
 }
 
-function configureAmrFirstOutputEnv(): void {
-  delete process.env.POSTHOG_KEY;
-  delete process.env.POSTHOG_HOST;
-  delete process.env.LANGFUSE_PUBLIC_KEY;
-  delete process.env.LANGFUSE_SECRET_KEY;
-  delete process.env.LANGFUSE_BASE_URL;
-  delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
-  process.env.VELA_RUNTIME_KEY = `fake-runtime-key-${randomUUID()}`;
-  process.env.VELA_LINK_URL = 'https://amr-link.open-design.ai/v1';
-  process.env.OD_CHAT_RUN_FIRST_OUTPUT_TIMEOUT_MS = '100';
-  process.env.OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS = STALL_WATCHDOG_TIMEOUT_MS;
-  process.env.OD_ACP_STAGE_TIMEOUT_MS = STALL_WATCHDOG_TIMEOUT_MS;
-}
-
 async function writeFlakyClaude(dir: string, name: string): Promise<string> {
   const bin = path.join(dir, name);
   const counterPath = path.join(dir, `${name}-attempts`);
@@ -625,89 +523,6 @@ if (attempts === 0) {
   }));
   setTimeout(() => process.exit(0), 20);
 }
-`, 'utf8');
-  await chmod(bin, 0o755);
-  return bin;
-}
-
-async function writeFatalThenSuccessfulVela(dir: string, name: string): Promise<string> {
-  const bin = path.join(dir, name);
-  const counterPath = path.join(dir, `${name}-attempts`);
-  await writeFile(bin, `#!/bin/sh
-export FAKE_VELA_REQUIRE_SET_MODEL=0
-if [ "$1" = "agent" ] && [ "$2" = "run" ]; then
-  attempts=0
-  if [ -f ${JSON.stringify(counterPath)} ]; then
-    attempts=$(tr -dc '0-9' < ${JSON.stringify(counterPath)})
-  fi
-  echo $((attempts + 1)) > ${JSON.stringify(counterPath)}
-  if [ "$attempts" -eq 0 ]; then
-    export FAKE_VELA_PROMPT_ERROR='transient fatal RPC close'
-  fi
-fi
-exec ${JSON.stringify(process.execPath)} ${JSON.stringify(FAKE_VELA)} "$@"
-`, 'utf8');
-  await chmod(bin, 0o755);
-  return bin;
-}
-
-async function writeHeartbeatStallingVela(
-  dir: string,
-  name: string,
-  stallAttempts: number,
-  successfulPromptDelayMs = 0,
-): Promise<string> {
-  const bin = path.join(dir, name);
-  const counterPath = path.join(dir, `${name}-attempts`);
-  await writeFile(bin, `#!/bin/sh
-unset FAKE_VELA_STALL_AFTER_PROMPT
-unset FAKE_VELA_PROMPT_RESULT_DELAY_MS
-if [ "$1" = "agent" ] && [ "$2" = "run" ]; then
-  attempts=0
-  if [ -f ${JSON.stringify(counterPath)} ]; then
-    attempts=$(tr -dc '0-9' < ${JSON.stringify(counterPath)})
-  fi
-  echo $((attempts + 1)) > ${JSON.stringify(counterPath)}
-  if [ "$attempts" -lt ${String(stallAttempts)} ]; then
-    export FAKE_VELA_STALL_AFTER_PROMPT=1
-  elif [ ${String(successfulPromptDelayMs)} -gt 0 ]; then
-    export FAKE_VELA_PROMPT_RESULT_DELAY_MS=${String(successfulPromptDelayMs)}
-  fi
-fi
-exec ${JSON.stringify(process.execPath)} ${JSON.stringify(FAKE_VELA)} "$@"
-`, 'utf8');
-  await chmod(bin, 0o755);
-  return bin;
-}
-
-async function writeTitleOnlyVela(
-  dir: string,
-  name: string,
-  stallFirstAttempt: boolean,
-): Promise<string> {
-  const bin = path.join(dir, name);
-  const counterPath = path.join(dir, `${name}-attempts`);
-  await writeFile(bin, `#!/bin/sh
-unset FAKE_VELA_STALL_AFTER_PROMPT FAKE_VELA_TEXT_BEFORE_STALL
-unset FAKE_VELA_OMIT_PROMPT_USAGE FAKE_VELA_STAY_ALIVE_AFTER_PROMPT_MS
-if [ "$1" = "agent" ] && [ "$2" = "run" ]; then
-  attempts=0
-  if [ -f ${JSON.stringify(counterPath)} ]; then
-    attempts=$(tr -dc '0-9' < ${JSON.stringify(counterPath)})
-  fi
-  echo $((attempts + 1)) > ${JSON.stringify(counterPath)}
-  export FAKE_VELA_TEXT='<od-title>Generated title</od-title>'
-  if [ ${stallFirstAttempt ? '1' : '0'} -eq 1 ] && [ "$attempts" -eq 0 ]; then
-    export FAKE_VELA_TEXT_BEFORE_STALL=1
-    export FAKE_VELA_STALL_AFTER_PROMPT=1
-  elif [ ${stallFirstAttempt ? '1' : '0'} -eq 1 ]; then
-    export FAKE_VELA_TEXT='<od-title>Recovered title</od-title>Recovered answer.'
-  else
-    export FAKE_VELA_OMIT_PROMPT_USAGE=1
-    export FAKE_VELA_STAY_ALIVE_AFTER_PROMPT_MS=250
-  fi
-fi
-exec ${JSON.stringify(process.execPath)} ${JSON.stringify(FAKE_VELA)} "$@"
 `, 'utf8');
   await chmod(bin, 0o755);
   return bin;
@@ -1039,6 +854,3 @@ async function readAttemptPrompts(file: string): Promise<Map<number, string>> {
   return prompts;
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}

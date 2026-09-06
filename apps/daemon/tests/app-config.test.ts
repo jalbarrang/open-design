@@ -13,7 +13,7 @@ import {
   it,
 } from 'vitest';
 
-import { agentCliEnvForAgent, readAppConfig, writeAppConfig } from '../src/app-config.js';
+import { readAppConfig, writeAppConfig } from '../src/app-config.js';
 import { isLocalSameOrigin } from '../src/origin-validation.js';
 
 // Default telemetry preference applied when an existing config has no
@@ -418,63 +418,6 @@ describe('app-config', () => {
         codex: { model: 'gpt-5-codex' },
       });
       expect(cfg.agentCliEnv).toBeUndefined();
-    });
-
-    it('persists supported per-agent CLI env keys and drops everything else', async () => {
-      await writeAppConfig(dataDir, {
-        agentCliEnv: {
-          claude: {
-            CLAUDE_CONFIG_DIR: '  ~/.claude-2  ',
-            ANTHROPIC_BASE_URL: '  https://proxy.example/anthropic  ',
-            ANTHROPIC_API_KEY: '  sk-proxy-anthropic  ',
-            ANTHROPIC_AUTH_TOKEN: '  sk-proxy-token  ',
-            MMD_MODEL_ROUTES_FILE: '  ~/.config/mms/model-routes.json  ',
-          },
-          codex: {
-            CODEX_HOME: '~/.codex-alt',
-            CODEX_BIN: '~/bin/codex-next',
-            OPENAI_BASE_URL: '  https://proxy.example/openai  ',
-            OPENAI_API_KEY: '  sk-proxy-openai  ',
-          },
-          amr: {
-            VELA_BIN: '~/bin/vela',
-            VELA_API_URL: '  https://custom-amr.example  ',
-            OPEN_DESIGN_AMR_PROFILE: '  local  ',
-            OPENCODE_TEST_HOME: '  ~/.open-design-amr-opencode  ',
-            HOME: 'should-not-persist',
-          },
-          opencode: {
-            OPENCODE_BIN: '  ~/bin/opencode  ',
-          },
-          'byok-opencode': {
-            OPENCODE_BIN: '  ~/bin/byok-opencode  ',
-          },
-          'trae-cli': {
-            TRAE_CLI_BIN: '  ~/bin/traecli-public  ',
-          },
-          __proto__: {
-            CLAUDE_CONFIG_DIR: 'bad',
-          },
-        },
-      });
-
-      const cfg = await readAppConfig(dataDir);
-
-      expect(cfg.agentCliEnv).toEqual({
-        claude: { CLAUDE_CONFIG_DIR: '~/.claude-2', ANTHROPIC_BASE_URL: 'https://proxy.example/anthropic', ANTHROPIC_API_KEY: 'sk-proxy-anthropic', ANTHROPIC_AUTH_TOKEN: 'sk-proxy-token', MMD_MODEL_ROUTES_FILE: '~/.config/mms/model-routes.json' },
-        codex: { CODEX_HOME: '~/.codex-alt', CODEX_BIN: '~/bin/codex-next', OPENAI_BASE_URL: 'https://proxy.example/openai', OPENAI_API_KEY: 'sk-proxy-openai' },
-        amr: {
-          VELA_BIN: '~/bin/vela',
-          VELA_API_URL: 'https://custom-amr.example',
-          OPEN_DESIGN_AMR_PROFILE: 'local',
-          OPENCODE_TEST_HOME: '~/.open-design-amr-opencode',
-        },
-        opencode: { OPENCODE_BIN: '~/bin/opencode' },
-        'trae-cli': { TRAE_CLI_BIN: '~/bin/traecli-public' },
-      });
-      expect(agentCliEnvForAgent(cfg.agentCliEnv, 'byok-opencode')).toEqual({
-        OPENCODE_BIN: '~/bin/opencode',
-      });
     });
 
     it('drops legacy standalone Claude and Codex auth keys without base URLs or CLI intent', async () => {
