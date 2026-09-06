@@ -696,6 +696,18 @@ async function resolveDesignSystemAssetsUncached(
   builtInRoot: string,
   userInstalledRoot: string,
 ): Promise<DesignSystemAssets> {
+  // `readDesignSystemAssets` strips the `user:` prefix before touching disk, so
+  // both roots answer to the same directory name. Without honouring the prefix
+  // here, a user-installed system whose id collides with a built-in one
+  // (`user:default` vs `default`) reads the built-in and the user's own tokens
+  // never reach the prompt. An explicit `user:` selection names its root.
+  if (designSystemId.startsWith('user:')) {
+    const userOnly = await readDesignSystemAssets(userInstalledRoot, designSystemId);
+    if (userOnly.tokensCss !== undefined && userOnly.fixtureHtml !== undefined) {
+      return userOnly;
+    }
+  }
+
   const builtIn = await readDesignSystemAssets(builtInRoot, designSystemId);
   if (builtIn.tokensCss !== undefined && builtIn.fixtureHtml !== undefined) {
     return builtIn;

@@ -868,8 +868,10 @@ describe('local OpenDesign MCP brief app', () => {
       MCP_SERVER_INSTRUCTIONS,
     ].join('\n');
 
-    expect(userFacingCopy).toContain('OpenDesign Cloud');
-    expect(userFacingCopy).toContain('Local Codex');
+    // The point of this test is that internal names never reach user-visible
+    // copy. It used to also pin the two public execution-mode labels, but
+    // "OpenDesign Cloud" and "Local Codex" both went with the cloud model, so
+    // only the leak checks remain meaningful.
     expect(userFacingCopy).not.toContain('Secure BYOK');
     expect(userFacingCopy).not.toMatch(/\b(?:Vela|AMR)\b/u);
     expect(userFacingCopy).not.toMatch(/agent\s*:\s*["']?[a-z]/iu);
