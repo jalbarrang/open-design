@@ -2,6 +2,31 @@ import type { Express, Request, Response } from 'express';
 import type * as BetterSqlite3 from 'better-sqlite3';
 import path from 'node:path';
 
+/**
+ * Media type for a served plugin asset, by extension.
+ *
+ * Markdown matters beyond tidiness: the web client only parses a plugin's
+ * SKILL.md when the response advertises a markdown (or plain text) type, so
+ * anything falling through to `application/octet-stream` is silently dropped
+ * and the plugin renders with no description.
+ */
+function pluginAssetMediaType(ext: string): string {
+  switch (ext) {
+    case '.html': return 'text/html; charset=utf-8';
+    case '.js': return 'application/javascript; charset=utf-8';
+    case '.css': return 'text/css; charset=utf-8';
+    case '.json': return 'application/json; charset=utf-8';
+    case '.md':
+    case '.markdown': return 'text/markdown; charset=utf-8';
+    case '.svg': return 'image/svg+xml';
+    case '.png': return 'image/png';
+    case '.jpg':
+    case '.jpeg': return 'image/jpeg';
+    default: return 'application/octet-stream';
+  }
+}
+
+
 export interface RegisterPluginAssetRoutesDeps {
   db: PluginDbLike;
   pluginAssetCache: { get(url: string): Promise<{ buf: Buffer; contentType: string }> };
@@ -108,7 +133,7 @@ export function registerPluginAssetRoutes(app: Express, deps: RegisterPluginAsse
       res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; frame-ancestors 'self'");
       res.setHeader('X-Content-Type-Options', 'nosniff');
       const ext = path.extname(contentPath).toLowerCase();
-      const ct = ext === '.html' ? 'text/html; charset=utf-8' : ext === '.js' ? 'application/javascript; charset=utf-8' : ext === '.css' ? 'text/css; charset=utf-8' : ext === '.json' ? 'application/json; charset=utf-8' : ext === '.svg' ? 'image/svg+xml' : ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/octet-stream';
+      const ct = pluginAssetMediaType(ext);
       res.setHeader('Content-Type', ct);
       if (ext === '.html' && typeof contentRel === 'string') {
         buf = Buffer.from(rewritePluginAssetUrls(buf.toString('utf8'), routeParam(req.params.id), path.posix.dirname(contentRel.replace(/\\/g, '/'))), 'utf8');
@@ -262,7 +287,7 @@ export function registerPluginAssetRoutes(app: Express, deps: RegisterPluginAsse
       res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; frame-ancestors 'self'");
       res.setHeader('X-Content-Type-Options', 'nosniff');
       const ext = path.extname(resolved).toLowerCase();
-      const ct = ext === '.html' ? 'text/html; charset=utf-8' : ext === '.js' ? 'application/javascript; charset=utf-8' : ext === '.css' ? 'text/css; charset=utf-8' : ext === '.json' ? 'application/json; charset=utf-8' : ext === '.svg' ? 'image/svg+xml' : ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/octet-stream';
+      const ct = pluginAssetMediaType(ext);
       res.setHeader('Content-Type', ct);
       res.send(buf);
     } catch (err) {

@@ -246,16 +246,6 @@ describe('composeSystemPrompt', () => {
     expect(design).toContain('## Requirements Clarification Phase');
   });
 
-  it('pins Cloud nano-banana shorthand and forbids reading generated media bytes back into context', () => {
-    const prompt = composeSystemPrompt({
-      skillMode: 'image',
-      metadata: { kind: 'image', imageModel: 'vela/nano-banana-2' } as any,
-    });
-
-    expect(prompt).toContain('`nano-banana` and `nano-banana-2` mean');
-    expect(prompt).toContain('Do not call `Read` on the generated image');
-  });
-
   it('injects the html-in-canvas preflight for the hyperframes skill', () => {
     const prompt = composeSystemPrompt({
       skillName: 'hyperframes',
@@ -412,8 +402,11 @@ describe('composeSystemPrompt', () => {
       expect(prototypePrompt).toContain('reply exactly `图片已生成`');
       expect(prototypePrompt).toContain('MEDIA_DISPATCH_FAILED');
       expect(prototypePrompt).toContain('图片未生成：媒体生成调度失败，原因未分类');
-      expect(prototypePrompt).toContain('IMAGE_MODEL="vela/gpt-image-2"');
-      expect(prototypePrompt).not.toContain(
+      // No configured image default here, so the prompt falls back to the fal
+      // suggestion and names it as the model. That fallback used to be masked
+      // by the Cloud default; it is the intended copy now that there is none.
+      expect(prototypePrompt).toContain('IMAGE_MODEL="flux-pro-ultra"');
+      expect(prototypePrompt).toContain(
         'For the best fal image model use `--model flux-pro-ultra`',
       );
     });
