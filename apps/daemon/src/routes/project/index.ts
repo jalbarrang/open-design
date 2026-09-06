@@ -6,6 +6,7 @@ import {
   defaultScenarioPluginIdForProjectMetadata,
   type ChatSessionMode,
   type PluginManifest,
+  type ProjectMetadata,
   type ProjectFile,
   type ProjectFileTextPreviewResponse,
   type ProjectFileVersion,
@@ -40,6 +41,8 @@ import {
   listInstalledPlugins,
   resolvePluginSnapshot,
 } from '../../plugins/index.js';
+import { automaticScenarioTaskProfile } from '../../plugins/scenario-binding.js';
+import { createAutomaticProjectStrategyBinding } from '../../plugins/strategy-binding.js';
 import { connectorService } from '../../connectors/service.js';
 import type { RouteDeps } from '../../server-context.js';
 import { listSkills } from '../../skills.js';
@@ -1665,10 +1668,22 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         && (metadata as { intent?: unknown }).intent === 'web-clone'
         && typeof pendingPrompt === 'string'
         && /https?:\/\/\S+/i.test(pendingPrompt);
-      const projectMetadata =
-        metadata && typeof metadata === 'object'
+      // The bindings below are daemon-owned. A caller may ask for a route
+      // through the typed top-level fields (`automaticStrategyTaskProfile`,
+      // `pluginId`), but cannot smuggle a finished binding inside the
+      // otherwise-extensible metadata object and claim a route it never took.
+      const clientMetadata = metadata && typeof metadata === 'object'
+        ? Object.fromEntries(
+            Object.entries(metadata).filter(([key]) => (
+              key !== 'scenarioBinding'
+              && key !== 'strategyBinding'
+            )),
+          ) as typeof metadata
+        : null;
+      const baseProjectMetadata =
+        clientMetadata
           ? {
-              ...metadata,
+              ...clientMetadata,
               ...(skipDiscoveryBrief === true || webCloneUrlSkipsDiscovery
                 ? { skipDiscoveryBrief: true }
                 : {}),
@@ -1679,9 +1694,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
                     projectLocationId: selectedLocationId,
                   }
                 : {}),
-              ...(Array.isArray(metadata.linkedDirs)
+              ...(Array.isArray(clientMetadata.linkedDirs)
                 ? (() => {
-                    const v = validateLinkedDirs(metadata.linkedDirs);
+                    const v = validateLinkedDirs(clientMetadata.linkedDirs);
                     return v.error ? {} : { linkedDirs: v.dirs };
                   })()
                 : {}),
@@ -1706,6 +1721,57 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
                 }
               : null;
       const now = Date.now();
+      const initialSessionMode = normalizeChatSessionMode(
+        req.body?.conversationMode ?? req.body?.sessionMode,
+      );
+      const explicitPlugin =
+        typeof req.body?.pluginId === 'string' && req.body.pluginId.trim().length > 0
+          ? true
+          : typeof req.body?.appliedPluginSnapshotId === 'string'
+            && req.body.appliedPluginSnapshotId.trim().length > 0;
+      const requestedAutomaticStrategyTaskProfile =
+        req.body?.automaticStrategyTaskProfile === 'prototype'
+        || req.body?.automaticStrategyTaskProfile === 'ppt'
+        || req.body?.automaticStrategyTaskProfile === 'marketing'
+        || req.body?.automaticStrategyTaskProfile === 'hyperframes'
+          ? req.body.automaticStrategyTaskProfile
+          : null;
+      // Fail closed. A present but unusable profile is a 400, never a silent
+      // drop: dropping it produces a project that looks correct and quietly
+      // lost the route the user picked.
+      if (
+        req.body?.automaticStrategyTaskProfile !== undefined
+        && !requestedAutomaticStrategyTaskProfile
+      ) {
+        return sendApiError(
+          res,
+          400,
+          'BAD_REQUEST',
+          'automaticStrategyTaskProfile is invalid',
+        );
+      }
+      // An automatic OD Next route pins no scenario plugin at all; the
+      // strategy binding is what records the daemon's choice.
+      const automaticStrategyBinding = requestedAutomaticStrategyTaskProfile
+        && initialSessionMode === 'design'
+        && !explicitPlugin
+          ? createAutomaticProjectStrategyBinding({
+              metadata: baseProjectMetadata as ProjectMetadata | null,
+              taskProfile: requestedAutomaticStrategyTaskProfile,
+              boundAt: now,
+            })
+          : null;
+      if (requestedAutomaticStrategyTaskProfile && !automaticStrategyBinding) {
+        return sendApiError(
+          res,
+          400,
+          'BAD_REQUEST',
+          'automaticStrategyTaskProfile does not match this automatic Design route',
+        );
+      }
+      const projectMetadata = automaticStrategyBinding
+        ? { ...(baseProjectMetadata ?? {}), strategyBinding: automaticStrategyBinding }
+        : baseProjectMetadata;
       let project;
       try {
         if (externalProjectDir) {
@@ -1741,9 +1807,6 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       }
       // Seed a default conversation so the UI always has somewhere to write.
       const cid = randomId();
-      const initialSessionMode = normalizeChatSessionMode(
-        req.body?.conversationMode ?? req.body?.sessionMode,
-      );
       insertConversation(db, {
         id: cid,
         projectId: id,
@@ -1752,17 +1815,16 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         createdAt: now,
         updatedAt: now,
       });
-      const explicitPlugin =
-        typeof req.body?.pluginId === 'string' && req.body.pluginId.trim().length > 0
-          ? true
-          : typeof req.body?.appliedPluginSnapshotId === 'string'
-            && req.body.appliedPluginSnapshotId.trim().length > 0;
       let resolveBody =
         explicitPlugin ? (req.body as Record<string, unknown>) : null;
-      if (!resolveBody && initialSessionMode === 'design') {
+      // The plugin the daemon picked on the user's behalf, as opposed to one
+      // the request named. Kept so the binding below can say which it was.
+      let automaticFallbackPluginId: string | null = null;
+      if (!resolveBody && initialSessionMode === 'design' && !automaticStrategyBinding) {
         const fallbackPluginId = defaultScenarioPluginIdForProjectMetadata(projectMetadata);
         if (fallbackPluginId && getInstalledPlugin(db, fallbackPluginId)) {
           resolveBody = { ...(req.body || {}), pluginId: fallbackPluginId };
+          automaticFallbackPluginId = fallbackPluginId;
         }
       }
       let resolvedSnapshot = null;
@@ -1774,6 +1836,21 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           projectId: id,
           conversationId: cid,
           registry,
+          // The fallback branch above puts `pluginId` into the body itself, so
+          // `resolvePluginSnapshot` would otherwise read its own injected value
+          // as the user naming a plugin and stamp `explicit_user`. Say who
+          // actually chose it: only a plugin the request carried is the user's.
+          // `automatic_default` must also carry the exact profile
+          // `writeProjectScenarioBinding` recomputes, or the stamp is rejected.
+          projectBinding: automaticFallbackPluginId
+            ? {
+                provenance: 'automatic_default' as const,
+                taskProfile: automaticScenarioTaskProfile({
+                  metadata: projectMetadata,
+                  pluginId: automaticFallbackPluginId,
+                }),
+              }
+            : { provenance: 'explicit_user' as const },
           activeProjectDesignSystem:
             typeof normalizedDesignSystemId === 'string' && normalizedDesignSystemId.length > 0
               ? { id: normalizedDesignSystemId }
@@ -2124,6 +2201,17 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       // patching other metadata without ever losing their import root.
       if (patch.metadata === null) {
         const existing = getProject(db, req.params.id);
+        // A daemon-owned binding records which route the daemon chose. Letting
+        // a metadata clear take it out would leave the project routed by a
+        // decision nothing can any longer explain.
+        if (existing?.metadata?.strategyBinding) {
+          return sendApiError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'metadata cannot be cleared while strategyBinding is daemon-owned',
+          );
+        }
         if (existing?.metadata?.baseDir) {
           return sendApiError(
             res,
@@ -2136,6 +2224,25 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       if (patch.metadata && typeof patch.metadata === 'object') {
         const existing = getProject(db, req.params.id);
         const existingMeta = existing?.metadata;
+        // Both bindings are stamped by the daemon from the request it actually
+        // resolved. Accepting a client-supplied value would let a caller claim
+        // an automatic route it never took, which is exactly the provenance
+        // these fields exist to establish. Equal values pass so an unrelated
+        // metadata patch can round-trip the whole object.
+        if (
+          'scenarioBinding' in patch.metadata
+          && JSON.stringify(patch.metadata.scenarioBinding)
+            !== JSON.stringify(existingMeta?.scenarioBinding)
+        ) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'scenarioBinding is daemon-owned');
+        }
+        if (
+          'strategyBinding' in patch.metadata
+          && JSON.stringify(patch.metadata.strategyBinding)
+            !== JSON.stringify(existingMeta?.strategyBinding)
+        ) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'strategyBinding is daemon-owned');
+        }
         if ('fromTrustedPicker' in patch.metadata
             && patch.metadata.fromTrustedPicker !== existingMeta?.fromTrustedPicker) {
           return sendApiError(
@@ -2208,6 +2315,23 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             res, 400, 'BAD_REQUEST',
             'orchestratorWorkspace can only be set via POST /api/import/folder or POST /api/projects/:id/working-dir',
           );
+        }
+        // `updateProject` replaces metadata wholesale, so a patch that simply
+        // omits a daemon-owned binding would erase the recorded route without
+        // ever naming it. Re-stamp both from the stored record. The guards
+        // above already rejected any patch that tried to change them, so this
+        // only ever restores the value the daemon itself wrote.
+        if (existingMeta?.scenarioBinding) {
+          patch.metadata = {
+            ...patch.metadata,
+            scenarioBinding: existingMeta.scenarioBinding,
+          };
+        }
+        if (existingMeta?.strategyBinding) {
+          patch.metadata = {
+            ...patch.metadata,
+            strategyBinding: existingMeta.strategyBinding,
+          };
         }
       }
       if (patch.metadata?.linkedDirs) {
