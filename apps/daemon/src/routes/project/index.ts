@@ -3,10 +3,13 @@ import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { Express, Response } from 'express';
 import {
+  automaticStrategyTaskProfileForProjectMetadata,
   defaultScenarioPluginIdForProjectMetadata,
   type ChatSessionMode,
   type PluginManifest,
   type ProjectMetadata,
+  type RestoreProjectAutomaticScenarioRequest,
+  type RestoreProjectAutomaticScenarioResponse,
   type ProjectFile,
   type ProjectFileTextPreviewResponse,
   type ProjectFileVersion,
@@ -39,7 +42,12 @@ import {
   buildConnectorProbe,
   getInstalledPlugin,
   listInstalledPlugins,
+  readVerifiedProjectScenarioBinding,
+  readVerifiedProjectStrategyBinding,
   resolvePluginSnapshot,
+  restoreProjectSnapshotLink,
+  type ResolveSnapshotError,
+  type ResolveSnapshotOk,
 } from '../../plugins/index.js';
 import {
   createProjectExampleBinding,
@@ -1243,7 +1251,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   const { readAppConfig, writeAppConfig } = ctx.appConfig;
   const { insertProject, validateLinkedDirs, getProject, updateProject, dbDeleteProject, removeProjectDir } = ctx.projectStore;
   const { writeProjectFile, readProjectFile, ensureProject, listFiles, listTabs, setTabs, resolveProjectDir } = ctx.projectFiles;
-  const { insertConversation } = ctx.conversations;
+  const { insertConversation, getFirstProjectConversation } = ctx.conversations;
   const { getTemplate, listTemplates, deleteTemplate, insertTemplate, findTemplateByNameAndProject, updateTemplate } = ctx.templates;
   const { listLatestProjectRunStatuses, listProjectsAwaitingInput, normalizeProjectDisplayStatus, composeProjectDisplayStatus, listProjects } = ctx.status;
   const { subscribeFileEvents, activeProjectEventSinks } = ctx.events;
@@ -2004,6 +2012,189 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       res.json(body);
     } catch (err: any) {
       sendApiError(res, 400, 'BAD_REQUEST', String(err));
+    }
+  });
+
+  app.post('/api/projects/:id/scenario/restore-automatic', async (req, res) => {
+    const project = getProject(db, req.params.id);
+    if (!project) {
+      return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+    }
+    const request = req.body as Partial<RestoreProjectAutomaticScenarioRequest> | null;
+    if (!request || !Object.prototype.hasOwnProperty.call(request, 'expectedCurrentSnapshotId')) {
+      return sendApiError(
+        res,
+        400,
+        'BAD_REQUEST',
+        'expectedCurrentSnapshotId is required',
+      );
+    }
+    if (
+      request.expectedCurrentSnapshotId !== null
+      && typeof request.expectedCurrentSnapshotId !== 'string'
+    ) {
+      return sendApiError(
+        res,
+        400,
+        'BAD_REQUEST',
+        'expectedCurrentSnapshotId must be a string or null',
+      );
+    }
+    const currentSnapshotId = project.appliedPluginSnapshotId ?? null;
+    if (request.expectedCurrentSnapshotId !== currentSnapshotId) {
+      return sendApiError(
+        res,
+        409,
+        'PROJECT_SCENARIO_CONFLICT',
+        'project scenario changed; refresh before restoring the automatic scenario',
+      );
+    }
+
+    const automaticStrategyTaskProfile = automaticStrategyTaskProfileForProjectMetadata(
+      project.metadata,
+    );
+    if (automaticStrategyTaskProfile) {
+      const currentStrategyBinding = readVerifiedProjectStrategyBinding(project.metadata);
+      const strategyBinding = createAutomaticProjectStrategyBinding({
+        metadata: project.metadata,
+        taskProfile: automaticStrategyTaskProfile,
+      });
+      if (!strategyBinding) {
+        return sendApiError(
+          res,
+          409,
+          'DEFAULT_SCENARIO_UNAVAILABLE',
+          'no automatic strategy route is available for this project',
+        );
+      }
+      if (
+        currentSnapshotId === null
+        && currentStrategyBinding?.taskProfile === automaticStrategyTaskProfile
+        && !project.metadata?.scenarioBinding
+      ) {
+        const body: RestoreProjectAutomaticScenarioResponse = {
+          project,
+          strategyBinding: currentStrategyBinding,
+          changed: false,
+        };
+        return res.json(body);
+      }
+
+      const restored = db.transaction(() => {
+        if (currentSnapshotId) {
+          restoreProjectSnapshotLink(db, project.id, currentSnapshotId, null);
+        }
+        const metadata: ProjectMetadata = {
+          ...(project.metadata ?? { kind: 'prototype' }),
+          strategyBinding,
+        };
+        delete metadata.scenarioBinding;
+        return updateProject(db, project.id, { metadata });
+      })();
+      if (!restored) {
+        return sendApiError(
+          res,
+          409,
+          'DEFAULT_SCENARIO_RESTORE_FAILED',
+          'automatic strategy restoration failed',
+        );
+      }
+      const body: RestoreProjectAutomaticScenarioResponse = {
+        project: restored,
+        strategyBinding,
+        changed: true,
+      };
+      return res.json(body);
+    }
+
+    const defaultPluginId = defaultScenarioPluginIdForProjectMetadata(project.metadata);
+    if (!defaultPluginId || !getInstalledPlugin(db, defaultPluginId)) {
+      return sendApiError(
+        res,
+        409,
+        'DEFAULT_SCENARIO_UNAVAILABLE',
+        'no installed automatic scenario is available for this project',
+      );
+    }
+    const taskProfile = automaticScenarioTaskProfile({
+      metadata: project.metadata,
+      pluginId: defaultPluginId,
+    });
+    const currentBinding = readVerifiedProjectScenarioBinding(db, {
+      projectId: project.id,
+      appliedPluginSnapshotId: currentSnapshotId,
+      metadata: project.metadata,
+    });
+    if (
+      currentBinding?.provenance === 'automatic_default'
+      && currentBinding.snapshotId === currentSnapshotId
+      && currentBinding.pluginId === defaultPluginId
+      && (currentBinding.taskProfile ?? null) === taskProfile
+    ) {
+      const body: RestoreProjectAutomaticScenarioResponse = {
+        project,
+        scenarioBinding: currentBinding,
+        changed: false,
+      };
+      return res.json(body);
+    }
+
+    const registry = await loadPluginRegistryView();
+    if (!registry) {
+      return sendApiError(res, 503, 'PLUGIN_REGISTRY_UNAVAILABLE', 'plugin registry unavailable');
+    }
+    const conversationId = getFirstProjectConversation(db, project.id)?.id ?? null;
+    const restore = db.transaction(():
+      | { ok: true; resolved: ResolveSnapshotOk; project: NonNullable<ReturnType<typeof getProject>> }
+      | { ok: false; failure: ResolveSnapshotError | null } => {
+      const resolved = resolvePluginSnapshot({
+        db,
+        body: { pluginId: defaultPluginId },
+        projectId: project.id,
+        conversationId,
+        registry,
+        connectorProbe: buildConnectorProbe(connectorService),
+        projectBinding: {
+          provenance: 'automatic_default',
+          taskProfile,
+        },
+      });
+      if (!resolved || !resolved.ok) {
+        return { ok: false, failure: resolved && !resolved.ok ? resolved : null };
+      }
+      const updated = getProject(db, project.id);
+      if (!updated?.metadata?.scenarioBinding) {
+        throw new Error('automatic scenario binding was not persisted');
+      }
+      return { ok: true, resolved, project: updated };
+    });
+    try {
+      const outcome = restore();
+      if (!outcome.ok) {
+        if (outcome.failure) {
+          return res.status(outcome.failure.status).json(outcome.failure.body);
+        }
+        return sendApiError(
+          res,
+          409,
+          'DEFAULT_SCENARIO_RESTORE_FAILED',
+          'automatic scenario restoration failed',
+        );
+      }
+      const body: RestoreProjectAutomaticScenarioResponse = {
+        project: outcome.project,
+        scenarioBinding: outcome.project.metadata!.scenarioBinding!,
+        changed: outcome.resolved.snapshotId !== currentSnapshotId,
+      };
+      return res.json(body);
+    } catch (error) {
+      console.warn('[projects] automatic scenario restore failed', error);
+      return sendApiError(
+        res,
+        409,
+        'DEFAULT_SCENARIO_RESTORE_FAILED',
+        'automatic scenario restoration failed; the existing project pin was preserved',
+      );
     }
   });
 
