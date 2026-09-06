@@ -966,11 +966,14 @@ describe('classifyRunFailure — signal and interrupt attribution', () => {
         'Your workspace is out of credits. Ask your workspace owner to refill in order to continue.',
       ),
     ).toMatchObject({
+      // `workspace_credits_exhausted` and the `recharge` action left the
+      // contract with the workspace billing model. Running out of credit is
+      // still exhaustion, so it files as hard quota and stays non-retryable.
       failure_category: 'rate_limit',
-      failure_detail: 'workspace_credits_exhausted',
+      failure_detail: 'hard_quota',
       failure_stage: 'session_init',
       retryable: false,
-      user_action: 'recharge',
+      user_action: 'none',
     });
 
     expect(
@@ -1056,8 +1059,11 @@ describe('classifyRunFailure — signal and interrupt attribution', () => {
     expect(
       classify(null, 'json-rpc id 2: AMR model catalog is temporarily unavailable. Please retry.'),
     ).toMatchObject({
+      // The AMR-specific routing rule went with the cloud router, so this
+      // sample lands on the generic upstream detail. Category, retryability
+      // and the user's remedy are unchanged.
       failure_category: 'upstream_unavailable',
-      failure_detail: 'provider_routing_error',
+      failure_detail: 'network_error',
       failure_stage: 'first_token_wait',
       retryable: true,
       user_action: 'retry',
@@ -1120,10 +1126,13 @@ describe('classifyRunFailure — signal and interrupt attribution', () => {
         'No payment method. Add a payment method here: https://opencode.ai/workspace/wrk_123/billing',
       ),
     ).toMatchObject({
+      // Same as the workspace-credits sample above: the dedicated detail and
+      // the `recharge` action are gone from the contract, so a missing payment
+      // method files as hard quota and stays non-retryable.
       failure_category: 'rate_limit',
-      failure_detail: 'workspace_credits_exhausted',
+      failure_detail: 'hard_quota',
       retryable: false,
-      user_action: 'recharge',
+      user_action: 'none',
     });
 
     expect(

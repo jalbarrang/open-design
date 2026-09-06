@@ -326,8 +326,12 @@ describe('handshake failures that name their own remedy', () => {
     expect(classify('AGENT_EXECUTION_FAILED', RATE_LIMITED)).toMatchObject({
       failure_category: 'rate_limit',
     });
+    // `insufficient_balance` is not a category any more; being out of money is
+    // filed as hard-quota exhaustion, which is what makes it non-retryable.
     expect(classify('AGENT_EXECUTION_FAILED', NO_BALANCE)).toMatchObject({
-      failure_category: 'insufficient_balance',
+      failure_category: 'rate_limit',
+      failure_detail: 'hard_quota',
+      retryable: false,
     });
     expect(classify('AGENT_EXECUTION_FAILED', UPSTREAM_DOWN)).toMatchObject({
       failure_category: 'upstream_unavailable',
