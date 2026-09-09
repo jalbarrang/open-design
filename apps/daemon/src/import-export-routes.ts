@@ -19,6 +19,13 @@ import {
   readSlideFiles,
   type BuildDeckRenderInputOptions,
 } from './deck-export.js';
+import {
+  MAX_STANDALONE_ENTRY_BYTES,
+  StandaloneHtmlExportError,
+  bundleStandaloneHtml,
+  type StandaloneAssetReader,
+} from './artifacts/standalone-html.js';
+import type { StandaloneHtmlExportRequest } from '@open-design/contracts';
 import { readProjectFileVersion } from './project-file-versions.js';
 import { authorizeReasoningEgress, sendReasoningEgressDenial } from './reasoning-egress.js';
 import { sandboxImportedProjectRootUnavailableReason } from './sandbox-mode.js';
@@ -512,6 +519,155 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
   // .pptx and raster-.pdf routes funnel through here. Like the PDF route, it
   // requires the desktop runtime — there is no headless renderer in a bare
   // daemon yet, so a web-only deployment gets a clear 501.
+  async function handleStandaloneHtmlExport(
+    res: Response,
+    projectId: string,
+    body: StandaloneHtmlExportRequest | null | undefined,
+  ) {
+    try {
+      if (!isSafeId(projectId)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'invalid project id');
+      }
+      const fileName = typeof body?.fileName === 'string' ? body.fileName.trim() : '';
+      if (!fileName) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'fileName required');
+      }
+      if (typeof body?.versionId === 'string' && body.versionId.trim()) {
+        return sendApiError(
+          res,
+          409,
+          'CONFLICT',
+          'standalone HTML cannot export a historical entry with current project dependencies',
+          { details: { kind: 'historical-dependency-snapshot-unavailable' } },
+        );
+      }
+
+      const project = getProject(db, projectId);
+      if (!project) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+      }
+
+      let ownerMeta;
+      try {
+        ownerMeta = await resolveProjectFilePath(
+          PROJECTS_DIR,
+          projectId,
+          fileName,
+          project.metadata,
+        );
+      } catch (error: any) {
+        const missing = error?.code === 'ENOENT';
+        return sendApiError(
+          res,
+          missing ? 404 : 400,
+          missing ? 'FILE_NOT_FOUND' : 'BAD_REQUEST',
+          missing ? `HTML entry not found: ${fileName}` : String(error?.message || error),
+        );
+      }
+      if (ownerMeta.size > MAX_STANDALONE_ENTRY_BYTES) {
+        return sendApiError(
+          res,
+          413,
+          'PAYLOAD_TOO_LARGE',
+          `owner html ${ownerMeta.size} bytes exceeds ${MAX_STANDALONE_ENTRY_BYTES}`,
+          { details: { kind: 'limit-exceeded', limit: 'entryBytes' } },
+        );
+      }
+      if (!ownerMeta.mime.startsWith('text/html')) {
+        return sendApiError(
+          res,
+          415,
+          'UNSUPPORTED_MEDIA_TYPE',
+          'standalone export only supports HTML entry files',
+        );
+      }
+
+      const ownerFile = await readProjectFile(
+        PROJECTS_DIR,
+        projectId,
+        fileName,
+        project.metadata,
+      );
+      const exportSource = await resolveHtmlExportSource({
+        projectId,
+        projectsRoot: PROJECTS_DIR,
+        relPath: fileName,
+        html: ownerFile.buffer.toString('utf8'),
+        metadata: project.metadata,
+        readProjectFile,
+        resolveProjectFilePath,
+      });
+      const assetReader: StandaloneAssetReader = async (projectPath) => {
+        let meta;
+        try {
+          meta = await resolveProjectFilePath(
+            PROJECTS_DIR,
+            projectId,
+            projectPath,
+            project.metadata,
+          );
+        } catch (error: any) {
+          if (error?.code === 'ENOENT') return null;
+          throw error;
+        }
+        return {
+          mime: meta.mime,
+          size: meta.size,
+          read: async () => {
+            const file = await readProjectFile(
+              PROJECTS_DIR,
+              projectId,
+              projectPath,
+              project.metadata,
+            );
+            return file.buffer;
+          },
+        };
+      };
+      const bundled = await bundleStandaloneHtml({
+        entryPath: exportSource.relPath,
+        html: exportSource.html,
+        readAsset: assetReader,
+      });
+
+      const titleBase = typeof body?.title === 'string' && body.title.trim()
+        ? body.title.trim()
+        : path.basename(fileName, path.extname(fileName)) || 'artifact';
+      const filename = `${sanitizeArchiveFilename(titleBase) || 'artifact'}.html`;
+      const asciiFallback = filename.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '_');
+      res.setHeader('Content-Security-Policy', 'sandbox allow-scripts');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      );
+      res.setHeader(
+        'X-Open-Design-External-Dependencies',
+        String(bundled.externalDependencies.length),
+      );
+      return res.type('text/html').send(bundled.html);
+    } catch (error: any) {
+      if (error instanceof StandaloneHtmlExportError || error?.name === 'StandaloneHtmlExportError') {
+        const standaloneError = error as StandaloneHtmlExportError;
+        const details = {
+          kind: standaloneError.kind,
+          ...(standaloneError.dependency ? { dependency: standaloneError.dependency } : {}),
+          ...(standaloneError.chain.length > 0 ? { chain: standaloneError.chain } : {}),
+          ...(standaloneError.limit ? { limit: standaloneError.limit } : {}),
+        };
+        if (standaloneError.kind === 'limit-exceeded') {
+          return sendApiError(res, 413, 'PAYLOAD_TOO_LARGE', standaloneError.message, { details });
+        }
+        const status = standaloneError.kind === 'missing-local-dependency'
+          || standaloneError.kind === 'invalid-source'
+          ? 422
+          : 400;
+        const code = status === 422 ? 'VALIDATION_FAILED' : 'BAD_REQUEST';
+        return sendApiError(res, status, code, standaloneError.message, { details });
+      }
+      return sendApiError(res, 400, 'BAD_REQUEST', String(error?.message || error));
+    }
+  }
+
   async function handleScreenshotExport(
     res: Response,
     format: 'pptx' | 'pdf' | 'image',
@@ -997,6 +1153,14 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
   // Programmatic screenshot-based PPTX: render each deck slide to a pixel-perfect
   // PNG and assemble a one-image-per-slide .pptx. Replaces the old "send a prompt
   // to the agent and hope it runs python-pptx" path with a deterministic export.
+  // Standalone HTML: inline every local dependency into one self-contained
+  // file (#6855). Unlike the visual formats below it needs no desktop
+  // renderer, so it is the one export that works headlessly. `od export
+  // --format html` routes here; see `export-cli-routing.ts`.
+  app.post('/api/projects/:id/export/html', async (req, res) => {
+    await handleStandaloneHtmlExport(res, req.params.id, req.body);
+  });
+
   app.post('/api/projects/:id/export/pptx', async (req, res) => {
     await handleScreenshotExport(res, 'pptx', req.params.id, req.body);
   });
@@ -1299,8 +1463,15 @@ async function resolveHtmlExportSource({
       html: rewriteViteDistRootAssetUrls(distFile.buffer.toString('utf8')),
       relPath: distRelPath,
     };
-  } catch {
-    return { html, relPath };
+  } catch (error: any) {
+    // "No dist here" is the ordinary case: an unbuilt Vite project exports its
+    // dev entry, which is what the caller asked for. Any OTHER failure means a
+    // dist DOES exist and could not be read (EISDIR on a directory named
+    // index.html, EACCES on a bad mode). Falling back there hands back a dev
+    // entry whose `/src/*.tsx` cannot run offline, and the export looks like it
+    // succeeded. Surface the real error instead.
+    if (error?.code === 'ENOENT') return { html, relPath };
+    throw error;
   }
 }
 

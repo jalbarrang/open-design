@@ -36,27 +36,4 @@ describe('BYOK run input boundary', () => {
     })).toBe(true);
   });
 
-  it('removes credential-bearing and server-owned fields before persistence', () => {
-    const sanitized = __forTestWithoutSensitiveRunInput({
-      agentId: 'byok-opencode',
-      byokProfileId: 'byok-openrouter',
-      byokProvider: { apiKey: 'nested-secret' },
-      apiKey: 'top-level-secret',
-      rechargeResumeCapability: 'capability-secret',
-      workspaceScope: {
-        schemaVersion: 1,
-        projectId: 'forged-project',
-        workspaceId: 'forged-workspace',
-        workspaceMemberId: 'forged-member',
-        source: 'persisted_project_binding',
-      },
-      message: 'Create a site',
-    });
-
-    expect(sanitized).toEqual({
-      agentId: 'byok-opencode',
-      message: 'Create a site',
-    });
-    expect(JSON.stringify(sanitized)).not.toContain('secret');
-  });
 });

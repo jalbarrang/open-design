@@ -3,9 +3,13 @@ import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { Express, Response } from 'express';
 import {
+  automaticStrategyTaskProfileForProjectMetadata,
   defaultScenarioPluginIdForProjectMetadata,
   type ChatSessionMode,
   type PluginManifest,
+  type ProjectMetadata,
+  type RestoreProjectAutomaticScenarioRequest,
+  type RestoreProjectAutomaticScenarioResponse,
   type ProjectFile,
   type ProjectFileTextPreviewResponse,
   type ProjectFileVersion,
@@ -38,8 +42,20 @@ import {
   buildConnectorProbe,
   getInstalledPlugin,
   listInstalledPlugins,
+  readVerifiedProjectScenarioBinding,
+  readVerifiedProjectStrategyBinding,
   resolvePluginSnapshot,
+  restoreProjectSnapshotLink,
+  type ResolveSnapshotError,
+  type ResolveSnapshotOk,
 } from '../../plugins/index.js';
+import {
+  createProjectExampleBinding,
+  digestExampleSkillManifest,
+  InvalidProjectExampleBindingError,
+} from '../../plugins/example-binding.js';
+import { automaticScenarioTaskProfile } from '../../plugins/scenario-binding.js';
+import { createAutomaticProjectStrategyBinding } from '../../plugins/strategy-binding.js';
 import { connectorService } from '../../connectors/service.js';
 import type { RouteDeps } from '../../server-context.js';
 import { listSkills } from '../../skills.js';
@@ -65,7 +81,7 @@ import {
   prependAfterDoctype,
 } from '@open-design/contracts/runtime/html-injection-points';
 
-export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {}
+export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation' | 'pluginScope'> {}
 
 function projectDetailResolvedDir(
   projectsRoot: string,
@@ -1235,7 +1251,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   const { readAppConfig, writeAppConfig } = ctx.appConfig;
   const { insertProject, validateLinkedDirs, getProject, updateProject, dbDeleteProject, removeProjectDir } = ctx.projectStore;
   const { writeProjectFile, readProjectFile, ensureProject, listFiles, listTabs, setTabs, resolveProjectDir } = ctx.projectFiles;
-  const { insertConversation } = ctx.conversations;
+  const { insertConversation, getFirstProjectConversation } = ctx.conversations;
   const { getTemplate, listTemplates, deleteTemplate, insertTemplate, findTemplateByNameAndProject, updateTemplate } = ctx.templates;
   const { listLatestProjectRunStatuses, listProjectsAwaitingInput, normalizeProjectDisplayStatus, composeProjectDisplayStatus, listProjects } = ctx.status;
   const { subscribeFileEvents, activeProjectEventSinks } = ctx.events;
@@ -1665,10 +1681,23 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         && (metadata as { intent?: unknown }).intent === 'web-clone'
         && typeof pendingPrompt === 'string'
         && /https?:\/\/\S+/i.test(pendingPrompt);
-      const projectMetadata =
-        metadata && typeof metadata === 'object'
+      // The bindings below are daemon-owned. A caller may ask for a route
+      // through the typed top-level fields (`automaticStrategyTaskProfile`,
+      // `pluginId`), but cannot smuggle a finished binding inside the
+      // otherwise-extensible metadata object and claim a route it never took.
+      const clientMetadata = metadata && typeof metadata === 'object'
+        ? Object.fromEntries(
+            Object.entries(metadata).filter(([key]) => (
+              key !== 'scenarioBinding'
+              && key !== 'strategyBinding'
+              && key !== 'exampleBinding'
+            )),
+          ) as typeof metadata
+        : null;
+      const baseProjectMetadata =
+        clientMetadata
           ? {
-              ...metadata,
+              ...clientMetadata,
               ...(skipDiscoveryBrief === true || webCloneUrlSkipsDiscovery
                 ? { skipDiscoveryBrief: true }
                 : {}),
@@ -1679,9 +1708,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
                     projectLocationId: selectedLocationId,
                   }
                 : {}),
-              ...(Array.isArray(metadata.linkedDirs)
+              ...(Array.isArray(clientMetadata.linkedDirs)
                 ? (() => {
-                    const v = validateLinkedDirs(metadata.linkedDirs);
+                    const v = validateLinkedDirs(clientMetadata.linkedDirs);
                     return v.error ? {} : { linkedDirs: v.dirs };
                   })()
                 : {}),
@@ -1706,6 +1735,138 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
                 }
               : null;
       const now = Date.now();
+      const initialSessionMode = normalizeChatSessionMode(
+        req.body?.conversationMode ?? req.body?.sessionMode,
+      );
+      const explicitPlugin =
+        typeof req.body?.pluginId === 'string' && req.body.pluginId.trim().length > 0
+          ? true
+          : typeof req.body?.appliedPluginSnapshotId === 'string'
+            && req.body.appliedPluginSnapshotId.trim().length > 0;
+      const requestedAutomaticStrategyTaskProfile =
+        req.body?.automaticStrategyTaskProfile === 'prototype'
+        || req.body?.automaticStrategyTaskProfile === 'ppt'
+        || req.body?.automaticStrategyTaskProfile === 'marketing'
+        || req.body?.automaticStrategyTaskProfile === 'hyperframes'
+          ? req.body.automaticStrategyTaskProfile
+          : null;
+      // Fail closed. A present but unusable profile is a 400, never a silent
+      // drop: dropping it produces a project that looks correct and quietly
+      // lost the route the user picked.
+      if (
+        req.body?.automaticStrategyTaskProfile !== undefined
+        && !requestedAutomaticStrategyTaskProfile
+      ) {
+        return sendApiError(
+          res,
+          400,
+          'BAD_REQUEST',
+          'automaticStrategyTaskProfile is invalid',
+        );
+      }
+      // An official example card picked under a task type. It is a reference,
+      // not a strategy: the project keeps its automatic OD Next route and the
+      // example's SKILL.md travels as a user-selected Skill at run start. It
+      // therefore deliberately does NOT participate in `explicitPlugin` — the
+      // whole point is to stop pinning an executable plugin.
+      //
+      // Fail closed like `automaticStrategyTaskProfile` above: a present but
+      // unusable reference is a 400, never a silent drop, because a dropped
+      // reference produces a run that looks correct and quietly lost the
+      // example the user picked.
+      const rawExampleReference = req.body?.exampleReference;
+      let exampleBinding: ProjectMetadata['exampleBinding'] | null = null;
+      if (rawExampleReference !== undefined) {
+        const exampleReference =
+          rawExampleReference && typeof rawExampleReference === 'object'
+          && !Array.isArray(rawExampleReference)
+            ? rawExampleReference as Record<string, unknown>
+            : null;
+        const examplePluginId = typeof exampleReference?.pluginId === 'string'
+          ? exampleReference.pluginId.trim()
+          : '';
+        const exampleSource = typeof exampleReference?.source === 'string'
+          ? exampleReference.source.trim()
+          : '';
+        if (!examplePluginId || !exampleSource) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'exampleReference is invalid');
+        }
+        // Contradictory claims. `pluginId`/`appliedPluginSnapshotId` say "run
+        // this plugin as the strategy"; `exampleReference` says "keep the
+        // automatic route and carry this example as reference material". A
+        // request asserting both has no single correct reading, and guessing
+        // one would silently decide the route for the user.
+        if (explicitPlugin) {
+          return sendApiError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'exampleReference cannot be combined with pluginId or appliedPluginSnapshotId',
+          );
+        }
+        // Re-resolve server-side through the same local lookup
+        // `/api/plugins/:id/apply-local` uses, then read the example's bytes
+        // from the record's own path. The request body contributes an identity
+        // claim only; it never contributes content.
+        const resolvedExample = await ctx.pluginScope?.getLocalPluginBySource?.(
+          examplePluginId,
+          exampleSource,
+        ) ?? null;
+        const resolvedExampleRecord = resolvedExample as
+          { id?: unknown; source?: unknown; fsPath?: unknown } | null;
+        if (
+          !resolvedExampleRecord
+          || resolvedExampleRecord.id !== examplePluginId
+          || resolvedExampleRecord.source !== exampleSource
+          || typeof resolvedExampleRecord.fsPath !== 'string'
+          || !resolvedExampleRecord.fsPath
+        ) {
+          return sendApiError(res, 404, 'PLUGIN_NOT_FOUND', 'example plugin not found');
+        }
+        try {
+          exampleBinding = createProjectExampleBinding({
+            pluginId: examplePluginId,
+            pluginSource: exampleSource,
+            manifestSourceDigest: await digestExampleSkillManifest(
+              resolvedExampleRecord.fsPath,
+            ),
+            boundAt: now,
+          });
+        } catch (error) {
+          if (error instanceof InvalidProjectExampleBindingError) {
+            return sendApiError(res, 400, 'BAD_REQUEST', error.message);
+          }
+          throw error;
+        }
+      }
+      // An automatic OD Next route pins no scenario plugin at all; the
+      // strategy binding is what records the daemon's choice.
+      const automaticStrategyBinding = requestedAutomaticStrategyTaskProfile
+        && initialSessionMode === 'design'
+        && !explicitPlugin
+          ? createAutomaticProjectStrategyBinding({
+              metadata: baseProjectMetadata as ProjectMetadata | null,
+              taskProfile: requestedAutomaticStrategyTaskProfile,
+              boundAt: now,
+            })
+          : null;
+      if (requestedAutomaticStrategyTaskProfile && !automaticStrategyBinding) {
+        return sendApiError(
+          res,
+          400,
+          'BAD_REQUEST',
+          'automaticStrategyTaskProfile does not match this automatic Design route',
+        );
+      }
+      const projectMetadata = automaticStrategyBinding || exampleBinding
+        ? {
+            ...(baseProjectMetadata ?? {}),
+            ...(automaticStrategyBinding
+              ? { strategyBinding: automaticStrategyBinding }
+              : {}),
+            ...(exampleBinding ? { exampleBinding } : {}),
+          }
+        : baseProjectMetadata;
       let project;
       try {
         if (externalProjectDir) {
@@ -1741,9 +1902,6 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       }
       // Seed a default conversation so the UI always has somewhere to write.
       const cid = randomId();
-      const initialSessionMode = normalizeChatSessionMode(
-        req.body?.conversationMode ?? req.body?.sessionMode,
-      );
       insertConversation(db, {
         id: cid,
         projectId: id,
@@ -1752,17 +1910,16 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         createdAt: now,
         updatedAt: now,
       });
-      const explicitPlugin =
-        typeof req.body?.pluginId === 'string' && req.body.pluginId.trim().length > 0
-          ? true
-          : typeof req.body?.appliedPluginSnapshotId === 'string'
-            && req.body.appliedPluginSnapshotId.trim().length > 0;
       let resolveBody =
         explicitPlugin ? (req.body as Record<string, unknown>) : null;
-      if (!resolveBody && initialSessionMode === 'design') {
+      // The plugin the daemon picked on the user's behalf, as opposed to one
+      // the request named. Kept so the binding below can say which it was.
+      let automaticFallbackPluginId: string | null = null;
+      if (!resolveBody && initialSessionMode === 'design' && !automaticStrategyBinding) {
         const fallbackPluginId = defaultScenarioPluginIdForProjectMetadata(projectMetadata);
         if (fallbackPluginId && getInstalledPlugin(db, fallbackPluginId)) {
           resolveBody = { ...(req.body || {}), pluginId: fallbackPluginId };
+          automaticFallbackPluginId = fallbackPluginId;
         }
       }
       let resolvedSnapshot = null;
@@ -1774,6 +1931,21 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           projectId: id,
           conversationId: cid,
           registry,
+          // The fallback branch above puts `pluginId` into the body itself, so
+          // `resolvePluginSnapshot` would otherwise read its own injected value
+          // as the user naming a plugin and stamp `explicit_user`. Say who
+          // actually chose it: only a plugin the request carried is the user's.
+          // `automatic_default` must also carry the exact profile
+          // `writeProjectScenarioBinding` recomputes, or the stamp is rejected.
+          projectBinding: automaticFallbackPluginId
+            ? {
+                provenance: 'automatic_default' as const,
+                taskProfile: automaticScenarioTaskProfile({
+                  metadata: projectMetadata,
+                  pluginId: automaticFallbackPluginId,
+                }),
+              }
+            : { provenance: 'explicit_user' as const },
           activeProjectDesignSystem:
             typeof normalizedDesignSystemId === 'string' && normalizedDesignSystemId.length > 0
               ? { id: normalizedDesignSystemId }
@@ -1840,6 +2012,189 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       res.json(body);
     } catch (err: any) {
       sendApiError(res, 400, 'BAD_REQUEST', String(err));
+    }
+  });
+
+  app.post('/api/projects/:id/scenario/restore-automatic', async (req, res) => {
+    const project = getProject(db, req.params.id);
+    if (!project) {
+      return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+    }
+    const request = req.body as Partial<RestoreProjectAutomaticScenarioRequest> | null;
+    if (!request || !Object.prototype.hasOwnProperty.call(request, 'expectedCurrentSnapshotId')) {
+      return sendApiError(
+        res,
+        400,
+        'BAD_REQUEST',
+        'expectedCurrentSnapshotId is required',
+      );
+    }
+    if (
+      request.expectedCurrentSnapshotId !== null
+      && typeof request.expectedCurrentSnapshotId !== 'string'
+    ) {
+      return sendApiError(
+        res,
+        400,
+        'BAD_REQUEST',
+        'expectedCurrentSnapshotId must be a string or null',
+      );
+    }
+    const currentSnapshotId = project.appliedPluginSnapshotId ?? null;
+    if (request.expectedCurrentSnapshotId !== currentSnapshotId) {
+      return sendApiError(
+        res,
+        409,
+        'PROJECT_SCENARIO_CONFLICT',
+        'project scenario changed; refresh before restoring the automatic scenario',
+      );
+    }
+
+    const automaticStrategyTaskProfile = automaticStrategyTaskProfileForProjectMetadata(
+      project.metadata,
+    );
+    if (automaticStrategyTaskProfile) {
+      const currentStrategyBinding = readVerifiedProjectStrategyBinding(project.metadata);
+      const strategyBinding = createAutomaticProjectStrategyBinding({
+        metadata: project.metadata,
+        taskProfile: automaticStrategyTaskProfile,
+      });
+      if (!strategyBinding) {
+        return sendApiError(
+          res,
+          409,
+          'DEFAULT_SCENARIO_UNAVAILABLE',
+          'no automatic strategy route is available for this project',
+        );
+      }
+      if (
+        currentSnapshotId === null
+        && currentStrategyBinding?.taskProfile === automaticStrategyTaskProfile
+        && !project.metadata?.scenarioBinding
+      ) {
+        const body: RestoreProjectAutomaticScenarioResponse = {
+          project,
+          strategyBinding: currentStrategyBinding,
+          changed: false,
+        };
+        return res.json(body);
+      }
+
+      const restored = db.transaction(() => {
+        if (currentSnapshotId) {
+          restoreProjectSnapshotLink(db, project.id, currentSnapshotId, null);
+        }
+        const metadata: ProjectMetadata = {
+          ...(project.metadata ?? { kind: 'prototype' }),
+          strategyBinding,
+        };
+        delete metadata.scenarioBinding;
+        return updateProject(db, project.id, { metadata });
+      })();
+      if (!restored) {
+        return sendApiError(
+          res,
+          409,
+          'DEFAULT_SCENARIO_RESTORE_FAILED',
+          'automatic strategy restoration failed',
+        );
+      }
+      const body: RestoreProjectAutomaticScenarioResponse = {
+        project: restored,
+        strategyBinding,
+        changed: true,
+      };
+      return res.json(body);
+    }
+
+    const defaultPluginId = defaultScenarioPluginIdForProjectMetadata(project.metadata);
+    if (!defaultPluginId || !getInstalledPlugin(db, defaultPluginId)) {
+      return sendApiError(
+        res,
+        409,
+        'DEFAULT_SCENARIO_UNAVAILABLE',
+        'no installed automatic scenario is available for this project',
+      );
+    }
+    const taskProfile = automaticScenarioTaskProfile({
+      metadata: project.metadata,
+      pluginId: defaultPluginId,
+    });
+    const currentBinding = readVerifiedProjectScenarioBinding(db, {
+      projectId: project.id,
+      appliedPluginSnapshotId: currentSnapshotId,
+      metadata: project.metadata,
+    });
+    if (
+      currentBinding?.provenance === 'automatic_default'
+      && currentBinding.snapshotId === currentSnapshotId
+      && currentBinding.pluginId === defaultPluginId
+      && (currentBinding.taskProfile ?? null) === taskProfile
+    ) {
+      const body: RestoreProjectAutomaticScenarioResponse = {
+        project,
+        scenarioBinding: currentBinding,
+        changed: false,
+      };
+      return res.json(body);
+    }
+
+    const registry = await loadPluginRegistryView();
+    if (!registry) {
+      return sendApiError(res, 503, 'PLUGIN_REGISTRY_UNAVAILABLE', 'plugin registry unavailable');
+    }
+    const conversationId = getFirstProjectConversation(db, project.id)?.id ?? null;
+    const restore = db.transaction(():
+      | { ok: true; resolved: ResolveSnapshotOk; project: NonNullable<ReturnType<typeof getProject>> }
+      | { ok: false; failure: ResolveSnapshotError | null } => {
+      const resolved = resolvePluginSnapshot({
+        db,
+        body: { pluginId: defaultPluginId },
+        projectId: project.id,
+        conversationId,
+        registry,
+        connectorProbe: buildConnectorProbe(connectorService),
+        projectBinding: {
+          provenance: 'automatic_default',
+          taskProfile,
+        },
+      });
+      if (!resolved || !resolved.ok) {
+        return { ok: false, failure: resolved && !resolved.ok ? resolved : null };
+      }
+      const updated = getProject(db, project.id);
+      if (!updated?.metadata?.scenarioBinding) {
+        throw new Error('automatic scenario binding was not persisted');
+      }
+      return { ok: true, resolved, project: updated };
+    });
+    try {
+      const outcome = restore();
+      if (!outcome.ok) {
+        if (outcome.failure) {
+          return res.status(outcome.failure.status).json(outcome.failure.body);
+        }
+        return sendApiError(
+          res,
+          409,
+          'DEFAULT_SCENARIO_RESTORE_FAILED',
+          'automatic scenario restoration failed',
+        );
+      }
+      const body: RestoreProjectAutomaticScenarioResponse = {
+        project: outcome.project,
+        scenarioBinding: outcome.project.metadata!.scenarioBinding!,
+        changed: outcome.resolved.snapshotId !== currentSnapshotId,
+      };
+      return res.json(body);
+    } catch (error) {
+      console.warn('[projects] automatic scenario restore failed', error);
+      return sendApiError(
+        res,
+        409,
+        'DEFAULT_SCENARIO_RESTORE_FAILED',
+        'automatic scenario restoration failed; the existing project pin was preserved',
+      );
     }
   });
 
@@ -2124,6 +2479,25 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       // patching other metadata without ever losing their import root.
       if (patch.metadata === null) {
         const existing = getProject(db, req.params.id);
+        // A daemon-owned binding records which route the daemon chose. Letting
+        // a metadata clear take it out would leave the project routed by a
+        // decision nothing can any longer explain.
+        if (existing?.metadata?.strategyBinding) {
+          return sendApiError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'metadata cannot be cleared while strategyBinding is daemon-owned',
+          );
+        }
+        if (existing?.metadata?.exampleBinding) {
+          return sendApiError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'metadata cannot be cleared while exampleBinding is daemon-owned',
+          );
+        }
         if (existing?.metadata?.baseDir) {
           return sendApiError(
             res,
@@ -2136,6 +2510,32 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       if (patch.metadata && typeof patch.metadata === 'object') {
         const existing = getProject(db, req.params.id);
         const existingMeta = existing?.metadata;
+        // Both bindings are stamped by the daemon from the request it actually
+        // resolved. Accepting a client-supplied value would let a caller claim
+        // an automatic route it never took, which is exactly the provenance
+        // these fields exist to establish. Equal values pass so an unrelated
+        // metadata patch can round-trip the whole object.
+        if (
+          'scenarioBinding' in patch.metadata
+          && JSON.stringify(patch.metadata.scenarioBinding)
+            !== JSON.stringify(existingMeta?.scenarioBinding)
+        ) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'scenarioBinding is daemon-owned');
+        }
+        if (
+          'strategyBinding' in patch.metadata
+          && JSON.stringify(patch.metadata.strategyBinding)
+            !== JSON.stringify(existingMeta?.strategyBinding)
+        ) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'strategyBinding is daemon-owned');
+        }
+        if (
+          'exampleBinding' in patch.metadata
+          && JSON.stringify(patch.metadata.exampleBinding)
+            !== JSON.stringify(existingMeta?.exampleBinding)
+        ) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'exampleBinding is daemon-owned');
+        }
         if ('fromTrustedPicker' in patch.metadata
             && patch.metadata.fromTrustedPicker !== existingMeta?.fromTrustedPicker) {
           return sendApiError(
@@ -2208,6 +2608,29 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             res, 400, 'BAD_REQUEST',
             'orchestratorWorkspace can only be set via POST /api/import/folder or POST /api/projects/:id/working-dir',
           );
+        }
+        // `updateProject` replaces metadata wholesale, so a patch that simply
+        // omits a daemon-owned binding would erase the recorded route without
+        // ever naming it. Re-stamp both from the stored record. The guards
+        // above already rejected any patch that tried to change them, so this
+        // only ever restores the value the daemon itself wrote.
+        if (existingMeta?.scenarioBinding) {
+          patch.metadata = {
+            ...patch.metadata,
+            scenarioBinding: existingMeta.scenarioBinding,
+          };
+        }
+        if (existingMeta?.strategyBinding) {
+          patch.metadata = {
+            ...patch.metadata,
+            strategyBinding: existingMeta.strategyBinding,
+          };
+        }
+        if (existingMeta?.exampleBinding) {
+          patch.metadata = {
+            ...patch.metadata,
+            exampleBinding: existingMeta.exampleBinding,
+          };
         }
       }
       if (patch.metadata?.linkedDirs) {

@@ -480,7 +480,16 @@ describe('brand routes', () => {
     upsertMessage(db, 'conversation-blocked', {
       id: 'message-blocked',
       role: 'assistant',
-      content: 'Please complete the Cloudflare check. <question-form><question>Done?</question></question-form>',
+      // Must be a form the web parser would actually render: the body is JSON
+      // with a `questions` array (apps/web/src/artifacts/question-form.ts).
+      // A `<question-form>` whose body is not valid form JSON is scored
+      // `unrenderable` and correctly does not count as awaiting input.
+      content: [
+        'Please complete the Cloudflare check.',
+        '<question-form id="anti-bot" title="Verification">',
+        '{"questions":[{"id":"done","label":"Done?","type":"text"}]}',
+        '</question-form>',
+      ].join('\n'),
       runId: 'run-blocked',
       runStatus: 'running',
       startedAt: 1,

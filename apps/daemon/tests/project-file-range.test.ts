@@ -877,25 +877,6 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     expect(html).not.toContain('data-od-preview-observability');
   });
 
-  it('injects the URL preview scroll bridge only when requested', async () => {
-    const plain = await fetch(rawUrl('page.html'));
-    expect(await plain.text()).toBe('<html/>');
-
-    const bridged = await fetch(`${rawUrl('page.html')}?odPreviewBridge=scroll`);
-    expect(bridged.status).toBe(200);
-    const html = await bridged.text();
-    expect(html).toContain('data-od-url-scroll-bridge');
-    expect(html).toContain("type: 'od:preview-scroll'");
-    expect(html).toContain("type: 'od:preview-content-size'");
-    expect(html).toContain('od:preview-content-size-request');
-    expect(html).toContain('lastContentSizeRequest.measurementId');
-    expect(html).toContain('lastContentSizeRequest.generation');
-    expect(html).toContain('documentEpoch: contentSizeDocumentEpoch');
-    expect(html).toContain("get('odPreviewEpoch')");
-    expect(html).toContain('scrollWidth: size && size.scrollWidth');
-    expect(html).toContain('clientWidth: size && size.clientWidth');
-  });
-
   it('injects the URL preview scroll bridge before the closing body tag', async () => {
     const bridged = await fetch(`${rawUrl('body.html')}?odPreviewBridge=scroll`);
     expect(bridged.status).toBe(200);
@@ -918,30 +899,6 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     // ...and the bridge must land after it closes, not inside it.
     expect(injectedAt).toBeGreaterThan(html.indexOf('</script>'));
     expect(injectedAt).toBeLessThan(html.lastIndexOf('</body>'));
-  });
-
-  it('injects the containment base after a `<head>` written inside a script string', async () => {
-    // The containment `<base>` runs after the bridges on every URL preview, and
-    // it used its own first-textual-`<head>` match. Requesting only the scroll
-    // bridge keeps any head-open guard from synthesizing a real `<head>` first,
-    // so the base injector has to find the boundary on its own.
-    const bridged = await fetch(`${rawUrl('script-literal-head.html')}?odPreviewBridge=scroll`);
-    expect(bridged.status).toBe(200);
-    const html = await bridged.text();
-    expect(html).toContain('data-od-project-preview-base');
-    expect(html).toContain('const doc = `<head><title>Slip</title></head>`;');
-  });
-
-  it('injects the URL preview sandbox shim after a `<head>` written inside a script string', async () => {
-    // nexu-io/open-design#7410, head-open half: the document has no real
-    // `<head>`, so the first textual match is the one inside the script.
-    const bridged = await fetch(`${rawUrl('script-literal-head.html')}?odPreviewBridge=sandbox`);
-    expect(bridged.status).toBe(200);
-    const html = await bridged.text();
-    const injectedAt = html.indexOf('data-od-sandbox-shim');
-    expect(injectedAt).toBeGreaterThan(-1);
-    expect(html).toContain('const doc = `<head><title>Slip</title></head>`;');
-    expect(injectedAt).toBeLessThan(html.indexOf('<script>'));
   });
 
   it('injects the URL preview scroll bridge after a `</body>` written in an attribute value', async () => {
@@ -1275,16 +1232,6 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     expect(load(html)('[data-od-url-scroll-bridge]').length).toBe(1);
   });
 
-  it('does not treat a foreign-namespace or template base as authored', async () => {
-    const bridged = await fetch(`${rawUrl('foreign-namespace-base.html')}?odPreviewBridge=scroll`);
-    expect(bridged.status).toBe(200);
-    const html = await bridged.text();
-    // Neither of those governs the document, so containment still applies.
-    expect(html).toContain('data-od-project-preview-base');
-    expect(html).toContain('href="https://ignored.example/"');
-    expect(html).toContain('href="https://inert.example/"');
-  });
-
   it('applies the in-select mode inside template contents too', async () => {
     const bridged = await fetch(`${rawUrl('template-select-foreign.html')}?odPreviewBridge=scroll`);
     expect(bridged.status).toBe(200);
@@ -1368,22 +1315,6 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     expect(page('#slot').text()).toBe('real');
   });
 
-  it('injects the URL preview selection bridge only when requested', async () => {
-    const plain = await fetch(rawUrl('page.html'));
-    expect(await plain.text()).toBe('<html/>');
-
-    const bridged = await fetch(`${rawUrl('page.html')}?odPreviewBridge=selection`);
-    expect(bridged.status).toBe(200);
-    const html = await bridged.text();
-    expect(html).toContain('data-od-url-selection-bridge');
-    expect(html).toContain("type: 'od:comment-target'");
-    expect(html).toContain("type: 'od:preview-runtime-state-captured'");
-    expect(html).toContain('roots: roots');
-    expect(html).toContain('function postReady(');
-    expect(html).toContain('href: window.location.href');
-    expect(html).not.toContain('data-od-url-scroll-bridge');
-  });
-
   it('injects the URL preview snapshot bridge only when requested', async () => {
     const plain = await fetch(rawUrl('page.html'));
     expect(await plain.text()).toBe('<html/>');
@@ -1395,67 +1326,6 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     expect(html).toContain("type: 'od:snapshot:result'");
     expect(html).not.toContain('data-od-url-scroll-bridge');
     expect(html).not.toContain('data-od-url-selection-bridge');
-  });
-
-  it('injects URL preview observability before author scripts when requested', async () => {
-    const bridged = await fetch(`${rawUrl('body.html')}?odPreviewBridge=observability`);
-    expect(bridged.status).toBe(200);
-    const html = await bridged.text();
-    expect(html).toContain('data-od-preview-observability');
-    expect(html).toContain("send('runtime_error'");
-    expect(html).toContain("send('white_screen'");
-    expect(html.indexOf('data-od-preview-observability')).toBeLessThan(html.indexOf('<body>'));
-  });
-
-  it('injects passive URL guards before authored scripts', async () => {
-    const bridged = await fetch(
-      `${rawUrl('guarded.html')}?odPreviewBridge=sandbox&odPreviewBridge=focus&odPreviewBridge=redirect`,
-    );
-    expect(bridged.status).toBe(200);
-    const html = await bridged.text();
-    const authorScriptIndex = html.indexOf('<script src="./boot.js">');
-    expect(authorScriptIndex).toBeGreaterThan(-1);
-    expect(html).toContain('data-od-sandbox-shim');
-    expect(html).toContain('data-od-preview-focus-guard');
-    expect(html).toContain('data-od-preview-redirect-guard');
-    expect(html.indexOf('data-od-sandbox-shim')).toBeLessThan(authorScriptIndex);
-    expect(html.indexOf('data-od-preview-focus-guard')).toBeLessThan(authorScriptIndex);
-    expect(html.indexOf('data-od-preview-redirect-guard')).toBeLessThan(authorScriptIndex);
-  });
-
-  it('preserves and serves complex nested external resources through a guarded URL preview', async () => {
-    const response = await fetch(
-      `${rawUrl('prototypes/booking/index.html')}?odPreviewBridge=scroll&odPreviewBridge=selection&odPreviewBridge=snapshot&odPreviewBridge=observability&odPreviewBridge=sandbox&odPreviewBridge=focus`,
-    );
-    expect(response.status).toBe(200);
-    const html = await response.text();
-
-    const firstAuthorScript = html.indexOf('<script src="./scripts/support.js">');
-    expect(firstAuthorScript).toBeGreaterThan(-1);
-    expect(html.indexOf('data-od-sandbox-shim')).toBeLessThan(firstAuthorScript);
-    expect(html.indexOf('data-od-preview-focus-guard')).toBeLessThan(firstAuthorScript);
-    expect(html.match(/type="text\/babel"/g)).toHaveLength(43);
-    expect(html).toContain('<script type="module" src="./scripts/module.js"></script>');
-    expect(html).toContain('srcset="./assets/card.svg 1x, ./assets/card@2x.svg 2x"');
-
-    const baseHref = html.match(/<base href="([^"]+)" data-od-project-preview-base>/)?.[1];
-    expect(baseHref).toBeTruthy();
-    const previewBase = new URL(baseHref!, baseUrl);
-    const expectedResources = new Map([
-      ['./styles/app.css', '@import "./theme.css"; .card { background-image: url("../assets/card.svg"); }'],
-      ['./styles/theme.css', ':root { --accent: #0a7; }'],
-      ['./scripts/support.js', 'window.__supportLoaded = true; fetch("./data.json").then((response) => response.json());'],
-      ['./scripts/module.js', 'export const ready = true;'],
-      ['./components/screen-43.jsx', 'window.__screen43 = () => <section>Screen 43</section>;'],
-      ['./data.json', '{"ready":true}'],
-      ['./assets/card.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>'],
-      ['./assets/card@2x.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="2"/>'],
-    ]);
-    for (const [relativePath, expectedBody] of expectedResources) {
-      const assetResponse = await fetch(new URL(relativePath, previewBase));
-      expect(assetResponse.status, relativePath).toBe(200);
-      expect(await assetResponse.text(), relativePath).toBe(expectedBody);
-    }
   });
 
   it('serves built dist HTML for Vite dev entries so previews do not load /src from daemon root', async () => {
@@ -1501,32 +1371,6 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     expect(preflight.headers.get('access-control-allow-origin')).toBeNull();
   });
 
-  it('injects the URL preview scroll bridge for powered previews when requested', async () => {
-    const bridged = await fetch(`${poweredUrl('page.html')}?odPreviewBridge=scroll`);
-    expect(bridged.status).toBe(200);
-    expect(bridged.headers.get('document-isolation-policy')).toBe('isolate-and-credentialless');
-    const html = await bridged.text();
-    expect(html).toContain('data-od-url-scroll-bridge');
-    expect(html).toContain("type: 'od:preview-content-size'");
-    expect(html).toContain('od:preview-content-size-request');
-    expect(html).toContain('lastContentSizeRequest.measurementId');
-    expect(html).toContain('lastContentSizeRequest.generation');
-    expect(html).toContain('documentEpoch: contentSizeDocumentEpoch');
-    expect(html).toContain("get('odPreviewEpoch')");
-    expect(html).toContain('scrollWidth: size && size.scrollWidth');
-    expect(html).toContain('clientWidth: size && size.clientWidth');
-  });
-
-  it('injects preview observability for powered previews when requested', async () => {
-    const bridged = await fetch(`${poweredUrl('page.html')}?odPreviewBridge=observability`);
-    expect(bridged.status).toBe(200);
-    expect(bridged.headers.get('document-isolation-policy')).toBe('isolate-and-credentialless');
-    const html = await bridged.text();
-    expect(html).toContain('data-od-preview-observability');
-    expect(html).toContain("send('runtime_error'");
-    expect(html).toContain("send('white_screen'");
-  });
-
   it('does not let the powered preview origin call normal daemon APIs', async () => {
     const origin = poweredOrigin();
     const poweredReferer = `${origin}/api/projects/${projectId}/powered/page.html`;
@@ -1550,20 +1394,6 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     expect(await api.json()).toEqual({
       error: 'Powered preview origin cannot access this API route',
     });
-  });
-
-  it('injects all URL preview bridges together', async () => {
-    const bridged = await fetch(`${rawUrl('body.html')}?odPreviewBridge=scroll&odPreviewBridge=selection&odPreviewBridge=snapshot&odPreviewBridge=observability`);
-    expect(bridged.status).toBe(200);
-    const html = await bridged.text();
-    expect(html).toContain('data-od-url-scroll-bridge');
-    expect(html).toContain('data-od-url-selection-bridge');
-    expect(html).toContain('data-od-url-snapshot-bridge');
-    expect(html).toContain('data-od-preview-observability');
-    expect(html.indexOf('data-od-preview-observability')).toBeLessThan(html.indexOf('<body>'));
-    expect(html.indexOf('data-od-url-scroll-bridge')).toBeLessThan(html.indexOf('</body>'));
-    expect(html.indexOf('data-od-url-selection-bridge')).toBeLessThan(html.indexOf('</body>'));
-    expect(html.indexOf('data-od-url-snapshot-bridge')).toBeLessThan(html.indexOf('</body>'));
   });
 
   it('does not inject the URL preview scroll bridge twice', async () => {

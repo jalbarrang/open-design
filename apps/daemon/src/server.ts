@@ -634,6 +634,7 @@ import {
   getConversation,
   getDeployment,
   getDeploymentById,
+  getFirstProjectConversation,
   getMessage,
   getMessageTelemetryFinalizationState,
   getPreviewComment,
@@ -3295,6 +3296,7 @@ export async function startServer({
     listConversations,
     updateConversation,
     deleteConversation,
+    getFirstProjectConversation,
     getMessage,
     listMessages,
     upsertMessage,
@@ -3539,6 +3541,13 @@ export async function startServer({
     appConfig: appConfigDeps,
     agents: agentDeps,
     validation: validationDeps,
+    // Arrow, not a direct reference: `getLocalPluginBySource` is declared
+    // further down this function, so it is only in scope by the time a request
+    // actually calls through here.
+    pluginScope: {
+      getLocalPluginBySource: (id: string, source: string) =>
+        getLocalPluginBySource(db, id, source),
+    },
   });
   registerTerminalRoutes(app, {
     db,
